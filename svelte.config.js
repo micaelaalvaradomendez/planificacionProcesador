@@ -1,7 +1,7 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-const dev = process.argv.includes('dev');
+const dev = process.env.NODE_ENV === 'development';
 const repo = 'planificacionProcesador';
 
 export default {
@@ -10,12 +10,12 @@ export default {
     adapter: adapter({
       pages: 'build',
       assets: 'build',
-      fallback: 'index.html' 
+      fallback: '404.html' 
     }),
     paths: {
       // En dev = '', en Pages = '/<repo>'
-      base: dev ? '' : `/${repo}`
+      base: dev ? '' : '/planificacionProcesador'
     },
-    prerender: { entries: [] }
+    prerender: { entries: ['*'] }
   }
 };
