@@ -1,0 +1,1 @@
+<!-- Componente panel de estadísticas -->

@@ -1,0 +1,1 @@
+<!-- Componente visor de logs -->

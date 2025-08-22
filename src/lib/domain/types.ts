@@ -1,0 +1,1 @@
+// Enums (Estado, Algoritmo), DTOs

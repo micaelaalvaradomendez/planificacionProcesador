@@ -1,38 +1,82 @@
-# sv
+# Simulador de Planificación de Procesos
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+## Descripción
 
-## Creating a project
+Este proyecto implementa un **simulador de planificación del procesador**, cuyo objetivo es reproducir el comportamiento de distintas políticas de planificación en un sistema **monoprocesador y multiprogramado**.  
 
-If you're seeing this, you've probably already done this step. Congrats!
+El simulador permite cargar una tanda de procesos desde un archivo de entrada (TXT o JSON estandarizado) y, en función de los parámetros definidos, ejecuta la simulación mostrando los **eventos, indicadores y diagramas** correspondientes.
 
-```sh
-# create a new project in the current directory
-npx sv create
+## Objetivos
 
-# create a new project in my-app
-npx sv create my-app
+### Estrategias de Planificación de CPU
+- **FCFS** (First Come, First Served)
+- **Prioridad Externa**
+- **Round Robin**
+- **SPN** (Shortest Process Next)
+- **SRTN** (Shortest Remaining Time Next)
+
+### Parámetros del Sistema Operativo
+- **TIP**: Tiempo de inicialización de proceso
+- **TFP**: Tiempo de finalización de proceso
+- **TCP**: Tiempo de cambio de contexto
+- **Quantum**: En caso de Round Robin
+
+### Reportes de Ejecución
+- **Eventos del sistema**: Arribo, despacho, finalización, I/O, interrupciones
+- **Indicadores por proceso y por tanda**:
+  - Tiempo de retorno
+  - Tiempo de retorno normalizado
+  - Tiempo en estado de listo
+  - Tiempos medios de retorno de la tanda
+- **Estadísticas de uso de CPU**:
+  - Tiempo ocioso
+  - Tiempo utilizado por el SO
+  - Tiempo utilizado por los procesos
+
+## Entrada
+
+El archivo de entrada contiene una **tanda de procesos**, con el siguiente formato (CSV/JSON):
+
+| # | Campo | Descripción |
+|---|-------|-------------|
+| 1 | Nombre del proceso | Identificador único |
+| 2 | Tiempo de arribo | Momento de llegada al sistema |
+| 3 | Cantidad de ráfagas de CPU | Número total de ráfagas |
+| 4 | Duración de ráfaga de CPU | Tiempo de ejecución |
+| 5 | Duración de ráfaga de I/O | Tiempo de entrada/salida |
+| 6 | Prioridad externa | Nivel de prioridad |
+
+### Ejemplo (JSON):
+```json
+[
+  {
+    "nombre": "P1",
+    "arribo": 0,
+    "rafagasCPU": 3,
+    "duracionCPU": 5,
+    "duracionIO": 4,
+    "prioridad": 80
+  }
+]
 ```
 
-## Developing
+## Salida
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+- **Archivo de eventos** con la secuencia de lo ocurrido en la simulación
+- **Diagrama de Gantt** que represente visualmente la planificación aplicada
+- **Resultados por pantalla** con indicadores y métricas de la tanda procesada
 
-```sh
-npm run dev
+## Condiciones de uso
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+- **Multiplataforma**: El simulador debe funcionar en cualquier sistema operativo sin necesidad de instalar dependencias externas
+- **Interfaz intuitiva**: La ejecución es intuitiva: basta con cargar el archivo de entrada, seleccionar la política de planificación e iniciar la simulación
+- **Casos de prueba**: Se deben realizar pruebas con mínimo cuatro tandas de procesos distintas, analizando y comentando los resultados de cada algoritmo de planificación
 
-## Building
+## Documentación
 
-To create a production version of your app:
+El proyecto incluye:
 
-```sh
-npm run build
-```
+- **Diagramas UML**: Clases, flujo de procesos y arquitectura del simulador
+- **Diagramas de Gantt**: Generados automáticamente, coherentes con los resultados de la ejecución
+- **Explicación teórica**: De cada algoritmo, fundamentada en *Stallings – Operating Systems: Internals and Design Principles (7ª Ed.)*
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
