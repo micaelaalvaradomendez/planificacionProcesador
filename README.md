@@ -78,5 +78,5 @@ El proyecto incluye:
 
 - **Diagramas UML**: Clases, flujo de procesos y arquitectura del simulador
 - **Diagramas de Gantt**: Generados automáticamente, coherentes con los resultados de la ejecución
-- **Explicación teórica**: De cada algoritmo, fundamentada en *Stallings – Operating Systems: Internals and Design Principles (7ª Ed.)*
+- **Explicación teórica**: De cada algoritmo
 
