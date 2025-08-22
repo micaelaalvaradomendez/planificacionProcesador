@@ -9,35 +9,35 @@ import { POLICY_MAP, ALGORITHM_MAP } from '../model/types';
 /**
  * Convierte ProcessSpec (nuevo) a ProcesData (dominio existente)
  */
-export function processSpecToProcesData(spec: ProcessSpec): ProcesData {
+export function convertirEspecificacionAProcesData(spec: ProcessSpec): ProcesData {
   return {
     nombre: spec.name,
-    arribo: spec.arrivalTime,
-    rafagasCPU: spec.cpuBursts,
-    duracionCPU: spec.cpuBurstDuration,
-    duracionIO: spec.ioBurstDuration,
-    prioridad: spec.priority
+    arribo: spec.tiempoArribo,
+    rafagasCPU: spec.rafagasCPU,
+    duracionCPU: spec.duracionRafagaCPU,
+    duracionIO: spec.duracionRafagaES,
+    prioridad: spec.prioridad
   };
 }
 
 /**
  * Convierte ProcesData (dominio) a ProcessSpec (nuevo)
  */
-export function procesDataToProcessSpec(data: ProcesData): ProcessSpec {
+export function convertirProcesDataAEspecificacion(data: ProcesData): ProcessSpec {
   return {
     name: data.nombre,
-    arrivalTime: data.arribo,
-    cpuBursts: data.rafagasCPU,
-    cpuBurstDuration: data.duracionCPU,
-    ioBurstDuration: data.duracionIO,
-    priority: data.prioridad
+    tiempoArribo: data.arribo,
+    rafagasCPU: data.rafagasCPU,
+    duracionRafagaCPU: data.duracionCPU,
+    duracionRafagaES: data.duracionIO,
+    prioridad: data.prioridad
   };
 }
 
 /**
  * Convierte RunConfig (nuevo) a ParametrosSimulacion (dominio existente)
  */
-export function runConfigToParametrosSimulacion(config: RunConfig): ParametrosSimulacion {
+export function convertirConfiguracionAParametrosSimulacion(config: RunConfig): ParametrosSimulacion {
   return {
     TIP: config.tip,
     TFP: config.tfp,
@@ -50,7 +50,7 @@ export function runConfigToParametrosSimulacion(config: RunConfig): ParametrosSi
 /**
  * Convierte ParametrosSimulacion (dominio) a RunConfig (nuevo)
  */
-export function parametrosSimulacionToRunConfig(params: ParametrosSimulacion): RunConfig {
+export function convertirParametrosSimulacionAConfiguracion(params: ParametrosSimulacion): RunConfig {
   return {
     policy: ALGORITHM_MAP[params.algoritmo],
     tip: params.TIP,
@@ -63,12 +63,12 @@ export function parametrosSimulacionToRunConfig(params: ParametrosSimulacion): R
 /**
  * Convierte Workload completo al formato del dominio existente
  */
-export function workloadToDomainFormat(workload: Workload): {
+export function convertirTandaAFormatoDominio(workload: Workload): {
   procesos: ProcesData[];
   parametros: ParametrosSimulacion;
 } {
   return {
-    procesos: workload.processes.map(processSpecToProcesData),
-    parametros: runConfigToParametrosSimulacion(workload.config)
+    procesos: workload.processes.map(convertirEspecificacionAProcesData),
+    parametros: convertirConfiguracionAParametrosSimulacion(workload.config)
   };
 }

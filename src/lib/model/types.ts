@@ -7,11 +7,11 @@ export type Policy = 'FCFS' | 'PRIORITY' | 'RR' | 'SPN' | 'SRTN';
 
 export interface ProcessSpec {
   name: string;
-  arrivalTime: number;
-  cpuBursts: number;
-  cpuBurstDuration: number;
-  ioBurstDuration: number;
-  priority: number; // 1..100 (mayor = más prioridad)
+  tiempoArribo: number;
+  rafagasCPU: number;
+  duracionRafagaCPU: number;
+  duracionRafagaES: number;
+  prioridad: number; // 1..100 (mayor = más prioridad)
 }
 
 export interface RunConfig {
@@ -30,52 +30,52 @@ export interface Workload {
 
 export interface MetricsPerProcess {
   name: string;
-  turnaround: number;       // TRp
-  normalizedTR: number;     // TRn
-  readyTime: number;        // tiempo en listo
+  tiempoRetorno: number;        // TRp
+  tiempoRetornoNormalizado: number;     // TRn
+  tiempoEnListo: number;        // tiempo en estado listo
 }
 
 export interface BatchMetrics {
-  batchTR: number;          // TRt
-  avgTurnaround: number;    // TM_Rt
-  cpuIdle: number;          // tiempo ocioso
-  cpuOS: number;            // TIP + TFP + TCP
-  cpuUser: number;          // tiempo de CPU efectiva de procesos
-  cpuIdlePct?: number;
-  cpuOSPct?: number;
-  cpuUserPct?: number;
+  tiempoRetornoTanda: number;          // TRt
+  tiempoMedioRetorno: number;    // TM_Rt
+  cpuOcioso: number;          // tiempo ocioso
+  cpuSO: number;            // TIP + TFP + TCP
+  cpuProcesos: number;          // tiempo de CPU efectiva de procesos
+  porcentajeCpuOcioso?: number;
+  porcentajeCpuSO?: number;
+  porcentajeCpuProcesos?: number;
 }
 
 export interface Metrics {
-  perProcess: MetricsPerProcess[];
-  batch: BatchMetrics;
+  porProceso: MetricsPerProcess[];
+  tanda: BatchMetrics;
 }
 
 export type EventType =
-  | 'ARRIVE'
-  | 'ADMIT'                // NEW->READY tras TIP (o aceptación)
-  | 'DISPATCH'             // READY->RUN con TCP
-  | 'CONTEXT_SWITCH'       // cobro de TCP
-  | 'CPU_BURST_START'
-  | 'CPU_BURST_COMPLETE'
-  | 'QUANTUM_EXPIRED'
-  | 'IO_START'
-  | 'IO_COMPLETE'
-  | 'IO_INTERRUPT_HANDLED'
-  | 'PROCESS_FINISHED';
+  | 'ARRIBO_TRABAJO'
+  | 'INCORPORACION_SISTEMA'     // NUEVO->LISTO tras TIP
+  | 'DESPACHO'                  // LISTO->EJECUTANDO con TCP
+  | 'CAMBIO_CONTEXTO'           // cobro de TCP
+  | 'INICIO_RAFAGA_CPU'
+  | 'FIN_RAFAGA_CPU'
+  | 'AGOTAMIENTO_QUANTUM'
+  | 'INICIO_ES'
+  | 'FIN_ES'
+  | 'ATENCION_INTERRUPCION_ES'
+  | 'TERMINACION_PROCESO';
 
 export interface SimEvent {
-  time: number;
-  type: EventType;
-  process: string;   // nombre/id del proceso; para eventos globales podés usar '-'
+  tiempo: number;
+  tipo: EventType;
+  proceso: string;   // nombre/id del proceso; para eventos globales podés usar '-'
   extra?: string;    // TIP=, TFP=, TCP=, restante=, etc.
 }
 
 export interface GanttSlice {
-  process: string;        // nombre o 'SO'/'IDLE'/'CTX'
+  process: string;        // nombre o 'SO'/'OCIOSO'/'CTX'
   tStart: number;
   tEnd: number;
-  kind: 'CPU' | 'IO' | 'TIP' | 'TFP' | 'CTX' | 'IDLE';
+  kind: 'CPU' | 'ES' | 'TIP' | 'TFP' | 'TCP' | 'OCIOSO';
 }
 
 // Mapeos para compatibilidad con tipos existentes

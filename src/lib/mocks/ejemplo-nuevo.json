@@ -1,0 +1,36 @@
+{
+  "workloadName": "Tanda de Prueba - Terminología Actualizada",
+  "processes": [
+    {
+      "name": "P1",
+      "tiempoArribo": 0,
+      "rafagasCPU": 3,
+      "duracionRafagaCPU": 5,
+      "duracionRafagaES": 4,
+      "prioridad": 80
+    },
+    {
+      "name": "P2", 
+      "tiempoArribo": 2,
+      "rafagasCPU": 2,
+      "duracionRafagaCPU": 3,
+      "duracionRafagaES": 2,
+      "prioridad": 60
+    },
+    {
+      "name": "P3",
+      "tiempoArribo": 4,
+      "rafagasCPU": 1,
+      "duracionRafagaCPU": 8,
+      "duracionRafagaES": 6,
+      "prioridad": 90
+    }
+  ],
+  "config": {
+    "policy": "RR",
+    "tip": 1,
+    "tfp": 1,
+    "tcp": 1,
+    "quantum": 4
+  }
+}

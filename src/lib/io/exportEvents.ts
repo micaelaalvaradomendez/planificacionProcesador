@@ -1,9 +1,9 @@
 import type { SimEvent } from '../model/types';
-import { eventToCsvLine, sortEventsForExport } from '../sim/events';
+import { eventoALineaCsv, ordenarEventosParaExportar } from '../sim/events';
 
-export function exportEventsCsv(events: SimEvent[]): Blob {
-  const header = 'time;eventType;process;extra';
-  const lines = sortEventsForExport(events).map(eventToCsvLine);
-  const csv = [header, ...lines].join('\n');
+export function exportarEventosCsv(eventos: SimEvent[]): Blob {
+  const encabezado = 'tiempo;tipoEvento;proceso;extra';
+  const lineas = ordenarEventosParaExportar(eventos).map(eventoALineaCsv);
+  const csv = [encabezado, ...lineas].join('\n');
   return new Blob([csv], { type: 'text/csv;charset=utf-8' });
 }

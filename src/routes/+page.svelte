@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { parseJsonWorkload, parseCsvWorkload } from '$lib/io/parseWorkload';
-  import { exportEventsCsv } from '$lib/io/exportEvents';
-  import { exportMetricsJson, withPercentages } from '$lib/io/exportMetrics';
+  import { analizarTandaJson, analizarTandaCsv } from '$lib/io/parseWorkload';
+  import { exportarEventosCsv } from '$lib/io/exportEvents';
+  import { exportarMetricasJson, conPorcentajes } from '$lib/io/exportMetrics';
   import type { Workload, SimEvent, Metrics, Policy } from '$lib/model/types';
 
   let file: File | null = null;
@@ -19,11 +19,11 @@
   // Dejamos arreglos vacíos / de prueba para exportar:
   let events: SimEvent[] = [];
   let metrics: Metrics = {
-    perProcess: [],
-    batch: { batchTR: 0, avgTurnaround: 0, cpuIdle: 0, cpuOS: 0, cpuUser: 0 }
+    porProceso: [],
+    tanda: { tiempoRetornoTanda: 0, tiempoMedioRetorno: 0, cpuOcioso: 0, cpuSO: 0, cpuProcesos: 0 }
   };
 
-  async function loadFile() {
+  async function cargarArchivo() {
     errors = [];
     workload = null;
     loaded = false;
@@ -31,9 +31,9 @@
 
     try {
       if (mode === 'json') {
-        workload = await parseJsonWorkload(file);
+        workload = await analizarTandaJson(file);
       } else {
-        workload = await parseCsvWorkload(file, { policy, tip, tfp, tcp, quantum });
+        workload = await analizarTandaCsv(file, { policy, tip, tfp, tcp, quantum });
       }
       loaded = true;
     } catch (e) {
@@ -41,8 +41,8 @@
     }
   }
 
-  function downloadEvents() {
-    const blob = exportEventsCsv(events);
+  function descargarEventos() {
+    const blob = exportarEventosCsv(events);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'events.csv';
@@ -50,8 +50,8 @@
     URL.revokeObjectURL(a.href);
   }
 
-  function downloadMetrics() {
-    const blob = exportMetricsJson(withPercentages(metrics));
+  function descargarMetricas() {
+    const blob = exportarMetricasJson(conPorcentajes(metrics));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'metrics.json';
@@ -88,7 +88,7 @@
 
     <div class="mt-2">
       <input type="file" accept={mode === 'json' ? '.json,application/json' : '.csv,.txt,text/csv'} on:change={(e:any)=>{file=e.target.files?.[0]||null}} />
-      <button on:click={loadFile}>Cargar</button>
+      <button on:click={cargarArchivo}>Cargar</button>
     </div>
 
     {#if errors.length}
@@ -105,12 +105,12 @@
       <p><strong>Política:</strong> {workload.config.policy} | <strong>TIP:</strong> {workload.config.tip} | <strong>TFP:</strong> {workload.config.tfp} | <strong>TCP:</strong> {workload.config.tcp} {#if workload.config.quantum != null}| <strong>Q:</strong> {workload.config.quantum}{/if}</p>
       <table>
         <thead>
-          <tr><th>Proc</th><th>Arribo</th><th>#CPU</th><th>DurCPU</th><th>DurIO</th><th>Prio</th></tr>
+          <tr><th>Proceso</th><th>Tiempo Arribo</th><th>Ráfagas CPU</th><th>Duración CPU</th><th>Duración E/S</th><th>Prioridad</th></tr>
         </thead>
         <tbody>
           {#each workload.processes as p}
             <tr>
-              <td>{p.name}</td><td>{p.arrivalTime}</td><td>{p.cpuBursts}</td><td>{p.cpuBurstDuration}</td><td>{p.ioBurstDuration}</td><td>{p.priority}</td>
+              <td>{p.name}</td><td>{p.tiempoArribo}</td><td>{p.rafagasCPU}</td><td>{p.duracionRafagaCPU}</td><td>{p.duracionRafagaES}</td><td>{p.prioridad}</td>
             </tr>
           {/each}
         </tbody>
@@ -120,8 +120,8 @@
     <div class="card p-3 my-3">
       <h2>Salidas (Etapa 1 listas para usar)</h2>
       <p>Cuando integres el simulador, completará <em>events</em> y <em>metrics</em>. Por ahora, podés probar las descargas con datos vacíos para verificar formato.</p>
-      <button on:click={downloadEvents}>Descargar eventos (CSV)</button>
-      <button on:click={downloadMetrics}>Descargar métricas (JSON)</button>
+      <button on:click={descargarEventos}>Descargar eventos (CSV)</button>
+      <button on:click={descargarMetricas}>Descargar métricas (JSON)</button>
     </div>
   {/if}
 </div>
