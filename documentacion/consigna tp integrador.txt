@@ -1,0 +1,86 @@
+Trabajo Práctico Integrador
+TRABAJO PRÁCTICO DE IMPLEMENTACION Nº 1
+PP – PLANIFICACION DEL PROCESADOR
+
+Objetivo: Se trata de programar un sistema que simule distintas estrategias de planificación del procesador (dispatcher), y calcule un conjunto de indicadores que serán utilizados para discutir las ventajas y desventajas de cada estrategia.
+
+Características del sistema a simular: Asuma que se trata de un sistema multiprogramado y monoprocesador.
+El simulador debe leer un archivo en el que cada registro tiene los siguientes datos:
+• Nombre del proceso.
+• Tiempo de arribo.
+• Cantidad de ráfagas de CPU a emplear para terminar.
+• Duración de la ráfaga de CPU.
+• Duración de la ráfaga de entrada-salida entre ráfagas de CPU.
+• Prioridad externa.
+
+Completada la lectura del archivo se aceptará una entrada por teclado que indicará la política de planificación a aplicar a la tanda. Como mínimo se deben permitir las siguientes opciones:
+a) FCFS (First Come First Served).
+b) Prioridad Externa.
+c) Round-Robin.
+d) SPN (Shortest Process Next).
+e) SRTN (Shortest Remaining Time Next).
+
+Finalmente permitirá introducir los siguientes datos:
+a) Tiempo que utiliza el sistema operativo para aceptar los nuevos procesos (TIP).
+b) Tiempo que utiliza el sistema operativo para terminar los procesos (TFP).
+c) Tiempo de conmutación entre procesos (TCP).
+d) Quantum (si fuera necesario).
+
+El simulador ejecutará la tanda hasta que se hayan completado la totalidad de los trabajos produciendo las siguientes salidas:
+
+• Un archivo en el que se indiquen todos los eventos que se producen en el sistema a lo largo de la simulación y el tiempo en el que ocurren los mismos. Ejemplos de eventos: arriba un trabajo, se incorpora un trabajo al sistema, se completa la ráfaga del proceso que se está ejecutando, se agota el quantum, termina una operación de entrada-salida, se atiende una interrupción de entrada-salida, termina un proceso.
+
+• Al finalizar la simulación imprimirá y mostrará por pantalla –como mínimo– los siguientes indicadores:
+a) Para cada proceso: Tiempo de Retorno, Tiempo de Retorno Normalizado, Tiempo en Estado de Listo.
+b) Para la tanda de procesos: Tiempo de Retorno y Tiempo Medio de Retorno.
+c) Para el uso de la CPU: Tiempos de CPU desocupada, CPU utilizada por el SO, CPU utilizada por los procesos (en tiempos absolutos y porcentuales).
+
+- Otras condiciones:
+• Deberá probarlo con al menos cuatro tandas de trabajos que tengan características distintas cada una y comentar los resultados obtenidos con cada estrategia de planificación en función de las características de las tandas.
+• Para resolverlo, utilice java, o puede elegir cualquier lenguaje de programación que conozca.
+• El trabajo es unipersonal.
+• Además de probar el simulador en clase, deberá presentar el ejecutable o ambiente de ejecución y el código fuente en soporte digital o repositorio. 
+• El simulador deberá ejecutarse de manera intuitiva en cualquier sistema operativo y sin la necesidad de tener que instalar librerias, programas, etc.
+• El trabajo correctamente resuelto y presentado antes de rendir el parcial pertinente al tema, exime al alumno de rendir el/los punto/s del mismo que tengan que ver con planificación de procesos, otorgándosele en el examen el máximo puntaje previsto para esos puntos.
+• Se fijara una fecha limite para la entrega y muestra del trabajo sin excepción.
+• Se acordara un archivo en formato JSON, para todos los trabajos, de modo que los resultados sean aproximados a los trabajos presentados.
+• Se deberá presentar diagramas de Gantt, diagramas de clase, de flujo, etc. Que permita su rápida comprensión e interpretación del trabajo entregado. En el caso del diagrama de Gantt, deberá coincidir con los resultados en pantalla del simulador.
+
+- Acuerdos para su realización:
+
+a. Orden de procesamiento de eventos:
+1. Corriendo a Terminado.
+2. Corriendo a Bloqueado.
+3. Corriendo a Listo.
+4. Bloqueado a Listo.
+5. Nuevo a Listo.
+6. Finalmente el despacho de Listo a Corriendo.
+
+b. En Round Robin si tenemos un único proceso y su q termina, lo pasamos a listo y luego le volvemos a asignar la cpu (usamos un TCP). Para despachar el primer proceso también usamos un TCP.
+
+c. Un proceso pasa de bloqueado a listo instantáneamente (aunque se esté ejecutando otro) y consume 0 unidades de tiempo (este tiempo lo consideramos dentro del TCP posterior).
+
+d. En RR al producirse el cambio de bloqueado a listo de un proceso mientras otro se estaba ejecutando no nos afecta y debemos terminar el tiempo de quantum.
+
+e. Las prioridades las definimos de 1 a 100 siendo los valores mas grandes de mayor prioridad.
+
+f. En Prioridades, y SRT debo expropiarle la CPU a un proceso si, apareció uno con mayor prioridad o con menor tiempo restante y por lo tanto guardo lo que me resta de la ráfaga del proceso que se estaba ejecutando para terminarla cuando le vuelva a tocar.
+
+g. La tanda de trabajos a procesar se cargará en un archivo que el simulador debe leer y será un txt donde cada línea (registro) define un proceso, y cada uno de los campos a saber, se separan por comas:
+Campos:
+1. Nombre del proceso.
+2. Tiempo de arribo.
+3. Ráfagas de CPU para completarse.
+4. Duración de ráfagas de cpu.
+5. Duración de rafagas de I/O.
+6. Prioridad.
+
+h. Un proceso no computará estado de listo hasta que no haya cumplido su TIP (inicialmente no computa tiempo de listo).
+
+i. Recordar:
+1. Tiempo de Retorno de un proceso (TRp): es desde que arriba el proceso hasta que termina (después de su TFP, incluyendo éste).
+2. Tiempo de retorno normalizado (TRn)= Es el tiempo de Retorno del proceso dividido el tiempo efectivo de CPU que utilizó.
+3. Tiempo de retorno de la tanda (TRt)= desde que arriba el primer proceso hasta que se realiza el último TFP (incluyendo el tiempo de éste).
+4. Tiempo Medio de retorno de la tanda (T M Rt)= la suma de los tiempos de retorno de los procesos, dividido la cantidad de procesos
+
+

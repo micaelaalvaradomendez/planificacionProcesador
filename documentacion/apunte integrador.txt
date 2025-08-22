@@ -1,0 +1,377 @@
+
+Proceso: Definición y Estados
+Un proceso es, en esencia, un programa en ejecución. También puede conceptualizarse como la unidad de trabajo en un sistema. En un sistema informático, hay una colección de procesos ejecutándose concurrentemente, que pueden ser procesos del sistema operativo (ejecutan código del sistema) o procesos de usuario (ejecutan código de usuario). Un proceso requiere ciertos recursos para realizar su tarea, como tiempo de CPU, memoria, archivos y dispositivos de E/S, que se le asignan al crearse o durante su ejecución. Incluso si el mismo programa se ejecuta dos veces, cada ejecución se considera un proceso distinto.
+Un proceso es una entidad que puede asignarse y ejecutarse en un procesador. Consiste en el código del programa, un conjunto de datos asociados (variables, espacio de trabajo, búferes) y el contexto de ejecución (o estado del proceso). El contexto de ejecución incluye el contenido de diversos registros del procesador (como el contador de programa y los registros de datos), información de uso del sistema operativo (prioridad del proceso, estado de espera de eventos de E/S, etc.), identificador, punteros a memoria, información de E/S y auditoría.
+Un proceso puede encontrarse en uno de varios estados durante su vida útil. Los principales estados son:
+Nuevo (New): Es un proceso que acaba de ser creado pero que aún no ha sido admitido en el grupo de procesos ejecutables por el sistema operativo. Típicamente, el programa no ha sido cargado en la memoria principal, aunque su Bloque de Control de Proceso (BCP) ya ha sido creado.
+Listo (Ready): Un proceso que está esperando para ejecutar tan pronto como el procesador esté disponible. Se encuentra en la memoria principal (o al menos una porción esencial) y está preparado para ser ejecutado.
+Corriendo/En Ejecución (Running): El proceso que está siendo ejecutado actualmente por el procesador. En sistemas multiprocesador, puede haber varios procesos en este estado.
+Bloqueado (Blocked): Un proceso que no puede ejecutar hasta que se cumpla un evento determinado o se complete una operación de E/S. Por ejemplo, un proceso se bloquea cuando espera la finalización de una E/S o la recepción de ciertos datos.
+Saliente/Terminado (Exit/Terminated): Un proceso que ha sido liberado del grupo de procesos ejecutables por el sistema operativo porque ha completado su tarea o ha sido abortado por alguna razón.
+Control de Procesos: PCB, Colas y Transición de Estados
+El sistema operativo controla los eventos dentro del sistema, planifica y activa los procesos para su ejecución, asigna recursos y responde a solicitudes. Para ello, mantiene tablas de información sobre cada entidad que gestiona, incluyendo procesos, memoria, E/S y archivos.
+Bloque de Control de Proceso (PCB - Process Control Block): Cada proceso es representado en el sistema operativo por un PCB, también llamado bloque de control de tarea o descriptor de proceso. El PCB es la estructura de datos más importante del sistema operativo para la gestión de procesos. Contiene toda la información necesaria para gestionar el proceso, incluyendo su estado actual, recursos asignados, prioridad, contador de programa, punteros a memoria, datos de contexto, información de estado de E/S e información de auditoría. La clave del PCB es que permite interrumpir un proceso en ejecución y restaurar su estado posteriormente como si no hubiera habido interrupción.
+Colas de Procesos: Los procesos que no están ejecutando deben estar en algún tipo de cola esperando su turno de ejecución. El sistema operativo mantiene varias colas, cada una de las cuales es una lista de procesos esperando por algún recurso.
+Cola de Listos: Contiene procesos que están listos para ejecutar y esperan la disponibilidad del procesador.
+Cola de Bloqueados: Contiene procesos que están esperando la finalización de un evento o una operación de E/S. Puede haber múltiples colas de bloqueados, una por cada tipo de evento o dispositivo.
+Transición de Estados: Los procesos se mueven entre los estados según ciertos eventos. Por ejemplo:
+Null → Nuevo: Se crea un nuevo proceso para ejecutar un programa.
+Nuevo → Listo: El sistema operativo mueve un proceso recién creado al estado listo cuando está preparado para ejecutar.
+Listo → Ejecutando: El planificador selecciona un proceso de la cola de Listos para que se ejecute en el procesador.
+Ejecutando → Listo: Un proceso en ejecución puede ser interrumpido, por ejemplo, si ha agotado su tiempo asignado (cuanto de tiempo) o si un proceso de mayor prioridad se vuelve listo.
+Ejecutando → Bloqueado: Un proceso se bloquea cuando solicita una operación de E/S o espera por un evento que no ha ocurrido.
+Bloqueado → Listo: Un proceso se mueve a la cola de Listos cuando el evento por el que estaba esperando (ej. finalización de E/S) ocurre.
+Ejecutando → Saliente/Terminado: El proceso en ejecución finaliza cuando completa su tarea o es abortado.
+Cualquier estado → Saliente/Terminado: Un proceso puede ser terminado por su proceso padre o por el sistema operativo debido a un fallo.
+Eventos del Sistema
+La planificación es la clave de la multiprogramación y se encarga de asignar procesos al procesador o procesadores a lo largo del tiempo. El planificador de corto plazo se invoca cuando ocurre un evento que puede bloquear al proceso actual o dar la oportunidad de cambiar de proceso.
+Llegada/Creación: Un nuevo trabajo es admitido en el sistema, y el planificador a largo plazo decide si se convierte en un proceso. En entornos interactivos, un proceso se crea cuando un usuario inicia sesión; en lotes, cuando se envía un nuevo trabajo.
+Despacho (Dispatch): Es la acción del planificador de corto plazo (conocido como dispatcher o activador) de seleccionar un proceso de la cola de Listos y pasarlo al estado Ejecutando.
+Fin de Ráfaga de CPU (Time-Out/Interrupción de Temporizador): Prácticamente todos los sistemas operativos multiprogramados imponen una restricción de tiempo a la ejecución ininterrumpida de un proceso (un "cuanto" de tiempo). Cuando este tiempo expira, el proceso pasa de Ejecutando a Listo, y el planificador selecciona el siguiente proceso.
+Inicio/Fin de E/S:
+Inicio de E/S (Bloqueo): Cuando un proceso necesita realizar una operación de E/S, invoca una llamada al sistema para ello. Como la E/S es lenta, el proceso se mueve de Ejecutando a Bloqueado y espera a que la operación se complete.
+Fin de E/S (Desbloqueo): Una vez que la operación de E/S finaliza, el dispositivo genera una interrupción, y el manejador de interrupciones del sistema operativo mueve el proceso correspondiente de Bloqueado a Listo.
+Terminación: Un proceso termina cuando ha completado su tarea, ha excedido un límite de tiempo, ha encontrado un error, o ha sido abortado por otro proceso o el sistema operativo.
+Dispatcher y Overhead del SO
+Dispatcher (Activador): Es la parte del sistema operativo encargada de la selección real del proceso a ejecutar de la cola de Listos. Es una función del planificador de corto plazo y se ejecuta con mucha frecuencia.
+
+
+Overhead del Sistema Operativo (Sobrecarga): Se refiere al tiempo y recursos que el sistema operativo gasta en sus propias funciones de gestión, en lugar de en la ejecución de código de usuario.
+
+
+Tiempo de Intercambio de Procesos (TIP - Context Switching Time): Es el tiempo que se tarda en cambiar el procesador de un proceso a otro. Esto implica salvar el estado del procesador del proceso saliente (incluyendo el contador de programa y registros), actualizar su PCB, moverlo a la cola adecuada, seleccionar un nuevo proceso, actualizar su PCB y restaurar el estado del procesador del nuevo proceso. Este proceso conlleva una sobrecarga. Un cambio de hilo es menos costoso que un cambio de proceso completo porque los hilos comparten memoria y archivos, reduciendo la necesidad de invocar al núcleo.
+Tiempo de Función de Planificación (TFP - Scheduling Function Time): Es el tiempo que el planificador dedica a decidir qué proceso debe ejecutarse a continuación. Esto incluye el recorrido de las colas y la aplicación de los algoritmos de planificación.
+Tiempo de Carga de Proceso (TCP - Process Loading Time): Se refiere a la sobrecarga asociada con la creación inicial de un proceso, que incluye la asignación de un identificador único, la reserva de espacio en memoria para su imagen (programa, datos, pila y PCB), la inicialización del PCB y el establecimiento de enlaces con las colas del planificador.
+A continuación, se describen las estrategias de planificación (Scheduling) solicitadas, así como los criterios de comparación y el concepto de expropiación, basándose en la información de las fuentes proporcionadas:
+Estrategias de Planificación (Scheduling)
+La planificación es la clave de la multiprogramación y se encarga de asignar procesos al procesador o procesadores a lo largo del tiempo, con el objetivo de cumplir los objetivos del sistema, como el tiempo de respuesta, el rendimiento y la eficiencia del procesador. El planificador de corto plazo (o dispatcher) es el componente del sistema operativo que decide cuál de los procesos en la cola de listos se asignará a la CPU.
+1. FCFS (First-Come, First-Served)
+Descripción: Es el algoritmo de planificación de CPU más sencillo. Con este esquema, el proceso que solicita la CPU primero es el primero en ser asignado a ella. Su implementación es simple, utilizando una cola FIFO (First-In, First-Out). Cuando un proceso entra a la cola de listos, su Bloque de Control de Proceso (PCB) se enlaza al final de la cola, y cuando la CPU está libre, se asigna al proceso en la cabeza de la cola. El proceso en ejecución es entonces retirado de la cola.
+Características: Es un algoritmo no expropiativo, lo que significa que un proceso, una vez que se le asigna la CPU, se ejecuta hasta que se bloquea (por una operación de E/S o por esperar a otro proceso) o hasta que libera la CPU voluntariamente. Es equitativo en el sentido de que los procesos se atienden en el orden de llegada.
+Desventajas: Puede causar que procesos cortos esperen por procesos muy largos. También tiende a favorecer procesos limitados por el procesador sobre los procesos limitados por la E/S, lo que puede llevar a una utilización ineficiente de la CPU y los dispositivos de E/S.
+Combinaciones: A menudo se combina con esquemas de prioridades para una planificación eficaz, manteniendo varias colas (una por cada nivel de prioridad) y despachando dentro de cada cola usando FCFS.
+2. SPN (Shortest Process Next, no expropiativo)
+Descripción: Este algoritmo no expropiativo selecciona el proceso con el tiempo de procesamiento esperado más corto para ejecutar. Una vez que un proceso es seleccionado, se le permite ejecutarse hasta su finalización.
+Ventajas: Es óptimo, proporcionando el menor tiempo de espera promedio. Favorece a los trabajos cortos.
+Desafío: La principal dificultad es la necesidad de conocer o estimar el tiempo de procesamiento requerido por cada proceso. En entornos de producción, se pueden recopilar estadísticas del tiempo de ejecución promedio de "ráfagas" de CPU.
+3. SRTN (Shortest Remaining Time Next, expropiativo)
+Descripción: Es una versión expropiativa de SPN. El planificador siempre elige el proceso con el menor tiempo de procesamiento restante esperado.
+Expropiación: Cuando un nuevo proceso se une a la cola de listos, su tiempo total se compara con el tiempo restante del proceso que se está ejecutando actualmente. Si el nuevo trabajo necesita menos tiempo para terminar, el proceso actual es suspendido (expropiado), y el nuevo proceso se inicia.
+Ventajas: Permite que los trabajos cortos recién llegados obtengan un buen servicio.
+Desafío: Al igual que con SPN, requiere una estimación del tiempo de procesamiento. Existe un riesgo de inanición para los procesos más largos.
+4. Round Robin (RR) con quantum
+Descripción: Es uno de los algoritmos más antiguos, simples, equitativos y de mayor uso. A cada proceso se le asigna un intervalo de tiempo fijo, conocido como quantum o rodaja de tiempo (time slice). El planificador mantiene una lista de procesos ejecutables (una cola circular).
+Operación: Cuando el proceso en ejecución agota su quantum, la CPU es expropiada y el proceso se coloca al final de la cola de listos. El siguiente proceso en la cabeza de la cola es entonces seleccionado para ejecutarse. Si un proceso se bloquea o termina antes de que transcurra su quantum, la CPU se conmuta en ese momento.
+Impacto del Quantum: La longitud del quantum es una decisión de diseño clave.
+Quantum muy corto: Produce demasiadas conmutaciones de proceso (context switches), lo que reduce la eficiencia de la CPU debido a la sobrecarga administrativa. Un cambio de contexto implica salvar el estado del proceso actual, actualizar su PCB, seleccionar un nuevo proceso y restaurar su estado. Sin embargo, permite que los procesos cortos se muevan rápidamente por el sistema. La sobrecarga también incluye el manejo de interrupciones de reloj y las funciones de planificación y despacho.
+Quantum muy largo: El algoritmo Round Robin degenera en FCFS. Esto puede resultar en una mala respuesta para las peticiones interactivas cortas, ya que un proceso desafortunado podría tener que esperar mucho tiempo si otros procesos usan sus quantums completos.
+Compromiso: Un quantum con un valor entre 20 y 50 ms a menudo constituye una solución razonable.
+Desventajas: Trata de forma desigual a los procesos limitados por el procesador y a los procesos limitados por la E/S.
+5. Prioridades (Estáticas, Externas; con Expropiación)
+Descripción: A cada proceso se le asigna una prioridad, y el proceso ejecutable con la prioridad más alta es el que se ejecuta. El sistema operativo mantiene un conjunto de colas, típicamente en orden descendente de prioridad (ej. CL0, CL1, ... CLn), y el planificador selecciona de la cola de mayor prioridad no vacía.
+Expropiación: Si un proceso en ejecución es de menor prioridad y un proceso de mayor prioridad se vuelve listo (ej. por la finalización de una E/S, una interrupción de reloj que revela un proceso de mayor prioridad listo), el proceso de menor prioridad es expropiado.
+Tipos de Prioridades:
+Estáticas: La prioridad se asigna al proceso y no cambia, como en el algoritmo de Planificación de Tasa Monótona (RMS) en sistemas de tiempo real.
+Dinámicas: La prioridad de un proceso puede recalcularse y cambiar durante su ejecución. Esto se puede hacer en función de la antigüedad del proceso, su historial de ejecución (ej. si ha agotado su cuanto de tiempo, su prioridad puede bajar; si se bloquea por E/S, puede subir).
+Implementación: Los sistemas como Linux y Windows utilizan múltiples niveles de prioridad y clases.
+Desventajas: Puede llevar a la inanición (starvation), donde un proceso de baja prioridad nunca se ejecuta si continuamente hay procesos de mayor prioridad listos. El envejecimiento (aging) es una técnica para prevenir la inanición, que incrementa la prioridad de los procesos que han esperado mucho tiempo.
+Criterios de Comparación
+Los algoritmos de planificación se evalúan en función de varios criterios, que pueden ser orientados al usuario o orientados al sistema. No es posible optimizar todos ellos simultáneamente, por lo que el diseño implica un compromiso.
+Tiempo de Retorno (Turnaround Time):
+
+
+Definición: Es el tiempo transcurrido desde que se lanza un proceso hasta que finaliza. Incluye el tiempo de ejecución más el tiempo de espera por los recursos (incluida la CPU).
+Aplicación: Es una medida apropiada para trabajos por lotes.
+Tiempo de Espera (Waiting Time):
+
+
+Definición: Es el tiempo que un proceso pasa en la cola de listos, esperando por la CPU.
+Objetivo: Los algoritmos como SJF/SRTN buscan minimizar este tiempo.
+Utilización de CPU (CPU Utilization):
+
+
+Definición: Es el porcentaje de tiempo que el procesador está ocupado.
+Objetivo: Para un sistema compartido costoso, es un criterio significativo. Se busca maximizarla para hacer la mayor cantidad de trabajo por segundo. La multiprogramación permite una mejor utilización de la CPU.
+Otros criterios importantes:
+Tiempo de Respuesta (Response Time): Para un proceso interactivo, es el tiempo desde que se envía una petición hasta que se comienza a recibir la respuesta. Es visible para el usuario y crítico en sistemas interactivos.
+Rendimiento (Throughput): Número de procesos completados por unidad de tiempo.
+Equidad (Fairness): Asegura que los procesos comparables reciban un servicio comparable.
+Predecibilidad (Predictability): En sistemas de tiempo real, evitar la degradación de la calidad.
+Expropiación: Condiciones bajo las cuales se interrumpe al proceso actual
+La expropiación (preemption) es la capacidad de un sistema operativo de interrumpir un proceso en ejecución y asignarle la CPU a otro proceso. Esto es fundamental en sistemas de tiempo compartido e interactivos.
+Las condiciones bajo las cuales un proceso en ejecución puede ser expropiado (interrumpido) son:
+Expiración del Quantum de Tiempo: En algoritmos como Round Robin, si un proceso ha utilizado todo su quantum de tiempo asignado, es interrumpido y movido a la cola de listos.
+Llegada de un Proceso de Mayor Prioridad: Si un proceso de mayor prioridad se vuelve listo (ej. termina una operación de E/S por la que estaba esperando), puede expropiar al proceso actualmente en ejecución de menor prioridad.
+Llegada de un Nuevo Proceso con Menor Tiempo Restante: En algoritmos como SRTN, si un proceso recién llegado tiene un tiempo de ejecución restante menor que el del proceso actual, puede expropiarlo.
+Llamadas al Sistema u Operaciones de E/S: Cuando un proceso realiza una llamada al sistema que requiere una operación de E/S (ej. leer del disco), se bloquea y el planificador puede elegir otro proceso para ejecutar mientras tanto. Aunque el proceso se bloquea a sí mismo, el cambio de contexto y la selección de un nuevo proceso son parte de la gestión de la expropiación.
+Señales (o Semáforos): Las señales, como las interrupciones, pueden llevar a una decisión de planificación y potencialmente a una expropiación si un proceso de mayor prioridad se vuelve listo.
+La expropiación permite que los sistemas operativos sean más receptivos y eficientes en entornos multiprogramados, especialmente en sistemas de tiempo real donde es crucial cumplir con plazos estrictos.
+En un algoritmo Round Robin (RR), el tamaño del quantum (intervalo de tiempo asignado a cada proceso) tiene un impacto significativo en el rendimiento del sistema. Un quantum grande tiende a simular un comportamiento similar al algoritmo First-Come, First-Served (FCFS), mientras que un quantum pequeño introduce un mayor overhead debido a los frecuentes cambios de contexto, según Custom Professional Hosting y GeeksforGeeks. 
+Explicación detallada:
+Quantum grande (≈FCFS):
+ Cuando el quantum es muy grande, un proceso puede ejecutarse por un período prolongado antes de ser interrumpido. Si el quantum es lo suficientemente grande, un proceso podría completar su ejecución dentro de ese único quantum, evitando la necesidad de ser colocado nuevamente en la cola de listos. En este escenario, el algoritmo RR se comporta de manera muy similar a FCFS, donde los procesos se ejecutan en orden de llegada hasta su finalización.
+Quantum pequeño (≈ mayor overhead):
+ Un quantum pequeño significa que los procesos son interrumpidos con mayor frecuencia para dar paso a otros procesos en la cola. Cada cambio de contexto (guardar el estado del proceso actual y cargar el estado del siguiente) requiere un tiempo de procesamiento. Con un quantum pequeño, se realizan muchos cambios de contexto, lo que consume una parte considerable del tiempo de CPU, generando un overhead que disminuye la eficiencia del sistema, según Custom Professional Hosting y Testbook.
+Equilibrio:
+ En la práctica, se busca un valor de quantum que ofrezca un buen equilibrio entre tiempos de respuesta razonables (no tan largos como con FCFS) y una sobrecarga controlada por cambios de contexto. Un valor de quantum adecuado depende de las características de las cargas de trabajo y del hardware del sistema. 
+
+
+Aquí se detallan los indicadores de desempeño solicitados, su formulación y cómo interpretar sus resultados, basándose en la información proporcionada en las fuentes:
+Indicadores de Desempeño
+Tiempo de Retorno (TR) de cada proceso
+
+
+Formulación: El tiempo de retorno es el intervalo desde que un proceso es enviado al sistema hasta que finaliza. Incluye el tiempo que pasa esperando para entrar en memoria, esperando en la cola de listos, ejecutándose en la CPU y realizando operaciones de E/S. También puede entenderse como la suma del tiempo de espera más el tiempo de servicio (ejecución).
+TR = Tiempo de Sumisión a Tiempo de Finalización
+TR = Tiempo de Espera + Tiempo de Servicio (ejecución)
+Interpretación: Para un proceso individual, un tiempo de retorno más bajo es preferible, ya que indica que el proceso completó su ejecución más rápidamente. Es una medida adecuada para trabajos por lotes.
+Tiempo de Retorno Normalizado (TRn)
+
+
+Formulación: Es la relación del tiempo de retorno de un proceso con su tiempo de servicio (tiempo de CPU efectivo o tiempo real de ejecución).
+TRn = Tiempo de Retorno / Tiempo de Servicio
+Interpretación: Este valor indica el retraso relativo experimentado por un proceso.
+El valor más bajo posible es 1.0, lo que significa que el proceso finalizó tan pronto como terminó de ejecutarse, sin haber esperado.
+Valores más grandes corresponden a un nivel de servicio inferior. Por ejemplo, un TRn de 100 significa que un proceso estuvo en el sistema 100 veces el tiempo que realmente necesitaba de procesador. Esto sucede a menudo cuando un proceso corto llega justo después de uno largo bajo ciertas políticas de planificación.
+Algoritmos como el "Menor Tiempo Restante" (SRT) deberían ofrecer un rendimiento superior en tiempo de retorno normalizado en comparación con SPN. En simulaciones, FCFS muestra un rendimiento muy desfavorable para los procesos más cortos en términos de TRn.
+Tiempo Medio de Retorno de la tanda
+
+
+Formulación: Es el promedio estadístico del tiempo transcurrido desde que se envía un trabajo por lotes hasta que se completa. Esto implica sumar los tiempos de retorno individuales de todos los procesos en una tanda y dividirlos por el número total de procesos.
+Tiempo Medio de Retorno = Σ (TR de cada proceso) / (Número total de procesos)
+Interpretación: Una media más baja es deseable, ya que significa que, en promedio, los usuarios obtienen sus resultados más rápidamente. Los algoritmos de planificación como "El trabajo más corto primero" (SJF) buscan minimizar este promedio.
+Tiempo en estado de Listo (espera)
+
+
+Formulación: Es la suma de los períodos que un proceso pasa esperando en la cola de listos. El algoritmo de planificación de CPU solo afecta este tiempo, no el tiempo de ejecución o de E/S de un proceso.
+Tiempo de Espera = Σ (Períodos en la cola de listos)
+Interpretación: Un tiempo de espera menor es mejor, ya que implica que los procesos pasan menos tiempo inactivos y más tiempo progresando. Los algoritmos como SPN y SRTN están diseñados para minimizar el tiempo de espera promedio. Las simulaciones muestran que FCFS resulta en un tiempo de espera absoluto más uniforme, ya que la planificación es independiente del tiempo de servicio.
+Uso de CPU: tiempo ocioso, tiempo consumido por SO, tiempo de procesos
+
+
+Uso de CPU (Utilización del procesador)
+Formulación: Es el porcentaje de tiempo que el procesador está activo (no esperando). Puede modelarse como 1 - p^n, donde p es la fracción de tiempo que un proceso gasta esperando E/S y n es el grado de multiprogramación.
+Interpretación: Para sistemas compartidos costosos, el objetivo es maximizar la utilización de la CPU. Una CPU ociosa es un desperdicio de capacidad. La multiprogramación se implementa precisamente para mejorar la utilización de la CPU al permitir que otros programas se ejecuten mientras uno espera por E/S.
+Tiempo ocioso
+Formulación: El tiempo en que la CPU no está realizando trabajo útil porque todos los procesos están bloqueados o no hay procesos listos para ejecutar.
+Interpretación: Este tiempo debe ser minimizado para asegurar una alta eficiencia del sistema. Por ejemplo, en un sistema monoprogramado, la CPU puede estar ociosa la mayor parte del tiempo esperando operaciones de E/S.
+Tiempo consumido por el Sistema Operativo (Sobrecarga / Overhead)
+Formulación: Incluye el tiempo dedicado a las conmutaciones de contexto (salvar y restaurar el estado de los procesos), el manejo de interrupciones de reloj, la ejecución de las funciones del planificador y del despachador. La sobrecarga también puede incluir la invalidación y recarga de la caché y el TLB durante los cambios de contexto.
+Interpretación: Una menor sobrecarga es deseable, ya que la sobrecarga no contribuye directamente al trabajo productivo del usuario. Un quantum de tiempo muy corto en Round Robin, por ejemplo, produce demasiadas conmutaciones de proceso y reduce la eficiencia de la CPU debido a esta sobrecarga administrativa. Existe un compromiso entre el tiempo de respuesta y la sobrecarga: quantums pequeños mejoran la respuesta para trabajos cortos pero aumentan la sobrecarga, mientras que quantums largos la reducen pero pueden empeorar la respuesta.
+Tiempo de procesos (Tiempo de CPU efectivo / Tiempo de Servicio)
+Formulación: Es el tiempo real que un proceso pasa ejecutando instrucciones en la CPU. También se denomina "tiempo de ráfaga de CPU".
+Interpretación: Este es el tiempo productivo que el procesador dedica a la ejecución de las aplicaciones de usuario. A medida que las CPUs se vuelven más rápidas, los procesos tienden a ser más "limitados por E/S" (I/O-bound), lo que implica ráfagas de CPU más cortas y una mayor importancia de la planificación de estos procesos para mantener los dispositivos de E/S ocupados.
+A continuación, se detalla el modelado de entrada y salida (E/S) en el contexto de un sistema operativo, incluyendo la tanda de procesos, sus campos, el manejo de E/S bloqueante y el orden de procesamiento de eventos, basándose en la información de las fuentes:
+Modelado de Entrada y Salida (E/S)
+El modelado de E/S es fundamental para comprender cómo el sistema operativo gestiona la interacción entre los procesos y los dispositivos externos, lo que a su vez afecta directamente el rendimiento del sistema y la experiencia del usuario. La E/S puede realizarse de varias maneras, afectando la eficiencia y el uso del procesador.
+E/S Programada: El procesador emite un mandato de E/S y espera activamente (sondeando continuamente) hasta que la operación se completa. Esto mantiene la CPU ocupada innecesariamente, degradando el rendimiento.
+E/S Dirigida por Interrupciones: El procesador emite un mandato de E/S y continúa ejecutando otras instrucciones. El módulo de E/S interrumpe al procesador cuando ha terminado su trabajo. El proceso que solicitó la E/S puede suspenderse hasta que la interrupción ocurra, permitiendo que otro trabajo se realice.
+Acceso Directo a Memoria (DMA): Un módulo DMA separado gestiona la transferencia completa de un bloque de datos entre el dispositivo de E/S y la memoria principal, sin involucrar a la CPU en cada palabra. El procesador solo se involucra al principio y al final de la transferencia, lo que mejora considerablemente el rendimiento.
+Tanda de Procesos: Archivo de Entrada
+En un contexto de modelado o simulación, una "tanda de procesos" se refiere a un conjunto de trabajos o programas de usuario que se someten al sistema para su procesamiento. Estos trabajos se mantienen en una "cola de lotes" y el planificador a largo plazo decide cuándo admitir nuevos trabajos al sistema, convirtiéndolos en procesos activos. Aunque las fuentes no especifican el formato del archivo de entrada (como .txt o .JSON), implican que la información sobre los procesos se presentaría en una estructura organizada que el sistema operativo pueda leer para crear y gestionar dichos procesos.
+Campos para la Definición de Procesos
+Para cada proceso en la tanda, el sistema operativo necesita una serie de atributos que se almacenan típicamente en un Bloque de Control de Proceso (BCP). Los campos solicitados se mapean a la información esencial que describe un proceso:
+Nombre (Identificador): Cada proceso tiene un identificador numérico único asignado por el sistema operativo para distinguirlo de otros procesos.
+Tiempo de Arribo (Tiempo de Llegada): Es el momento en que un proceso ingresa al sistema o está disponible para ser planificado. Este campo es crucial para el cálculo de métricas de rendimiento y para la planificación basada en el orden de llegada.
+Ráfagas (Ráfagas de CPU): Se refiere a los periodos de tiempo en los que un proceso ejecuta activamente en la CPU, intercalados con operaciones de E/S o esperas. Los procesos con ráfagas de CPU cortas y frecuentes operaciones de E/S se denominan limitados por E/S, mientras que los que requieren mucho tiempo de CPU se denominan limitados por el procesador.
+Duración CPU (Tiempo de Servicio): Es el tiempo real que un proceso necesita para completar su ejecución en el procesador. En los ejemplos de planificación, se utiliza como el tiempo total de ejecución requerido por un proceso.
+Duración E/S: Es el tiempo que un proceso pasa esperando que se complete una operación de E/S. Durante este tiempo, el proceso generalmente está en estado Bloqueado.
+Prioridad: Es un nivel asignado a cada proceso que influye en las decisiones del planificador. Los procesos con mayor prioridad se eligen preferentemente para su ejecución. La prioridad puede ser estática o dinámica, ajustándose según el comportamiento del proceso (por ejemplo, favoreciendo a los procesos limitados por E/S).
+Manejo de E/S Bloqueante: Transición de Corriendo → Bloqueado → Listo
+Este es un modelo fundamental de estados de proceso que describe cómo un proceso interactúa con las operaciones de E/S que causan su suspensión temporal:
+Corriendo (Ejecutando): El proceso está utilizando actualmente el procesador y sus instrucciones están siendo ejecutadas.
+Corriendo → Bloqueado: Esta transición ocurre cuando el proceso en ejecución necesita realizar una operación de E/S (o esperar un evento específico) y no puede continuar su ejecución hasta que dicha operación o evento se complete. Por ejemplo, cuando un proceso lee datos de un dispositivo y no hay entrada disponible, se bloquea automáticamente. El sistema operativo suspende al proceso y lo mueve a una cola de bloqueados.
+Bloqueado → Listo: Una vez que el evento por el cual el proceso estaba esperando (por ejemplo, la finalización de la operación de E/S) ocurre, el proceso se mueve del estado Bloqueado al estado Listo. En este estado, el proceso está preparado para ejecutar tan pronto como el procesador esté disponible y el planificador lo seleccione.
+Esta dinámica permite la multiprogramación, donde la CPU no permanece ociosa esperando la E/S de un solo proceso, sino que se asigna a otros procesos listos para mejorar la utilización del procesador.
+Orden de Procesamiento de Eventos
+El "orden de procesamiento de eventos" se refiere a cómo el planificador (o activador) del sistema operativo toma decisiones sobre qué proceso ejecutar a continuación en respuesta a diversos eventos del sistema.
+Los eventos comunes que desencadenan una decisión de planificación incluyen:
+Interrupciones de Reloj: Un temporizador de hardware genera interrupciones periódicas, lo que permite al sistema operativo determinar si el proceso en ejecución ha excedido su rodaja de tiempo (quantum). Si es así, el proceso actual puede ser movido al estado Listo y otro proceso puede ser activado. Esta es la base de la planificación por turno rotatorio (Round Robin).
+Interrupciones de E/S: Cuando un dispositivo de E/S termina su trabajo, genera una interrupción. El sistema operativo evalúa si un proceso que estaba bloqueado esperando esa E/S ahora está Listo. El planificador puede decidir ejecutar este proceso recién desbloqueado, el proceso que estaba ejecutando en el momento de la interrupción, o algún otro.
+Llamadas al Sistema: Si un proceso realiza una llamada al sistema que lo bloquea (como una solicitud de E/S) o que le hace ceder voluntariamente la CPU (como sched_yield en Linux), esto da al sistema operativo la oportunidad de planificar otro proceso.
+Terminación de Proceso: Cuando un proceso finaliza su ejecución, el sistema operativo debe seleccionar otro proceso de la cola de Listos para ejecutar.
+Los algoritmos de planificación determinan el orden específico. Algunas políticas comunes son:
+Primero en Llegar, Primero en Servir (FCFS/FIFO): Los procesos se ejecutan en el estricto orden en que llegan a la cola de listos. Es simple, pero puede ser ineficiente si un proceso largo bloquea a muchos cortos.
+El Trabajo Más Corto Primero (SJF/SPN): Selecciona el proceso con el tiempo de servicio esperado más corto. Puede minimizar el tiempo medio de retorno, pero requiere conocer las duraciones de antemano y no es expulsivo.
+Menor Tiempo Restante (SRT): Una versión expulsiva de SJF. El planificador elige el proceso con el menor tiempo restante esperado. Si un nuevo proceso llega y tiene un tiempo restante menor que el proceso en ejecución, este último es expulsado.
+Prioridad: El planificador siempre elige el proceso con la prioridad más alta de la cola de listos. Puede combinarse con otros algoritmos.
+Turno Rotatorio (Round Robin): Asigna a cada proceso un quantum de tiempo. Si el proceso no termina o se bloquea dentro de su quantum, la CPU es apropiada y asignada al siguiente proceso en la cola circular.
+En sistemas multiprocesador, la planificación se complica, ya que se debe decidir cómo asignar procesos a múltiples CPUs, pudiendo existir una cola global o colas por procesador, y considerando la sobrecarga de la conmutación de contexto.
+Para comprender a fondo el rendimiento y el comportamiento de los procesos en un sistema operativo, es crucial emplear métricas y herramientas de visualización. A continuación, se explican los elementos clave que mencionas:
+Diagrama de Gantt: Representación Gráfica de Ejecución en el Tiempo
+Un Diagrama de Gantt, en el contexto de la planificación de procesos, es una representación gráfica que muestra la ejecución de los procesos en una línea de tiempo [9.5]. Aunque las fuentes no usan explícitamente el término "Diagrama de Gantt", la Figura 9.5 de Stallings es un claro ejemplo de este tipo de visualización, donde se comparan diferentes políticas de planificación [9.5].
+Este tipo de diagrama permite:
+Visualizar el progreso de cada proceso: Cada barra horizontal representa un proceso y su duración en el procesador.
+Observar el entrelazamiento (intercalado) de procesos: Se muestra cómo el procesador alterna entre diferentes procesos a lo largo del tiempo, ilustrando la multiprogramación.
+Identificar tiempos de espera y ráfagas de CPU: Los segmentos coloreados o etiquetados en la línea de tiempo de un proceso pueden indicar cuándo el proceso está ejecutando, esperando, o en E/S. Por ejemplo, la Figura 9.5 de Stallings ilustra la ejecución de procesos A, B, C, D y E bajo distintas políticas de planificación como FCFS, Turno Rotatorio, y SPT, permitiendo comparar visualmente su tiempo de ejecución y sus tiempos de espera [9.5, 232].
+Log de Eventos: Llegada, Despacho, Finalización, Interrupción, E/S
+Un "Log de eventos" o registro de eventos es un historial detallado de las transiciones de estado y acciones clave que afectan a los procesos dentro del sistema operativo. Estos eventos son fundamentales para entender la dinámica de un sistema multiprogramado. La información para estos eventos se extrae del Bloque de Control de Proceso (BCP), que contiene todo el contexto y estado de un proceso.
+Los eventos clave que se registrarían incluyen:
+Llegada (Admisión): Cuando un nuevo proceso es admitido en el sistema y pasa del estado "Nuevo" a "Listo" o "Listo/Suspendido". En sistemas de procesamiento por lotes, esto ocurre cuando un trabajo se añade a la cola.
+Despacho (Activación/Ejecución): El momento en que el planificador selecciona un proceso de la cola de "Listos" para asignarle la CPU y moverlo al estado "Ejecutando". Esto implica un cambio de proceso, donde se guarda el contexto del proceso saliente y se carga el del proceso entrante.
+Finalización (Salida): Cuando un proceso termina su ejecución (ya sea de forma natural o por un error) y sale del sistema, pasando al estado "Saliente".
+Interrupción: Un evento externo o interno que detiene la ejecución del proceso actual y transfiere el control al sistema operativo. Las interrupciones son esenciales para la multiprogramación, permitiendo al procesador ejecutar otras instrucciones mientras una operación de E/S se lleva a cabo. Pueden ser:
+Interrupciones de reloj (Temporización): El proceso en ejecución ha agotado su "rodaja de tiempo" o "quantum", siendo expulsado al estado "Listo". Esto es la base del turno rotatorio (Round Robin).
+Interrupciones de E/S: Un módulo de E/S ha completado su trabajo y notifica al procesador, permitiendo que un proceso que estaba "Bloqueado" por esa E/S se mueva a "Listo".
+E/S (Bloqueo por E/S): Cuando un proceso en estado "Ejecutando" solicita una operación de entrada/salida y debe esperar su finalización, pasando al estado "Bloqueado". Una vez que la operación de E/S se completa, el proceso pasa de "Bloqueado" a "Listo". Este manejo de E/S bloqueante es fundamental para la multiprogramación y la eficiencia del procesador, ya que permite que la CPU no se quede ociosa esperando la E/S.
+Comparación de Políticas en Tandas Distintas
+La comparación de políticas de planificación se realiza evaluando su rendimiento bajo criterios específicos y en diferentes entornos o cargas de trabajo (conocidas como "tandas" o lotes de trabajos). No existe un único algoritmo de planificación que sea óptimo para todas las situaciones.
+Criterios de Planificación (Métricas):
+Orientados al usuario:
+Tiempo de estancia (Turnaround time): Tiempo total desde que un proceso llega hasta que finaliza, incluyendo el tiempo de ejecución y el tiempo de espera. Es una métrica común para trabajos por lotes.
+Tiempo de respuesta (Response time): Para procesos interactivos, es el tiempo desde que se lanza una petición hasta que se empieza a recibir la primera respuesta. El objetivo es lograr bajos tiempos de respuesta.
+Previsibilidad: Un trabajo debe ejecutarse aproximadamente en el mismo tiempo y costo, independientemente de la carga del sistema.
+Orientados al sistema:
+Rendimiento (Throughput): Número de procesos completados por unidad de tiempo. Un mayor rendimiento indica que se está realizando más trabajo.
+Utilización del procesador: Porcentaje de tiempo que el procesador está ocupado. El objetivo es mantener la CPU lo más ocupada posible.
+Comparación en Tandas Distintas:
+Las políticas de planificación se diseñan y evalúan para diferentes tipos de sistemas y cargas de trabajo, lo que se refiere a "tandas distintas":
+Sistemas de Procesamiento por Lotes (Batch Systems):
+
+
+El objetivo principal es maximizar el rendimiento y minimizar el tiempo de retorno (tiempo de estancia).
+Ejemplos de políticas:
+Primero en Llegar, Primero en Servir (FCFS/FIFO): Simple de implementar, pero puede ser ineficiente si un proceso largo bloquea a procesos cortos.
+El Trabajo Más Corto Primero (SJF/SPN): Óptimo para minimizar el tiempo medio de respuesta o de espera, pero requiere conocer la duración de los trabajos de antemano. Puede causar inanición para trabajos muy largos si siempre llegan trabajos cortos.
+Menor Tiempo Restante (SRT): Versión expulsiva de SJF, que selecciona el proceso con el menor tiempo restante esperado. Ofrece mejor rendimiento que SPN en términos de tiempo de estancia, pero también tiene riesgo de inanición para procesos largos.
+Sistemas Interactivos (Time-Sharing Systems):
+
+
+El objetivo principal es un buen tiempo de respuesta y la equidad entre usuarios.
+Ejemplos de políticas:
+Turno Rotatorio (Round Robin): Asigna un "quantum" de tiempo a cada proceso. Si un proceso no termina en su quantum, es expulsado y el procesador pasa al siguiente. Esto proporciona una respuesta justa y rápida a múltiples usuarios. La longitud del quantum es un factor clave.
+Prioridad: Asigna una prioridad a cada proceso, ejecutando siempre el de mayor prioridad. Puede combinarse con otros algoritmos y las prioridades pueden ser estáticas o dinámicas. Sin embargo, puede llevar a la inanición de procesos de baja prioridad.
+Retroalimentación (Feedback): Utiliza múltiples colas de prioridad con diferentes quantums de tiempo. Los procesos que agotan su quantum en una cola son degradados a una cola de menor prioridad, favoreciendo a los procesos limitados por E/S (ráfagas cortas de CPU) y a los procesos interactivos.
+Sistemas de Tiempo Real (Real-Time Systems):
+
+
+El objetivo crítico es cumplir con plazos de tiempo límite (deadlines), ya sean duros (obligatorios) o suaves (deseables). La equidad o el tiempo medio de respuesta son secundarios.
+Ejemplos de políticas:
+Planificación Basada en Plazos (Deadline Scheduling): Prioriza las tareas con los plazos más cercanos.
+Planificación de Tasa Monótona (Rate Monotonic Scheduling - RMS): Asigna prioridades a tareas periódicas, donde las tareas con períodos más cortos (mayores tasas de ocurrencia) tienen mayor prioridad.
+La elección y comparación de estas políticas se realiza a menudo mediante modelos de simulación y análisis de colas. Las simulaciones permiten evaluar el rendimiento bajo condiciones controladas y con diferentes cargas de trabajo, mientras que el análisis de colas proporciona fórmulas matemáticas para predecir el comportamiento del sistema.
+Para entender la gestión de procesos en un sistema operativo, es fundamental comprender los distintos niveles de planificación o scheduling. La planificación del procesador tiene como objetivo asignar procesos para que sean ejecutados por el procesador o procesadores a lo largo del tiempo, de manera que se cumplan los objetivos del sistema, como el tiempo de respuesta, el rendimiento y la eficiencia del procesador. En muchos sistemas, esta actividad se divide en tres funciones separadas, cuyos nombres sugieren las escalas de tiempo relativas en que se realizan.
+Estas tres funciones de planificación se relacionan con las transiciones de estado de los procesos.
+Planificación a Largo Plazo (Long-Term Scheduling)
+Función principal: El planificador a largo plazo determina qué programas son admitidos en el sistema para su procesamiento. En otras palabras, decide si se añade un nuevo proceso al conjunto de los que ya están activos.
+Control del grado de multiprogramación: Esta planificación controla el número de procesos que residen en el sistema al mismo tiempo. Un mayor número de procesos compite por el tiempo del procesador, lo que puede reducir el porcentaje de tiempo que cada proceso puede ejecutarse. Si hay muy pocos procesos, el procesador puede pasar mucho tiempo ocioso esperando operaciones de E/S.
+Momentos de invocación: Se invoca cuando se crea un nuevo proceso o cuando un trabajo existente termina. También puede activarse si la fracción de tiempo que el procesador está ocioso excede un umbral determinado.
+Criterios de decisión: La decisión sobre qué trabajo admitir se puede basar en varios criterios, incluyendo:
+Primero en llegar, primero en servirse (FCFS).
+Prioridad.
+Tiempo estimado de ejecución.
+Requisitos de E/S (por ejemplo, intentar mantener una mezcla de procesos limitados por el procesador y procesos limitados por la E/S para equilibrar el uso del sistema).
+Estado del proceso: Un proceso recién creado pasa al estado "Nuevo" y el planificador a largo plazo decide cuándo transferirlo a la cola de "Listo" o "Listo/Suspendido". Esto implica asignar una porción de memoria principal al proceso entrante.
+Contexto: Es particularmente relevante en sistemas de procesamiento por lotes (batch), o en la parte de lotes de un sistema operativo de propósito general.
+Planificación a Medio Plazo (Medium-Term Scheduling)
+Función principal: Es una parte fundamental de la función de intercambio o swapping.
+Control del grado de multiprogramación: Su objetivo principal es gestionar el grado de multiprogramación. Cuando hay demasiados procesos en memoria principal, el rendimiento puede degradarse debido al "trasiego" (thrashing) por fallos de página excesivos. El planificador a medio plazo puede mover procesos de la memoria principal al almacenamiento secundario (suspenderlos) para liberar espacio.
+Transiciones de estado: Involucra el movimiento de procesos entre los estados "Listo" y "Listo/Suspendido", o "Bloqueado" y "Bloqueado/Suspendido". Un proceso en estado "Suspendido" no está en memoria principal y no está inmediatamente disponible para ejecución.
+Consideraciones de memoria: La decisión de "meter" un proceso de nuevo en la memoria principal (swapping-in) tiene en cuenta las necesidades de memoria de los procesos que están fuera de la misma.
+Planificación a Corto Plazo (Short-Term Scheduling)
+Función principal: También conocido como activador o dispatcher, es el que toma las decisiones de "grano fino" sobre qué proceso listo se ejecutará a continuación en la CPU.
+Frecuencia de ejecución: Se ejecuta mucho más frecuentemente que los planificadores de largo y medio plazo. Se invoca cada vez que ocurre un evento que puede conllevar el bloqueo del proceso actual o que puede proporcionar la oportunidad de "expulsar" (preempt) al proceso en ejecución a favor de otro.
+Momentos de invocación: Se activa por eventos como:
+Interrupciones de reloj: Un proceso ha agotado su "rodaja de tiempo" (time slice o quantum).
+Interrupciones de E/S: Una operación de E/S ha finalizado, y un proceso que estaba bloqueado ahora está listo.
+Llamadas al sistema: Un proceso solicita un servicio del sistema operativo que podría bloquearlo o cambiar su prioridad.
+Señales (por ejemplo, semáforos): Eventos de sincronización que pueden desbloquear procesos.
+Estados del proceso: Se encarga de las transiciones entre los estados "Listo" y "Ejecutando". Selecciona un proceso de la cola de procesos "Listos" para asignarle el procesador.
+Criterios de planificación: El objetivo es optimizar uno o más aspectos del comportamiento del sistema. Los criterios se pueden clasificar en:
+Orientados al usuario:
+Tiempo de estancia (Turnaround time): Tiempo total desde la llegada hasta la finalización de un proceso (apropiado para trabajos por lotes).
+Tiempo de respuesta (Response time): Tiempo desde que se envía una petición hasta que se recibe la primera respuesta (crítico en sistemas interactivos).
+Previsibilidad: Que el servicio sea consistente independientemente de la carga del sistema.
+Orientados al sistema:
+Rendimiento (Throughput): Número de procesos completados por unidad de tiempo.
+Utilización del procesador: Porcentaje de tiempo que el procesador está ocupado.
+Equidad: Tratar a los procesos de manera similar, evitando la inanición.
+Imposición de prioridades: Favorecer a los procesos con prioridades más altas.
+Equilibrado de recursos: Mantener ocupados los recursos del sistema.
+Algoritmos: Existen muchos algoritmos de planificación a corto plazo, como Primero en Llegar, Primero en Servir (FCFS), Turno Rotatorio (Round Robin), Primero el Proceso Más Corto (SPN), Menor Tiempo Restante (SRT), Primero el de Mayor Tasa de Respuesta (HRRN), y Retroalimentación (Feedback).
+En resumen, los tres tipos de planificación trabajan en conjunto para gestionar el flujo de procesos en un sistema operativo: el planificador a largo plazo decide qué trabajos entran al sistema, el planificador a medio plazo gestiona la presencia de los procesos en memoria principal, y el planificador a corto plazo decide qué proceso ejecuta en la CPU en cada instante.
+apunte clase 20/8
+Para comprender el cambio de modo y el cambio de proceso, es fundamental entender cómo el sistema operativo (SO) gestiona y controla las actividades en un computador, apoyándose en el bloque de control de proceso (BCP).
+Cambio de Modo (Mode Switching)
+El cambio de modo se refiere a la transferencia de control de ejecución entre el modo usuario (menos privilegiado) y el modo núcleo o modo privilegiado (más privilegiado) del procesador.
+Propósito: Este mecanismo es esencial para el sistema operativo, ya que ciertas instrucciones (como la lectura y modificación de registros de control, instrucciones de E/S primitivas, o gestión de memoria) solo pueden ejecutarse en modo privilegiado. Además, ciertas regiones de memoria son accesibles únicamente en los modos más privilegiados.
+Mecanismo:
+El procesador sabe en qué modo está ejecutando gracias a un bit en la palabra de estado del programa (PSW).
+El cambio a modo núcleo se produce típicamente en respuesta a dos eventos:
+Una llamada al sistema (system call) realizada por un programa de usuario para solicitar un servicio del sistema operativo.
+Una interrupción (o trap si es una condición de error/excepción dentro del proceso) que dispara la ejecución de una rutina del sistema operativo.
+Al producirse una interrupción o llamada al sistema, el procesador automáticamente cambia a modo núcleo (por ejemplo, limpiando el campo de nivel de privilegio en el registro de estado) y transfiere el control a una rutina del sistema operativo.
+Al finalizar el servicio del sistema operativo, el modo se restaura a modo usuario.
+Cambio de Proceso (Process Switching)
+El cambio de proceso (a menudo confundido con el término más ambiguo "cambio de contexto") implica la interrupción de un proceso que está en estado de ejecución para que el sistema operativo pueda asignar el procesador a otro proceso, transfiriéndolo al estado de "Ejecutando".
+Naturaleza: Es una operación más compleja que el cambio de modo, ya que implica un cambio sustancial en el entorno de ejecución y el estado del proceso.
+Eventos que lo disparan: Un cambio de proceso puede ocurrir en cualquier momento en que el sistema operativo obtiene el control del proceso actualmente en ejecución. Estos eventos incluyen:
+Interrupción de reloj: El proceso en ejecución excede su tiempo máximo asignado (rodaja de tiempo o quantum).
+Interrupción de E/S: Una operación de E/S solicitada por el proceso actual ha terminado, o un proceso bloqueado por E/S ahora está listo.
+Fallo de memoria: El procesador encuentra una referencia a una dirección de memoria virtual que no está en la memoria principal (lo que se llama un fallo de página).
+Trap: Una condición de error o excepción (como un intento de acceso no permitido) generada por el proceso en ejecución.
+Llamada al sistema: Un proceso solicita un servicio del sistema operativo que puede requerir que se bloquee, como la apertura de un archivo o la espera de un recurso.
+Pasos para un cambio de proceso completo:
+Salvar el estado del procesador del proceso actual (incluyendo el contador de programa y otros registros).
+Actualizar el bloque de control del proceso (BCP) del proceso saliente, cambiando su estado (por ejemplo, a Listo, Bloqueado, o Saliente) y otros campos de auditoría.
+Mover el BCP del proceso saliente a la cola apropiada (cola de Listos, cola de Bloqueados, etc.).
+Seleccionar un nuevo proceso para ejecutar (esta es tarea del planificador).
+Actualizar el BCP del proceso elegido, cambiando su estado a "Ejecutando".
+Actualizar las estructuras de datos de gestión de memoria si es necesario (dependiendo del esquema de traducción de direcciones).
+Restaurar el estado del procesador al que tenía el proceso seleccionado la última vez que estuvo en ejecución (leyendo los valores del contador de programa y los registros de su BCP).
+Relación con el Bloque de Control de Proceso (BCP)
+El bloque de control de proceso (BCP) es la estructura de datos más crucial del sistema operativo para la gestión de procesos. Contiene toda la información necesaria para supervisar y controlar un proceso, incluyendo su estado actual, la asignación de recursos, su prioridad y otros datos relevantes.
+Registro del Estado del Proceso: El BCP almacena el contexto de ejecución de un proceso, que incluye el contenido de los registros del procesador (como el contador de programa, la palabra de estado del programa (PSW), y otros registros generales y de control), así como los punteros de pila. Esta información es fundamental para que el sistema operativo pueda interrumpir un proceso en ejecución y posteriormente restaurar su estado como si no hubiera habido interrupción alguna.
+Soporte para el Cambio de Proceso: Cuando ocurre un cambio de proceso, el BCP juega un papel central:
+El sistema operativo guarda el estado actual del procesador del proceso que se va a interrumpir directamente en los campos correspondientes de su BCP.
+También actualiza el estado del proceso dentro del BCP (por ejemplo, a "Listo" o "Bloqueado").
+Para reanudar un proceso, el sistema operativo recupera el contador de programa y los datos de contexto del BCP de ese proceso y los carga en los registros del procesador. Esto permite que el nuevo proceso continúe su ejecución desde el punto exacto donde fue interrumpido.
+El BCP también contiene punteros y enlaces que permiten al sistema operativo mover el proceso a la cola de planificación adecuada (ej. cola de Listos, cola de Bloqueados).
+Además, el BCP puede contener información de auditoría o contabilidad utilizada para facturación o evaluación del rendimiento.
+Soporte para el Cambio de Modo: Aunque un cambio de modo no siempre implica un cambio de proceso, el BCP es relevante porque:
+Contiene información de estado que incluye flags de interrupciones habilitadas/deshabilitadas y el modo de ejecución.
+Refleja los privilegios del proceso en términos de acceso a memoria y tipos de instrucciones que puede ejecutar, lo cual está directamente relacionado con el modo (usuario o núcleo) en el que se le permite operar.
+La capacidad de cambiar de modo es lo que permite al sistema operativo, al tomar el control (por ejemplo, tras una interrupción o llamada al sistema), acceder y manipular los BCPs y otras estructuras de datos esenciales para la gestión de procesos.
+En resumen, el BCP es la herramienta clave que permite al sistema operativo dar soporte a múltiples procesos y proporcionar la multiprogramación, controlando la vida, el estado y la ejecución de cada proceso a través de los mecanismos de cambio de modo y cambio de proceso.
+El cambio de modo y el cambio de proceso son dos conceptos fundamentales en la gestión de sistemas operativos que, aunque relacionados, son distintos y tienen diferentes implicaciones en el rendimiento y la operativa del sistema. El Bloque de Control de Proceso (BCP) es la estructura de datos central que soporta ambos mecanismos.
+¿Cuándo ocurre un cambio de modo?
+El cambio de modo (o mode switching) se refiere a la transferencia de control de ejecución entre el modo usuario y el modo núcleo (o privilegiado) del procesador. Este cambio es esencial porque ciertas instrucciones (como la lectura y modificación de registros de control, instrucciones de E/S primitivas o gestión de memoria) y regiones de memoria solo son accesibles en modos privilegiados.
+Un cambio de modo ocurre principalmente en respuesta a dos tipos de eventos:
+Llamadas al Sistema (System Calls): Cuando un programa en modo usuario necesita solicitar un servicio al sistema operativo (por ejemplo, abrir un archivo, leer datos del teclado, o crear un proceso), ejecuta una instrucción TRAP. Esta instrucción cambia automáticamente el procesador del modo usuario al modo núcleo y transfiere el control a una rutina del sistema operativo. Una vez que el sistema operativo ha completado el servicio, el control se devuelve al programa de usuario, y el modo se restaura al modo usuario.
+Interrupciones (Interrupts) o Traps (Excepciones/Errores):
+Interrupciones ordinarias: Son eventos externos e independientes del proceso en ejecución, como la finalización de una operación de E/S o una interrupción de reloj. Al ocurrir una interrupción, el procesador suspende la ejecución del programa actual, cambia a modo núcleo (poniendo a cero el nivel de privilegio en el registro de estado) y salta a la rutina de servicio de interrupción (manejador de interrupción) del sistema operativo.
+Traps: Son condiciones de error o excepción generadas dentro del proceso en ejecución, como un intento de acceso ilegal a un archivo o un fallo de memoria. Al igual que con las interrupciones, una trap provoca que el procesador cambie a modo núcleo y transfiera el control al sistema operativo para manejar la situación.
+Es importante destacar que un cambio de modo no implica necesariamente un cambio de proceso. Es decir, el sistema operativo puede volver a la ejecución del mismo proceso de usuario que fue interrumpido o que realizó la llamada al sistema, una vez que haya terminado su trabajo en modo núcleo. La sobrecarga de un cambio de modo es menor que la de un cambio de proceso.
+¿Cuándo ocurre un cambio de proceso?
+Un cambio de proceso (o process switching) es una operación más compleja que implica la interrupción de un proceso en ejecución para que el sistema operativo pueda asignar el procesador a otro proceso. A menudo se le denomina "cambio de contexto" de forma ambigua, por lo que los autores de la fuente prefieren "cambio de proceso".
+Un cambio de proceso puede ocurrir en cualquier momento en que el sistema operativo toma el control del proceso que se está ejecutando actualmente. Los eventos que pueden desencadenar un cambio de proceso incluyen:
+El proceso en ejecución se bloquea: Esto sucede cuando el proceso necesita esperar por un evento, como:
+Una solicitud de E/S (por ejemplo, leer de un archivo o esperar a que termine una operación de disco).
+La invocación de una llamada al sistema wait para la terminación de un proceso hijo.
+Una solicitud de un recurso no disponible.
+Un fallo de memoria (fallo de página) cuando el procesador intenta acceder a una dirección virtual no presente en la memoria principal. El proceso se pone en estado "Bloqueado" y el sistema operativo cambia a otro proceso.
+El proceso en ejecución es expulsado (preempted): El sistema operativo interrumpe forzosamente un proceso que aún no ha terminado su ejecución, generalmente porque:
+Ha excedido su rodaja de tiempo (time slice), un tiempo máximo de ejecución ininterrumpida. Un temporizador de reloj genera una interrupción periódica para este fin.
+Un proceso de mayor prioridad pasa al estado "Listo" (por ejemplo, después de completar una operación de E/S por la que estaba esperando). El sistema operativo puede expulsar al proceso actual para dar paso al de mayor prioridad.
+El proceso termina: Ya sea porque ha completado su ejecución de forma natural o ha sido abortado debido a un error.
+Creación de un nuevo proceso: Tras la creación de un nuevo proceso, el planificador puede decidir ejecutar el proceso recién creado en lugar del padre o cualquier otro proceso listo.
+Los pasos de un cambio de proceso son mucho más sustanciales que los de un cambio de modo:
+Salvar el estado del procesador del proceso saliente (contador de programa, registros y otra información).
+Actualizar el BCP del proceso saliente, cambiando su estado (Ejecutando a Listo, Bloqueado, etc.) y la información de auditoría.
+Mover el BCP del proceso saliente a la cola de planificación adecuada (cola de Listos, cola de Bloqueados, etc.).
+Seleccionar un nuevo proceso para ejecutar (tarea del planificador).
+Actualizar el BCP del proceso elegido, cambiándolo a estado "Ejecutando".
+Actualizar las estructuras de datos de gestión de memoria si es necesario (dependiendo del esquema de traducción de direcciones).
+Restaurar el estado del procesador al que tenía el proceso seleccionado la última vez que estuvo en ejecución, cargando los valores de su BCP.
+Además de estos pasos, un cambio de proceso puede invalidar la caché y el TLB (Translation Lookaside Buffer), lo que añade una sobrecarga significativa.
+Relación con el Bloque de Control de Proceso (BCP)
+El Bloque de Control de Proceso (BCP), también conocido como contexto de ejecución o descriptor de proceso, es la estructura de datos fundamental que el sistema operativo utiliza para gestionar y controlar cada proceso.
+Registro del Estado del Proceso: El BCP almacena el estado completo del proceso en un instante dado, incluyendo el contenido de los registros del procesador (como el contador de programa, la palabra de estado del programa (PSW), y otros registros generales y de control), así como los punteros de pila. Esta información es crucial para que el sistema operativo pueda suspender un proceso en cualquier punto de su ejecución y restaurarlo más tarde como si nada hubiera pasado.
+Soporte para el Cambio de Proceso: Durante un cambio de proceso, el BCP es manipulado intensivamente:
+El sistema operativo guarda el estado actual del procesador del proceso que deja de ejecutarse directamente en los campos correspondientes de su BCP.
+También actualiza el estado del proceso dentro del BCP (por ejemplo, a "Listo" o "Bloqueado") y otra información de control.
+Para reanudar un proceso, el sistema operativo recupera el contador de programa y los demás datos de contexto del BCP de ese proceso y los carga en los registros del procesador, permitiendo que el proceso continúe desde donde se interrumpió.
+El BCP también contiene punteros que permiten al sistema operativo mover el proceso a las colas de planificación adecuadas (como la cola de Listos o las colas de Bloqueados por evento).
+Soporte para el Cambio de Modo: Aunque un cambio de modo no siempre lleva a un cambio de proceso, la información guardada durante un cambio de modo (PC, PSW) es parte del contexto que se almacenaría en el BCP si se necesitara un cambio de proceso completo. El BCP refleja los privilegios y el estado (como las interrupciones habilitadas/deshabilitadas) que son inherentes al modo de ejecución del proceso. La capacidad del sistema operativo para operar en modo núcleo es lo que le permite acceder y modificar los BCPs y otras estructuras de datos para la gestión de procesos.
+En síntesis, el BCP es el eje de la multiprogramación, permitiendo al sistema operativo gestionar el ciclo de vida y la ejecución de cada proceso a través de los mecanismos de cambio de modo y cambio de proceso.
+
