@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "test-motor-simulacion",
+			"type": "shell",
+			"command": "npx tsx test-motor.ts",
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			]
+		}
+	]
+}

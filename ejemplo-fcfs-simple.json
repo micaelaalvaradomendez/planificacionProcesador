@@ -1,0 +1,27 @@
+{
+  "workloadName": "Prueba FCFS Simple",
+  "processes": [
+    {
+      "name": "P1",
+      "tiempoArribo": 0,
+      "rafagasCPU": 1,
+      "duracionRafagaCPU": 5,
+      "duracionRafagaES": 0,
+      "prioridad": 50
+    },
+    {
+      "name": "P2",
+      "tiempoArribo": 2,
+      "rafagasCPU": 1,
+      "duracionRafagaCPU": 3,
+      "duracionRafagaES": 0,
+      "prioridad": 50
+    }
+  ],
+  "config": {
+    "policy": "FCFS",
+    "tip": 1,
+    "tfp": 1,
+    "tcp": 1
+  }
+}
