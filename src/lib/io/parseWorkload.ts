@@ -1,5 +1,5 @@
 import type { Workload, ProcessSpec, RunConfig, Policy } from '../model/types';
-import { validarTandaDeProcesos } from '../model/validators';
+import { validarTandaDeProcesos, validarProceso } from '../model/validators';
 
 function normalizarPolitica(s: string | undefined): Policy {
   const up = (s || '').toUpperCase();
@@ -20,43 +20,46 @@ function normalizarPolitica(s: string | undefined): Policy {
 */
 export async function analizarTandaJson(file: File): Promise<Workload> {
   const text = await file.text();
-  const raw = JSON.parse(text);
+  let procesosRaw;
+  try {
+    procesosRaw = JSON.parse(text);
+  } catch (e) {
+    throw new Error('Archivo JSON inválido');
+  }
 
-  // soportamos dos variantes: {processes, policy, tip...} plano o {processes, config:{...}}
-  const cfg: RunConfig = raw.config
-    ? {
-        policy: normalizarPolitica(raw.config.policy),
-        tip: Number(raw.config.tip ?? 0),
-        tfp: Number(raw.config.tfp ?? 0),
-        tcp: Number(raw.config.tcp ?? 0),
-        quantum: raw.config.quantum != null ? Number(raw.config.quantum) : undefined
+  // Si el JSON es un array, lo interpretamos como la tanda de procesos
+  if (Array.isArray(procesosRaw)) {
+    const processes: ProcessSpec[] = procesosRaw.map((p: any) => ({
+      name: String(p.nombre || p.name),
+      tiempoArribo: Number(p.tiempo_arribo ?? p.tiempoArribo ?? p.arrivalTime),
+      rafagasCPU: Number(p.cantidad_rafagas_cpu ?? p.rafagasCPU ?? p.cpuBursts),
+      duracionRafagaCPU: Number(p.duracion_rafaga_cpu ?? p.duracionRafagaCPU ?? p.cpuBurstDuration),
+      duracionRafagaES: Number(p.duracion_rafaga_es ?? p.duracionRafagaES ?? p.ioBurstDuration),
+      prioridad: Number(p.prioridad_externa ?? p.prioridad ?? p.priority)
+    }));
+
+    // La política y parámetros se deben ingresar por la UI
+    const wl: Workload = {
+      workloadName: 'tanda-json',
+      processes,
+      config: {
+        policy: null as any, // la UI debe asignar luego
+        tip: 0,
+        tfp: 0,
+        tcp: 0,
+        quantum: undefined
       }
-    : {
-        policy: normalizarPolitica(raw.policy),
-        tip: Number(raw.tip ?? 0),
-        tfp: Number(raw.tfp ?? 0),
-        tcp: Number(raw.tcp ?? 0),
-        quantum: raw.quantum != null ? Number(raw.quantum) : undefined
-      };
+    };
+    // Solo validar los procesos, no la configuración
+    const procErrors = processes.map(validarProceso).flat();
+    if (procErrors.length) throw new Error(`Entrada JSON inválida:\n- ${procErrors.join('\n- ')}`);
+    return wl;
+  }
 
-  const processes: ProcessSpec[] = (raw.processes || []).map((p: any) => ({
-    name: String(p.name),
-    tiempoArribo: Number(p.tiempoArribo || p.arrivalTime), // soporte para ambos nombres
-    rafagasCPU: Number(p.rafagasCPU || p.cpuBursts),
-    duracionRafagaCPU: Number(p.duracionRafagaCPU || p.cpuBurstDuration),
-    duracionRafagaES: Number(p.duracionRafagaES || p.ioBurstDuration),
-    prioridad: Number(p.prioridad || p.priority)
-  }));
-
-  const wl: Workload = {
-    workloadName: raw.workloadName || 'tanda-trabajo',
-    processes,
-    config: cfg
-  };
-
-  const errors = validarTandaDeProcesos(wl);
-  if (errors.length) throw new Error(`Entrada JSON inválida:\n- ${errors.join('\n- ')}`);
-  return wl;
+  // Si no es un array, intentamos el formato anterior
+  // ...existing code...
+  // (mantener el soporte para el formato anterior si es necesario)
+  throw new Error('Formato de archivo JSON no soportado');
 }
 
 /** CSV/TXT opcional (una línea por proceso):

@@ -1,176 +1,53 @@
 <script lang="ts">
-  import { analizarTandaJson, analizarTandaCsv } from '$lib/io/parseWorkload';
-  import { exportarEventosCsv } from '$lib/io/exportEvents';
-  import { exportarMetricasJson, conPorcentajes } from '$lib/io/exportMetrics';
-  import { ejecutarSimulacionCompleta } from '$lib/application/usecases/runSimulation';
-  import { construirDiagramaGantt } from '$lib/application/usecases/buildGantt';
-  import { calcularEstadisticasExtendidas } from '$lib/application/usecases/computeStatistics';
-  import type { Workload, SimEvent, Metrics, Policy, GanttSlice } from '$lib/model/types';
-  import type { EstadisticasExtendidas } from '$lib/application/usecases/computeStatistics';
+  import { cargarArchivo } from '$lib/application/usecases/parseInput';
+  import { runSimulationWithTimeout } from '$lib/application/usecases/simulationRunner';
+  import { descargarEventos, descargarMetricas } from '$lib/application/usecases/exportResults';
+  import type { SimulationState } from '$lib/application/usecases/simulationState';
+  import { getInitialSimulationState, resetSimulationState } from '$lib/application/usecases/simulationState';
 
-  let file: File | null = null;
-  let mode: 'json' | 'csv' = 'json';
+  let simState: SimulationState = getInitialSimulationState();
 
-  // Config sólo necesario si usás CSV:
-  let policy: Policy = 'FCFS';
-  let tip = 0, tfp = 0, tcp = 0, quantum: number | undefined = undefined;
-
-  let workload: Workload | null = null;
-  let errors: string[] = [];
-  let loaded = false;
-
-  // Estado de simulación
-  let simulacionEnCurso = false;
-  let simulacionCompletada = false;
-  let events: SimEvent[] = [];
-  let metrics: Metrics = {
-    porProceso: [],
-    tanda: { tiempoRetornoTanda: 0, tiempoMedioRetorno: 0, cpuOcioso: 0, cpuSO: 0, cpuProcesos: 0 }
-  };
-  let ganttSlices: GanttSlice[] = [];
-  let estadisticasExtendidas: EstadisticasExtendidas | null = null;
-  let tiempoTotalSimulacion = 0;
-  let advertencias: string[] = [];
-
-  async function cargarArchivo() {
-    console.log('🔄 Iniciando carga de archivo...');
-    errors = [];
-    workload = null;
-    loaded = false;
-    simulacionCompletada = false;
-    
-    if (!file) { 
-      const error = 'Seleccioná un archivo';
-      console.error('❌', error);
-      errors.push(error); 
-      return; 
-    }
-
-    console.log('📂 Archivo seleccionado:', file.name, 'Modo:', mode);
-
-    try {
-      if (mode === 'json') {
-        console.log('📋 Analizando archivo JSON...');
-        workload = await analizarTandaJson(file);
-      } else {
-        console.log('📋 Analizando archivo CSV...');
-        workload = await analizarTandaCsv(file, { policy, tip, tfp, tcp, quantum });
-      }
-      loaded = true;
-      console.log('✅ Archivo cargado exitosamente:', workload.workloadName);
-      console.log('📊 Procesos cargados:', workload.processes.length);
-    } catch (e) {
-      const errorMsg = (e as Error).message;
-      console.error('❌ Error al cargar archivo:', errorMsg);
-      errors.push(errorMsg);
-    }
+  async function cargarArchivoUI() {
+    const result = await cargarArchivo(simState.file, simState.mode, simState.policy, simState.tip, simState.tfp, simState.tcp, simState.quantum);
+    simState.errors = result.errors;
+    simState.workload = result.workload;
+    simState.loaded = result.loaded;
+    simState.simulacionCompletada = false;
   }
 
-  async function ejecutarSimulacion() {
-    if (!workload) {
-      errors.push('Primero debés cargar una tanda de procesos');
+  async function ejecutarSimulacionUI() {
+    if (!simState.workload) {
+      simState.errors.push('Primero debés cargar una tanda de procesos');
       return;
     }
-
-    console.log('🚀 Preparando simulación...');
-    errors = [];
-    simulacionEnCurso = true;
-    simulacionCompletada = false;
-
-    // Timeout para evitar que el navegador se cuelgue
-    const timeoutMs = 30000; // 30 segundos máximo
-    let timeoutId: number;
-
-    try {
-      console.log('🚀 Iniciando simulación con:', workload.workloadName);
-      console.log('🔧 Configuración:', workload.config);
-      console.log('📋 Procesos a simular:', workload.processes.map(p => p.name));
-      
-      // Crear una promesa con timeout
-      const simulacionPromise = ejecutarSimulacionCompleta(workload);
-      
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error('La simulación tardó demasiado tiempo (más de 30 segundos). Puede haber un bucle infinito.'));
-        }, timeoutMs);
-      });
-      
-      // Ejecutar la simulación con timeout
-      const resultado = await Promise.race([simulacionPromise, timeoutPromise]);
-      clearTimeout(timeoutId);
-      
-      if (!resultado.exitoso) {
-        const errorMsg = resultado.error || 'Error desconocido en la simulación';
-        console.error('❌ Simulación falló:', errorMsg);
-        errors.push(errorMsg);
-        return;
-      }
-
-      // Guardar resultados
-      events = resultado.eventos;
-      metrics = resultado.metricas;
-      tiempoTotalSimulacion = resultado.tiempoTotal;
-      advertencias = resultado.advertencias || [];
-
-      console.log('📊 Eventos generados:', events.length);
-      console.log('⏱️ Tiempo total de simulación:', tiempoTotalSimulacion);
-
-      // Construir diagrama de Gantt
-      console.log('📈 Construyendo diagrama de Gantt...');
-      const diagramaGantt = construirDiagramaGantt(events);
-      ganttSlices = diagramaGantt.segmentos;
-
-      // Calcular estadísticas extendidas
-      console.log('📊 Calculando estadísticas extendidas...');
-      estadisticasExtendidas = calcularEstadisticasExtendidas(
-        metrics, 
-        events, 
-        tiempoTotalSimulacion
-      );
-
-      simulacionCompletada = true;
-      console.log('✅ Simulación completada exitosamente');
-
-    } catch (error) {
-      if (timeoutId) clearTimeout(timeoutId);
-      const errorMsg = `Error durante la simulación: ${error instanceof Error ? error.message : error}`;
-      console.error('❌ Error en simulación:', error);
-      errors.push(errorMsg);
-    } finally {
-      simulacionEnCurso = false;
-    }
+    simState.workload.config.policy = simState.policy;
+    simState.workload.config.tip = simState.tip;
+    simState.workload.config.tfp = simState.tfp;
+    simState.workload.config.tcp = simState.tcp;
+    simState.workload.config.quantum = simState.quantum;
+    simState.errors = [];
+    const result = await runSimulationWithTimeout(simState.workload);
+    simState.simulacionEnCurso = result.simulacionEnCurso;
+    simState.simulacionCompletada = result.simulacionCompletada;
+    simState.events = result.events;
+    simState.metrics = result.metrics;
+    simState.ganttSlices = result.ganttSlices;
+    simState.estadisticasExtendidas = result.estadisticasExtendidas;
+    simState.tiempoTotalSimulacion = result.tiempoTotalSimulacion;
+    simState.advertencias = result.advertencias;
+    simState.errors = result.errors;
   }
 
-  function descargarEventos() {
-    const blob = exportarEventosCsv(events);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `eventos_${workload?.workloadName || 'simulacion'}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  function descargarEventosUI() {
+    descargarEventos(simState.events, simState.workload?.workloadName);
   }
 
-  function descargarMetricas() {
-    const blob = exportarMetricasJson(conPorcentajes(metrics));
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `metricas_${workload?.workloadName || 'simulacion'}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  function descargarMetricasUI() {
+    descargarMetricas(simState.metrics, simState.workload?.workloadName);
   }
 
   function reiniciarSimulacion() {
-    simulacionCompletada = false;
-    events = [];
-    metrics = {
-      porProceso: [],
-      tanda: { tiempoRetornoTanda: 0, tiempoMedioRetorno: 0, cpuOcioso: 0, cpuSO: 0, cpuProcesos: 0 }
-    };
-    ganttSlices = [];
-    estadisticasExtendidas = null;
-    tiempoTotalSimulacion = 0;
-    advertencias = [];
-    errors = [];
+    resetSimulationState(simState);
   }
 </script>
 
@@ -183,45 +60,49 @@
     
     <label>
       <strong>Formato de entrada:</strong>
-      <select bind:value={mode}>
+      <select bind:value={simState.mode}>
         <option value="json">JSON (recomendado)</option>
         <option value="csv">CSV/TXT (configuración manual)</option>
       </select>
     </label>
 
-    {#if mode === 'csv'}
+    {#if simState.mode === 'csv' || (simState.mode === 'json' && simState.loaded && simState.workload)}
       <div class="config-grid">
         <label>Política
-          <select bind:value={policy}>
-            <option>FCFS</option><option>PRIORITY</option><option>RR</option><option>SPN</option><option>SRTN</option>
+          <select bind:value={simState.policy}>
+            <option>FCFS</option>
+            <option>PRIORITY</option>
+            <option>RR</option>
+            <option>SPN</option>
+            <option>SRTN</option>
           </select>
         </label>
-        <label>TIP <input type="number" bind:value={tip} min="0"/></label>
-        <label>TFP <input type="number" bind:value={tfp} min="0"/></label>
-        <label>TCP <input type="number" bind:value={tcp} min="0"/></label>
-        <label>Quantum <input type="number" bind:value={quantum} min="1" placeholder="solo RR"/></label>
+        <label>TIP <input type="number" bind:value={simState.tip} min="0"/></label>
+        <label>TFP <input type="number" bind:value={simState.tfp} min="0"/></label>
+        <label>TCP <input type="number" bind:value={simState.tcp} min="0"/></label>
+        <label>Quantum <input type="number" bind:value={simState.quantum} min="1" placeholder="solo RR"/></label>
       </div>
     {/if}
 
     <div class="file-controls">
-      <input type="file" accept={mode === 'json' ? '.json,application/json' : '.csv,.txt,text/csv'} on:change={(e:any)=>{file=e.target.files?.[0]||null}} />
-      <button on:click={cargarArchivo} class="btn-primary">Cargar Archivo</button>
+      <input type="file" accept={simState.mode === 'json' ? '.json,application/json' : '.csv,.txt,text/csv'} on:change={(e:any)=>{simState.file=e.target.files?.[0]||null}} />
+  <button on:click={cargarArchivoUI} class="btn-primary">Cargar Archivo</button>
     </div>
 
-    {#if errors.length}
+    {#if simState.errors.length}
       <div class="error-box">
         <h4>❌ Errores:</h4>
-        <ul>{#each errors as err}<li>{err}</li>{/each}</ul>
+        <ul>{#each simState.errors as err}<li>{err}</li>{/each}</ul>
       </div>
     {/if}
   </div>
 
-  {#if loaded && workload}
+  {#if simState.loaded && simState.workload}
     <div class="card p-3 my-3">
       <h2>📋 Configuración Cargada</h2>
       <div class="config-summary">
-        <p><strong>Tanda:</strong> {workload.workloadName || 'Sin nombre'}</p>
-        <p><strong>Política:</strong> {workload.config.policy} | <strong>TIP:</strong> {workload.config.tip} | <strong>TFP:</strong> {workload.config.tfp} | <strong>TCP:</strong> {workload.config.tcp} {#if workload.config.quantum != null}| <strong>Quantum:</strong> {workload.config.quantum}{/if}</p>
+        <p><strong>Tanda:</strong> {simState.workload.workloadName || 'Sin nombre'}</p>
+        <p><strong>Política:</strong> {simState.workload.config.policy} | <strong>TIP:</strong> {simState.workload.config.tip} | <strong>TFP:</strong> {simState.workload.config.tfp} | <strong>TCP:</strong> {simState.workload.config.tcp} {#if simState.workload.config.quantum != null}| <strong>Quantum:</strong> {simState.workload.config.quantum}{/if}</p>
       </div>
       
       <table class="process-table">
@@ -236,7 +117,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each workload.processes as p}
+          {#each simState.workload.processes as p}
             <tr>
               <td class="process-name">{p.name}</td>
               <td>{p.tiempoArribo}</td>
@@ -251,18 +132,18 @@
 
       <div class="simulation-controls">
         <button 
-          on:click={ejecutarSimulacion} 
-          disabled={simulacionEnCurso}
+          on:click={ejecutarSimulacionUI} 
+          disabled={simState.simulacionEnCurso}
           class="btn-success"
         >
-          {#if simulacionEnCurso}
+          {#if simState.simulacionEnCurso}
             🔄 Ejecutando Simulación...
           {:else}
             🚀 Ejecutar Simulación
           {/if}
         </button>
         
-        {#if simulacionCompletada}
+        {#if simState.simulacionCompletada}
           <button on:click={reiniciarSimulacion} class="btn-secondary">
             🔄 Nueva Simulación
           </button>
@@ -271,26 +152,26 @@
     </div>
   {/if}
 
-  {#if simulacionCompletada && estadisticasExtendidas}
+  {#if simState.simulacionCompletada && simState.estadisticasExtendidas}
     <!-- Resumen de Resultados -->
     <div class="card p-3 my-3 success-card">
       <h2>✅ Simulación Completada</h2>
       <div class="summary-grid">
         <div class="metric">
           <span class="metric-label">Tiempo Total:</span>
-          <span class="metric-value">{tiempoTotalSimulacion.toFixed(2)}</span>
+          <span class="metric-value">{simState.tiempoTotalSimulacion.toFixed(2)}</span>
         </div>
         <div class="metric">
           <span class="metric-label">Procesos Terminados:</span>
-          <span class="metric-value">{metrics.porProceso.length}</span>
+          <span class="metric-value">{simState.metrics.porProceso.length}</span>
         </div>
         <div class="metric">
           <span class="metric-label">Eventos Generados:</span>
-          <span class="metric-value">{events.length}</span>
+          <span class="metric-value">{simState.events.length}</span>
         </div>
         <div class="metric">
           <span class="metric-label">Eficiencia CPU:</span>
-          <span class="metric-value">{estadisticasExtendidas.analisis.eficienciaCPU.toFixed(1)}%</span>
+          <span class="metric-value">{simState.estadisticasExtendidas.analisis.eficienciaCPU.toFixed(1)}%</span>
         </div>
       </div>
     </div>
@@ -300,20 +181,20 @@
       <h2>💻 Uso de CPU</h2>
       <div class="cpu-metrics">
         <div class="cpu-bar">
-          <div class="bar-segment bar-user" style="width: {metrics.tanda.porcentajeCpuProcesos || 0}%">
-            Procesos ({(metrics.tanda.porcentajeCpuProcesos || 0).toFixed(1)}%)
+          <div class="bar-segment bar-user" style="width: {simState.metrics.tanda.porcentajeCpuProcesos || 0}%">
+            Procesos ({(simState.metrics.tanda.porcentajeCpuProcesos || 0).toFixed(1)}%)
           </div>
-          <div class="bar-segment bar-so" style="width: {metrics.tanda.porcentajeCpuSO || 0}%">
-            SO ({(metrics.tanda.porcentajeCpuSO || 0).toFixed(1)}%)
+          <div class="bar-segment bar-so" style="width: {simState.metrics.tanda.porcentajeCpuSO || 0}%">
+            SO ({(simState.metrics.tanda.porcentajeCpuSO || 0).toFixed(1)}%)
           </div>
-          <div class="bar-segment bar-idle" style="width: {metrics.tanda.porcentajeCpuOcioso || 0}%">
-            Ocioso ({(metrics.tanda.porcentajeCpuOcioso || 0).toFixed(1)}%)
+          <div class="bar-segment bar-idle" style="width: {simState.metrics.tanda.porcentajeCpuOcioso || 0}%">
+            Ocioso ({(simState.metrics.tanda.porcentajeCpuOcioso || 0).toFixed(1)}%)
           </div>
         </div>
         <div class="cpu-details">
-          <p><strong>Procesos:</strong> {metrics.tanda.cpuProcesos.toFixed(2)} unidades</p>
-          <p><strong>Sistema Operativo:</strong> {metrics.tanda.cpuSO.toFixed(2)} unidades</p>
-          <p><strong>Ocioso:</strong> {metrics.tanda.cpuOcioso.toFixed(2)} unidades</p>
+          <p><strong>Procesos:</strong> {simState.metrics.tanda.cpuProcesos.toFixed(2)} unidades</p>
+          <p><strong>Sistema Operativo:</strong> {simState.metrics.tanda.cpuSO.toFixed(2)} unidades</p>
+          <p><strong>Ocioso:</strong> {simState.metrics.tanda.cpuOcioso.toFixed(2)} unidades</p>
         </div>
       </div>
     </div>
@@ -331,7 +212,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each metrics.porProceso as proc}
+          {#each simState.metrics.porProceso as proc}
             <tr>
               <td class="process-name">{proc.name}</td>
               <td>{proc.tiempoRetorno.toFixed(2)}</td>
@@ -344,9 +225,9 @@
       
       <div class="batch-metrics">
         <h3>Métricas de Tanda</h3>
-        <p><strong>Tiempo Retorno Tanda:</strong> {metrics.tanda.tiempoRetornoTanda.toFixed(2)}</p>
-        <p><strong>Tiempo Medio Retorno:</strong> {metrics.tanda.tiempoMedioRetorno.toFixed(2)}</p>
-        <p><strong>Throughput:</strong> {estadisticasExtendidas.analisis.throughput.toFixed(3)} procesos/tiempo</p>
+        <p><strong>Tiempo Retorno Tanda:</strong> {simState.metrics.tanda.tiempoRetornoTanda.toFixed(2)}</p>
+        <p><strong>Tiempo Medio Retorno:</strong> {simState.metrics.tanda.tiempoMedioRetorno.toFixed(2)}</p>
+        <p><strong>Throughput:</strong> {simState.estadisticasExtendidas.analisis.throughput.toFixed(3)} procesos/tiempo</p>
       </div>
     </div>
 
@@ -356,25 +237,25 @@
       <div class="performance-grid">
         <div class="performance-item">
           <span class="performance-label">Balance de Carga:</span>
-          <span class="performance-value badge badge-{estadisticasExtendidas.analisis.balanceCarga.toLowerCase()}">{estadisticasExtendidas.analisis.balanceCarga}</span>
+          <span class="performance-value badge badge-{simState.estadisticasExtendidas.analisis.balanceCarga.toLowerCase()}">{simState.estadisticasExtendidas.analisis.balanceCarga}</span>
         </div>
         <div class="performance-item">
           <span class="performance-label">Equidad:</span>
-          <span class="performance-value badge badge-{estadisticasExtendidas.analisis.equidad.toLowerCase()}">{estadisticasExtendidas.analisis.equidad}</span>
+          <span class="performance-value badge badge-{simState.estadisticasExtendidas.analisis.equidad.toLowerCase()}">{simState.estadisticasExtendidas.analisis.equidad}</span>
         </div>
         <div class="performance-item">
           <span class="performance-label">Overhead:</span>
-          <span class="performance-value">{estadisticasExtendidas.analisis.overhead.toFixed(1)}%</span>
+          <span class="performance-value">{simState.estadisticasExtendidas.analisis.overhead.toFixed(1)}%</span>
         </div>
       </div>
     </div>
 
     <!-- Recomendaciones -->
-    {#if estadisticasExtendidas.recomendaciones.length > 0}
+    {#if simState.estadisticasExtendidas.recomendaciones.length > 0}
       <div class="card p-3 my-3 recommendations-card">
         <h2>💡 Recomendaciones</h2>
         <ul class="recommendations">
-          {#each estadisticasExtendidas.recomendaciones as rec}
+          {#each simState.estadisticasExtendidas.recomendaciones as rec}
             <li>{rec}</li>
           {/each}
         </ul>
@@ -382,11 +263,11 @@
     {/if}
 
     <!-- Advertencias -->
-    {#if advertencias.length > 0}
+    {#if simState.advertencias.length > 0}
       <div class="card p-3 my-3 warning-card">
         <h2>⚠️ Advertencias</h2>
         <ul class="warnings">
-          {#each advertencias as adv}
+          {#each simState.advertencias as adv}
             <li>{adv}</li>
           {/each}
         </ul>
@@ -397,10 +278,10 @@
     <div class="card p-3 my-3">
       <h2>💾 Exportar Resultados</h2>
       <div class="export-controls">
-        <button on:click={descargarEventos} class="btn-primary">
+        <button on:click={descargarEventosUI} class="btn-primary">
           📄 Descargar Eventos (CSV)
         </button>
-        <button on:click={descargarMetricas} class="btn-primary">
+        <button on:click={descargarMetricasUI} class="btn-primary">
           📊 Descargar Métricas (JSON)
         </button>
       </div>
