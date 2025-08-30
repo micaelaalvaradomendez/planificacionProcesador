@@ -1,0 +1,119 @@
+simulacion del tiempo, tiene que empezar en un t=0;
+en t0 empieza la simulacion y hay que modelar el tiempo de avanze del procesador, para que segun el tiempo de arrivo de cada proceso es cuando empieza a ejecutarse.
+en t0 el proceso entra en la cola de admitido, despues debe buscar el siguiente proceso que toca, ver que en el medio pueden pasar cosas como desbloqueo de un proceso, etc.
+hay que diagramar el flujo para cada politica de planificacion para tener un major entendimiento de como se va a comportar el sistema y como se va a ir desarrollando el programa.
+
+
+el reporte de salida puede ser un pdf pero tiente que tener en detalle que paso en t=0 y en t=1 ... y asi con cada tiempo
+
+revisar flujo de politicas de procesos:
+Las políticas de planificación de procesos son algoritmos utilizados por los sistemas operativos para determinar **qué proceso o hilo se ejecutará a continuación en la CPU**. El objetivo es optimizar diversos aspectos del comportamiento del sistema, como el tiempo de respuesta, el rendimiento o la equidad. La planificación es una función fundamental en la gestión de procesos y se divide en planificación a largo, medio y corto plazo. El planificador a corto plazo, también conocido como activador (*dispatcher*), es el que toma las decisiones de grano fino sobre qué proceso ejecutar a continuación y se invoca frecuentemente.
+
+A continuación, se describen los diagramas de flujo lógicos de varias políticas de planificación de procesos, enfocándose principalmente en la planificación a corto plazo en sistemas uniprocesador, que es donde se definen y clarifican la mayoría de los algoritmos:
+
+### Políticas de Planificación a Corto Plazo
+
+1.  **Primero en Llegar, Primero en Servirse (FCFS - First-Come, First-Served) / Primero en Entrar, Primero en Salir (FIFO - First-In, First-Out)**
+    *   **Concepto**: Es la política más sencilla y no expulsiva. Los procesos se atienden en el orden en que llegan a la cola de listos.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo gestiona una única **cola de procesos listos**.
+        *   **Llegada del Proceso**: Cuando un proceso está listo para ejecutarse, se añade al **final de la cola de listos**.
+        *   **Selección**: Cuando la CPU queda libre, el planificador selecciona el **proceso que lleva más tiempo en la cola de listos** (el primero de la cola).
+        *   **Ejecución**: El proceso seleccionado se ejecuta hasta que **finaliza o se bloquea** (por ejemplo, esperando una operación de E/S).
+        *   **Fin/Bloqueo**:
+            *   Si el proceso **finaliza**, se retira del sistema.
+            *   Si el proceso **se bloquea**, se mueve a una cola de bloqueados asociada al evento que espera.
+            *   Una vez que el evento ocurre, el proceso bloqueado se mueve al **final de la cola de listos**.
+        *   **Continuar**: El planificador vuelve al paso de selección para elegir el siguiente proceso listo.
+    *   **Características**: Fácil de entender e implementar. Puede resultar en un uso ineficiente del procesador si un proceso largo bloquea la CPU mientras otros procesos cortos esperan. No es atractiva por sí misma para uniprocesadores, pero se combina a menudo con prioridades.
+
+2.  **Turno Rotatorio (Round Robin - RR) / Planificación Cíclica**
+    *   **Concepto**: Es una política expulsiva que asigna a cada proceso un **intervalo de tiempo fijo (quantum)**.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo mantiene una **cola circular de procesos listos**.
+        *   **Llegada del Proceso**: Un nuevo proceso se añade al **final de la cola de listos**.
+        *   **Selección**: Cuando la CPU está disponible, el planificador selecciona el **siguiente proceso de la cola de listos** (siguiendo el orden circular).
+        *   **Ejecución con Temporizador**: El proceso se ejecuta por un tiempo máximo igual al **quantum de tiempo**. Se activa un temporizador de reloj.
+        *   **Fin del Quantum / Bloqueo / Fin**:
+            *   Si el proceso **expira su quantum** antes de finalizar o bloquearse, el temporizador interrumpe al proceso actual. Este proceso se sitúa en el **final de la cola de listos**.
+            *   Si el proceso **se bloquea** (por E/S) o **finaliza** antes de que expire su quantum, la CPU se le quita en ese momento. Si se bloquea, se mueve a una cola de bloqueados; si finaliza, se retira del sistema.
+            *   Una vez que el evento por el que un proceso bloqueado espera ocurre, el proceso se mueve al **final de la cola de listos**.
+        *   **Continuar**: El planificador selecciona el siguiente proceso listo de la cola.
+    *   **Características**: Proporciona un buen tiempo de respuesta para trabajos interactivos. El tamaño del *quantum* es crucial: muy corto aumenta la sobrecarga por cambios de contexto; muy largo puede degenerar en FCFS.
+
+3.  **Primero el Proceso Más Corto (SPN - Shortest Process Next) / El Trabajo Más Corto Primero (SJF - Shortest Job First)**
+    *   **Concepto**: Política no expulsiva que selecciona el proceso con el **tiempo de procesamiento esperado más corto**.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo mantiene una cola de procesos listos.
+        *   **Llegada del Proceso**: Un nuevo proceso se añade a la cola de listos. Se debe **estimar su tiempo de servicio**.
+        *   **Selección**: Cuando la CPU está disponible, el planificador selecciona el **proceso de la cola de listos con el tiempo de servicio esperado más corto**.
+        *   **Ejecución**: El proceso seleccionado se ejecuta hasta que **finaliza o se bloquea**.
+        *   **Fin/Bloqueo**: Similar a FCFS, el proceso se retira o se mueve a una cola de bloqueados, y al desbloquearse vuelve a la cola de listos.
+        *   **Continuar**: El planificador vuelve al paso de selección.
+    *   **Características**: Minimiza el tiempo de espera promedio. Requiere una estimación del tiempo de ejecución del proceso, lo cual puede ser difícil. Puede causar **inanición** a procesos más largos si hay un flujo continuo de procesos cortos.
+
+4.  **Menor Tiempo Restante (SRT - Shortest Remaining Time)**
+    *   **Concepto**: Versión expulsiva de SPN. El planificador elige el proceso con el **menor tiempo de procesamiento restante esperado**.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo mantiene una cola de procesos listos.
+        *   **Llegada del Proceso**: Un nuevo proceso se añade a la cola de listos. Se debe **estimar su tiempo de servicio**.
+        *   **Selección y Expulsión**:
+            *   Cuando la CPU está disponible, selecciona el proceso con el **menor tiempo restante**.
+            *   **Cada vez que un nuevo proceso llega o el proceso en ejecución realiza alguna operación (o es interrumpido)**, el planificador **revalúa** y podría expulsar al proceso actual si el recién llegado (o cualquier otro listo) tiene un tiempo restante esperado menor.
+        *   **Ejecución**: El proceso seleccionado ejecuta por un período.
+        *   **Fin/Bloqueo**: Similar a SPN.
+        *   **Continuar**: El planificador vuelve al paso de selección y reevaluación.
+    *   **Características**: Mejora el tiempo de respuesta promedio más que SPN, pero la sobrecarga es mayor debido a las reevaluaciones frecuentes. También puede llevar a **inanición** de procesos largos.
+
+5.  **Primero el de Mayor Tasa de Respuesta (HRRN - Highest Response Ratio Next)**
+    *   **Concepto**: Política no expulsiva que busca equilibrar el favorecimiento a procesos cortos con la prevención de inanición para procesos largos, calculando una **tasa de respuesta**.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo mantiene una cola de procesos listos.
+        *   **Llegada del Proceso**: Un nuevo proceso se añade a la cola de listos. Se debe **estimar su tiempo de servicio (s)**. Su tiempo de espera (w) se inicializa a 0.
+        *   **Selección**: Cuando la CPU está disponible, para cada proceso en la cola de listos se calcula su **tasa de respuesta (R = (w + s) / s)**.
+        *   El planificador selecciona el **proceso con el mayor valor de R**.
+        *   **Ejecución**: El proceso seleccionado se ejecuta hasta que **finaliza o se bloquea**.
+        *   **Fin/Bloqueo**: Similar a FCFS. Al desbloquearse, su tiempo de espera se restablece.
+        *   **Actualización de Tiempos de Espera**: Para los procesos que permanecen en la cola de listos, su tiempo de espera (**w**) se incrementa.
+        *   **Continuar**: El planificador vuelve al paso de selección.
+    *   **Características**: Favorece a procesos cortos (denominador pequeño), pero el tiempo de espera creciente (w) de los procesos largos incrementa su tasa, dándoles una oportunidad justa de competir.
+
+6.  **Retroalimentación (Feedback) / Colas Multinivel**
+    *   **Concepto**: Utiliza **prioridades dinámicas y expulsión por rodajas de tiempo**. Los procesos se mueven entre varias colas de prioridad según su comportamiento de ejecución.
+    *   **Flujo (Ejemplo de tres niveles, como en la figura 9.10 o P2.1)**:
+        *   **Inicio**: El sistema tiene múltiples colas de listos, generalmente **CL0 (más alta prioridad), CL1, CL2 (más baja prioridad)**.
+        *   **Llegada del Proceso**: Un nuevo proceso entra en la **cola de más alta prioridad (CL0)**.
+        *   **Selección**: El planificador siempre busca el proceso en la **cola de mayor prioridad no vacía**. Si hay varios procesos en esa cola, se usa FCFS o Round Robin dentro de esa cola.
+        *   **Ejecución**: El proceso seleccionado ejecuta con un **quantum de tiempo**.
+        *   **Expulsión/Bloqueo/Fin**:
+            *   Si el proceso **expira su quantum**, se degrada a la **siguiente cola de menor prioridad** (ej., de CL0 a CL1) y se añade al final de esa cola.
+            *   Si el proceso **se bloquea** o **finaliza** antes de expirar su quantum, se le quita la CPU. Si se bloquea, va a una cola de bloqueados; si finaliza, se retira del sistema. Cuando un proceso bloqueado se desbloquea, normalmente **vuelve a su cola original o a una cola de mayor prioridad** para evitar inanición.
+        *   **Variaciones**: El tamaño del quantum puede ser **creciente** en las colas de menor prioridad (ej., CLi tiene 2^i unidades de tiempo) para ayudar a los procesos largos. Para evitar la inanición, los procesos también pueden ser **promovidos** a colas de mayor prioridad después de un tiempo de espera prolongado.
+        *   **Continuar**: El planificador vuelve a seleccionar de las colas de mayor prioridad.
+    *   **Características**: Favorece a procesos cortos y nuevos, que terminan rápidamente en las colas de alta prioridad. Los procesos largos descienden en la jerarquía. La inanición es un riesgo si no se implementan mecanismos de envejecimiento.
+
+7.  **Planificación por Prioridad (General)**
+    *   **Concepto**: A cada proceso se le asigna un **nivel de prioridad**, y el planificador siempre elige el proceso listo con la **prioridad más alta**.
+    *   **Flujo**:
+        *   **Inicio**: El sistema operativo mantiene **múltiples colas de listos**, una para cada nivel de prioridad (ej., CL0, CL1, ..., CLn, donde CL0 es la más alta).
+        *   **Llegada del Proceso**: Un proceso entra a la **cola de listos correspondiente a su prioridad**.
+        *   **Selección**: El planificador busca en las colas **desde la más alta prioridad (CL0) hacia abajo**. El primer proceso encontrado en la cola de mayor prioridad no vacía es el seleccionado.
+        *   **Ejecución**: El proceso se ejecuta. Esta política puede ser **expulsiva** (un proceso de mayor prioridad que se vuelve listo expulsa al actual) o **no expulsiva**.
+        *   **Fin/Bloqueo**:
+            *   Si el proceso **finaliza**, se retira.
+            *   Si el proceso **se bloquea**, se mueve a una cola de bloqueados. Cuando se desbloquea, regresa a su cola de prioridad.
+            *   Si un proceso de **mayor prioridad se vuelve listo**, el proceso actual de menor prioridad es expulsado y vuelve a su cola de listos.
+        *   **Envejecimiento**: Para prevenir la inanición de procesos de baja prioridad, su prioridad puede **aumentarse dinámicamente** con el tiempo que esperan.
+        *   **Continuar**: El planificador vuelve a seleccionar.
+    *   **Características**: Asegura que los trabajos críticos se ejecuten primero. La inanición es un problema potencial para las tareas de baja prioridad sin mecanismos de envejecimiento.
+
+8.  **Planificación Contribución Justa (Fair-Share Scheduling - FSS)**
+    *   **Concepto**: Este enfoque considera al **grupo de procesos o al usuario propietario** al tomar decisiones de planificación, no solo a los procesos individuales. Se asigna una fracción del tiempo del procesador a cada grupo/usuario.
+    *   **Flujo**:
+        *   **Inicio**: Se definen grupos (ej., por usuario o aplicación) y se les asigna una **fracción deseada de tiempo de CPU**.
+        *   **Monitorización**: El sistema monitorea el **uso histórico de la CPU** por parte de los procesos individuales y sus grupos.
+        *   **Selección**: El planificador considera el uso de CPU de los grupos para asegurar que se cumplan sus asignaciones de "contribución justa". Un grupo que ha utilizado menos CPU de su asignación puede tener sus procesos favorecidos.
+        *   **Ejecución**: El proceso de un grupo favorecido se ejecuta.
+        *   **Ajustes**: Las decisiones de planificación buscan **equilibrar la carga de CPU entre los grupos**, degradando el servicio para los procesos de grupos que ya han consumido su "justa" parte, incluso si tienen muchos procesos.
+    *   **Características**: Más relevante en entornos multiusuario, donde la preocupación es cómo ejecuta el conjunto de procesos de un usuario o aplicación, en lugar de un solo proceso.
+
