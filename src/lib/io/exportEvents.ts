@@ -1,3 +1,8 @@
+export function exportarEventosJson(eventos: SimEvent[]): Blob {
+  // Exporta todos los eventos en formato JSON, sin filtrar
+  const json = JSON.stringify(eventos, null, 2);
+  return new Blob([json], { type: 'application/json;charset=utf-8' });
+}
 import type { SimEvent } from '../model/types';
 import { eventoALineaCsv, ordenarEventosParaExportar } from '../sim/events';
 

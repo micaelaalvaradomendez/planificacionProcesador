@@ -163,7 +163,12 @@ class SchedulerRoundRobin implements Scheduler {
   readonly nombre = 'Round Robin';
   readonly esExpropiativo = true;
   
-  constructor(private quantum: number) {}
+  private ultimoDespachoUnico: boolean = false;
+  constructor(private quantum: number) {
+    if (quantum === undefined || quantum <= 0) {
+      throw new Error('Round Robin requiere un quantum válido mayor a 0');
+    }
+  }
 
   seleccionarProximoProceso(
     colaListos: string[],
@@ -173,9 +178,14 @@ class SchedulerRoundRobin implements Scheduler {
     if (colaListos.length === 0) {
       return undefined;
     }
-
-    // En RR, simplemente FIFO (el primero en la cola)
-    // La cola ya debe estar ordenada cronológicamente
+    // Caso especial consigna: único proceso y vence quantum
+    if (colaListos.length === 1 && procesoActual === colaListos[0]) {
+      // Si el quantum vence, pasa a listo, se aplica TCP y se reasigna
+      this.ultimoDespachoUnico = true;
+      return colaListos[0];
+    }
+    this.ultimoDespachoUnico = false;
+    // FIFO normal
     return colaListos[0];
   }
 
@@ -187,6 +197,13 @@ class SchedulerRoundRobin implements Scheduler {
 
   calcularQuantum(): number {
     return this.quantum;
+  }
+
+  /**
+   * Indica si se debe aplicar TCP especial por caso único RR
+   */
+  esDespachoUnico(): boolean {
+    return this.ultimoDespachoUnico;
   }
 }
 

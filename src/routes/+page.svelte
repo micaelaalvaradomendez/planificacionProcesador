@@ -1,18 +1,23 @@
+<link rel="stylesheet" href="/src/lib/io/ui/styles/style.css">
 <script lang="ts">
   import { cargarArchivo } from '$lib/application/usecases/parseInput';
   import { runSimulationWithTimeout } from '$lib/application/usecases/simulationRunner';
   import { descargarEventos, descargarMetricas } from '$lib/application/usecases/exportResults';
   import type { SimulationState } from '$lib/application/usecases/simulationState';
   import { getInitialSimulationState, resetSimulationState } from '$lib/application/usecases/simulationState';
+  import type { Metrics } from '$lib/application/usecases/simulationState';
 
   let simState: SimulationState = getInitialSimulationState();
+  let configEstablecida = false;
+  let puedeEstablecer = true;
 
   async function cargarArchivoUI() {
-    const result = await cargarArchivo(simState.file, simState.mode, simState.policy, simState.tip, simState.tfp, simState.tcp, simState.quantum);
-    simState.errors = result.errors;
-    simState.workload = result.workload;
-    simState.loaded = result.loaded;
-    simState.simulacionCompletada = false;
+  const result = await cargarArchivo(simState.file, simState.mode, simState.policy, simState.tip, simState.tfp, simState.tcp, simState.quantum);
+  simState.errors = result.errors;
+  simState.workload = result.workload;
+  simState.loaded = result.loaded;
+  simState.simulacionCompletada = false;
+  configEstablecida = false; // Resetear config al cargar nuevo archivo
   }
 
   async function ejecutarSimulacionUI() {
@@ -26,6 +31,15 @@
     simState.workload.config.tcp = simState.tcp;
     simState.workload.config.quantum = simState.quantum;
     simState.errors = [];
+    // Limpiar resultados previos
+    simState.simulacionCompletada = false;
+    simState.simulacionEnCurso = false;
+    simState.events = [];
+    simState.metrics = {} as Metrics;
+    simState.ganttSlices = [];
+    simState.estadisticasExtendidas = null;
+    simState.tiempoTotalSimulacion = 0;
+    simState.advertencias = [];
     const result = await runSimulationWithTimeout(simState.workload);
     simState.simulacionEnCurso = result.simulacionEnCurso;
     simState.simulacionCompletada = result.simulacionCompletada;
@@ -48,6 +62,7 @@
 
   function reiniciarSimulacion() {
     resetSimulationState(simState);
+    configEstablecida = false;
   }
 </script>
 
@@ -66,23 +81,7 @@
       </select>
     </label>
 
-    {#if simState.mode === 'csv' || (simState.mode === 'json' && simState.loaded && simState.workload)}
-      <div class="config-grid">
-        <label>Política
-          <select bind:value={simState.policy}>
-            <option>FCFS</option>
-            <option>PRIORITY</option>
-            <option>RR</option>
-            <option>SPN</option>
-            <option>SRTN</option>
-          </select>
-        </label>
-        <label>TIP <input type="number" bind:value={simState.tip} min="0"/></label>
-        <label>TFP <input type="number" bind:value={simState.tfp} min="0"/></label>
-        <label>TCP <input type="number" bind:value={simState.tcp} min="0"/></label>
-        <label>Quantum <input type="number" bind:value={simState.quantum} min="1" placeholder="solo RR"/></label>
-      </div>
-    {/if}
+    
 
     <div class="file-controls">
       <input type="file" accept={simState.mode === 'json' ? '.json,application/json' : '.csv,.txt,text/csv'} on:change={(e:any)=>{simState.file=e.target.files?.[0]||null}} />
@@ -96,15 +95,12 @@
       </div>
     {/if}
   </div>
+ 
 
   {#if simState.loaded && simState.workload}
+    <!-- Tabla de procesos -->
     <div class="card p-3 my-3">
-      <h2>📋 Configuración Cargada</h2>
-      <div class="config-summary">
-        <p><strong>Tanda:</strong> {simState.workload.workloadName || 'Sin nombre'}</p>
-        <p><strong>Política:</strong> {simState.workload.config.policy} | <strong>TIP:</strong> {simState.workload.config.tip} | <strong>TFP:</strong> {simState.workload.config.tfp} | <strong>TCP:</strong> {simState.workload.config.tcp} {#if simState.workload.config.quantum != null}| <strong>Quantum:</strong> {simState.workload.config.quantum}{/if}</p>
-      </div>
-      
+      <h2>📋 Procesos cargados</h2>
       <table class="process-table">
         <thead>
           <tr>
@@ -129,6 +125,46 @@
           {/each}
         </tbody>
       </table>
+    </div>
+
+    <!-- Controles de configuración -->
+    <div class="config-grid">
+      <label>Política
+        <select bind:value={simState.policy}>
+          <option>FCFS</option>
+          <option>PRIORITY</option>
+          <option>RR</option>
+          <option>SPN</option>
+          <option>SRTN</option>
+        </select>
+      </label>
+      <label>TIP <input type="number" bind:value={simState.tip} min="0"/></label>
+      <label>TFP <input type="number" bind:value={simState.tfp} min="0"/></label>
+      <label>TCP <input type="number" bind:value={simState.tcp} min="0"/></label>
+      <label>Quantum <input type="number" bind:value={simState.quantum} min="1" placeholder="solo RR"/></label>
+    </div>
+
+    <!-- Botón para establecer configuración -->
+    <div class="config-confirm">
+      <button class="btn-primary" 
+        on:click={() => configEstablecida = true}
+        disabled={!simState.policy || simState.tip === null || simState.tfp === null || simState.tcp === null || (simState.policy === 'RR' && !simState.quantum)}>
+        Establecer configuración
+      </button>
+      {#if !simState.policy || simState.tip === null || simState.tfp === null || simState.tcp === null || (simState.policy === 'RR' && !simState.quantum)}
+        <span class="config-warning">Completa todos los campos antes de continuar.</span>
+      {/if}
+    </div>
+  {/if}
+
+  {#if simState.loaded && simState.workload && configEstablecida}
+    <!-- Configuración cargada y controles de simulación -->
+    <div class="card p-3 my-3">
+      <h2>📋 Configuración Cargada</h2>
+      <div class="config-summary">
+        <p><strong>Tanda:</strong> {simState.workload.workloadName || 'Sin nombre'}</p>
+        <p><strong>Política:</strong> {simState.workload.config.policy} | <strong>TIP:</strong> {simState.workload.config.tip} | <strong>TFP:</strong> {simState.workload.config.tfp} | <strong>TCP:</strong> {simState.workload.config.tcp} {#if simState.workload.config.quantum != null}| <strong>Quantum:</strong> {simState.workload.config.quantum}{/if}</p>
+      </div>
 
       <div class="simulation-controls">
         <button 
@@ -141,16 +177,14 @@
           {:else}
             🚀 Ejecutar Simulación
           {/if}
-        </button>
-        
-        {#if simState.simulacionCompletada}
-          <button on:click={reiniciarSimulacion} class="btn-secondary">
-            🔄 Nueva Simulación
-          </button>
-        {/if}
-      </div>
-    </div>
-  {/if}
+    </button>
+    {#if simState.simulacionCompletada}
+      <button on:click={reiniciarSimulacion} class="btn-secondary">
+        🔄 Nueva Simulación
+      </button>
+    {/if}
+  </div>
+
 
   {#if simState.simulacionCompletada && simState.estadisticasExtendidas}
     <!-- Resumen de Resultados -->
@@ -292,370 +326,4 @@
   {/if}
 </div>
 
-<style>
-  .container { 
-    max-width: 1200px; 
-    margin: 0 auto; 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-  
-  .subtitle {
-    color: #666;
-    font-size: 1.1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .card { 
-    border: 1px solid #e1e5e9; 
-    border-radius: 12px; 
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 1.5rem;
-  }
-  
-  .success-card {
-    border-left: 4px solid #28a745;
-    background: #f8fff9;
-  }
-  
-  .warning-card {
-    border-left: 4px solid #ffc107;
-    background: #fffbf0;
-  }
-  
-  .recommendations-card {
-    border-left: 4px solid #17a2b8;
-    background: #f0faff;
-  }
-  
-  .error-box {
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-top: 1rem;
-    color: #c53030;
-  }
-  
-  .config-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin: 1rem 0;
-  }
-  
-  .file-controls {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    margin-top: 1rem;
-  }
-  
-  .simulation-controls {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1.5rem;
-    align-items: center;
-  }
-  
-  .process-table, .metrics-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-  }
-  
-  .process-table th, .process-table td,
-  .metrics-table th, .metrics-table td {
-    border: 1px solid #e1e5e9;
-    padding: 0.75rem;
-    text-align: center;
-  }
-  
-  .process-table th, .metrics-table th {
-    background: #f8f9fa;
-    font-weight: 600;
-    color: #495057;
-  }
-  
-  .process-name {
-    font-weight: 600;
-    color: #007bff;
-  }
-  
-  .config-summary {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-  }
-  
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-  
-  .metric {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    text-align: center;
-  }
-  
-  .metric-label {
-    display: block;
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin-bottom: 0.5rem;
-  }
-  
-  .metric-value {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #007bff;
-  }
-  
-  .cpu-metrics {
-    margin-top: 1rem;
-  }
-  
-  .cpu-bar {
-    display: flex;
-    height: 40px;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #e1e5e9;
-    margin-bottom: 1rem;
-  }
-  
-  .bar-segment {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 600;
-    font-size: 0.9rem;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-  
-  .bar-user { background: #28a745; }
-  .bar-so { background: #ffc107; color: #212529; text-shadow: none; }
-  .bar-idle { background: #6c757d; }
-  
-  .cpu-details {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-  }
-  
-  .cpu-details p {
-    margin: 0;
-    padding: 0.5rem;
-    background: #f8f9fa;
-    border-radius: 4px;
-  }
-  
-  .batch-metrics {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #e1e5e9;
-  }
-  
-  .batch-metrics h3 {
-    margin-bottom: 1rem;
-    color: #495057;
-  }
-  
-  .performance-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-  
-  .performance-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 8px;
-  }
-  
-  .performance-label {
-    font-weight: 600;
-    color: #495057;
-  }
-  
-  .performance-value {
-    font-weight: 600;
-  }
-  
-  .badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  
-  .badge-excelente { background: #28a745; color: white; }
-  .badge-bueno { background: #007bff; color: white; }
-  .badge-regular { background: #ffc107; color: #212529; }
-  .badge-deficiente { background: #dc3545; color: white; }
-  .badge-alta { background: #28a745; color: white; }
-  .badge-media { background: #ffc107; color: #212529; }
-  .badge-baja { background: #dc3545; color: white; }
-  
-  .recommendations, .warnings {
-    list-style: none;
-    padding: 0;
-    margin: 1rem 0;
-  }
-  
-  .recommendations li, .warnings li {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background: rgba(255,255,255,0.7);
-    border-radius: 8px;
-    border-left: 3px solid #17a2b8;
-  }
-  
-  .warnings li {
-    border-left-color: #ffc107;
-  }
-  
-  .export-controls {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-  
-  .export-note {
-    font-size: 0.9rem;
-    color: #6c757d;
-    margin: 0;
-  }
-  
-  /* Botones */
-  button {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 0.95rem;
-  }
-  
-  .btn-primary {
-    background: #007bff;
-    color: white;
-  }
-  
-  .btn-primary:hover:not(:disabled) {
-    background: #0056b3;
-    transform: translateY(-1px);
-  }
-  
-  .btn-success {
-    background: #28a745;
-    color: white;
-  }
-  
-  .btn-success:hover:not(:disabled) {
-    background: #1e7e34;
-    transform: translateY(-1px);
-  }
-  
-  .btn-secondary {
-    background: #6c757d;
-    color: white;
-  }
-  
-  .btn-secondary:hover:not(:disabled) {
-    background: #545b62;
-    transform: translateY(-1px);
-  }
-  
-  button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  
-  /* Inputs */
-  input, select {
-    padding: 0.5rem;
-    border: 1px solid #e1e5e9;
-    border-radius: 4px;
-    font-size: 0.95rem;
-  }
-  
-  input:focus, select:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-  }
-  
-  label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: #495057;
-  }
-  
-  h1 {
-    color: #212529;
-    margin-bottom: 0.5rem;
-  }
-  
-  h2 {
-    color: #495057;
-    margin-bottom: 1rem;
-    font-size: 1.25rem;
-  }
-  
-  h3 {
-    color: #495057;
-    font-size: 1.1rem;
-  }
-  
-  @media (max-width: 768px) {
-    .container {
-      padding: 1rem;
-    }
-    
-    .config-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .summary-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .performance-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .cpu-details {
-      grid-template-columns: 1fr;
-    }
-    
-    .export-controls {
-      flex-direction: column;
-    }
-    
-    .simulation-controls {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    
-    .file-controls {
-      flex-direction: column;
-      align-items: stretch;
-    }
-  }
-</style>
 

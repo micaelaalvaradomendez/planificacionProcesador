@@ -4,6 +4,7 @@
  */
 
 import type { Workload } from '../model/types';
+import { FabricaScheduler } from './scheduler';
 import type { 
   SimState, 
   ProcesoRT, 
@@ -32,23 +33,25 @@ export interface ResultadoSimulacion {
  * Motor principal del simulador - Versión Simplificada y Funcional
  */
 export class MotorSimulacion {
+  private scheduler: any;
   private state: SimState;
   private maxIteraciones = 1000; // Protección contra bucles infinitos
 
   constructor(workload: Workload) {
-    this.state = crearEstadoInicial(workload);
+  this.state = crearEstadoInicial(workload);
+  // Instanciar el scheduler según la política
+  // RR: pasar quantum
+  const { policy, quantum } = workload.config;
+  this.scheduler = FabricaScheduler.crear(policy, quantum);
   }
 
   /**
-   * Ejecuta la simulación completa
+   * Ejecuta la simulación completa usando el motor de eventos discretos
    */
   ejecutar(): ResultadoSimulacion {
     try {
-      console.log('🚀 Iniciando simulación...');
-      
-      // Simulación simplificada para evitar bucles infinitos
-      this.simularFCFSSimple();
-
+      console.log('🚀 Iniciando simulación por eventos discretos...');
+      this.simularPorEventos();
       return {
         eventosInternos: this.state.eventosInternos,
         eventosExportacion: this.state.eventosExportacion,
@@ -68,111 +71,234 @@ export class MotorSimulacion {
   }
 
   /**
-   * Simulación FCFS simplificada para pruebas
+   * Motor de eventos discretos: procesa todos los tipos de eventos según la consigna
    */
-  private simularFCFSSimple(): void {
-    console.log('📋 Iniciando simulación FCFS simplificada');
-    
-    // Protección adicional contra bucles infinitos
-    const LIMITE_TIEMPO_SIMULACION = 10000; // 10 segundos máximo de tiempo simulado
-    const LIMITE_ITERACIONES = 1000; // máximo 1000 operaciones
-    
-    // Procesar cada proceso secuencialmente
-    const procesosOrdenados = Array.from(this.state.procesos.values())
-      .sort((a, b) => a.tiempoArribo - b.tiempoArribo);
-
-    let tiempoActual = 0;
+  private simularPorEventos(): void {
+    // Protección contra bucles infinitos
+    const LIMITE_ITERACIONES = 10000;
     let iteraciones = 0;
-    
-    for (const proceso of procesosOrdenados) {
-      iteraciones++;
-      if (iteraciones > LIMITE_ITERACIONES) {
-        console.warn('⚠️ Límite de iteraciones alcanzado, deteniendo simulación');
-        break;
-      }
-      
-      if (tiempoActual > LIMITE_TIEMPO_SIMULACION) {
-        console.warn('⚠️ Límite de tiempo de simulación alcanzado, deteniendo simulación');
-        break;
-      }
-      
-      console.log(`🔄 Procesando ${proceso.name} (iteración ${iteraciones})`);
-      
-      // Esperar al arribo del proceso
-      if (proceso.tiempoArribo > tiempoActual) {
-        // Tiempo ocioso
-        const tiempoOcioso = proceso.tiempoArribo - tiempoActual;
-        this.state.contadoresCPU.ocioso += tiempoOcioso;
-        tiempoActual = proceso.tiempoArribo;
-      }
 
-      // Arribo del proceso
-      this.state.tiempoActual = tiempoActual;
-      agregarEventoInterno(this.state, 'Arribo', proceso.name, 'Llegada al sistema');
-      agregarEventoExportacion(this.state, 'ARRIBO_TRABAJO', proceso.name);
-
-      // TIP
-      this.state.contadoresCPU.sistemaOperativo += this.state.tip;
-      tiempoActual += this.state.tip;
-      proceso.inicioTIP = this.state.tiempoActual;
-      proceso.finTIP = tiempoActual;
-      proceso.tipCumplido = true;
-
-      this.state.tiempoActual = tiempoActual;
-      agregarEventoExportacion(this.state, 'INCORPORACION_SISTEMA', proceso.name);
-
-      // Procesar todas las ráfagas del proceso
-      for (let rafaga = 0; rafaga < proceso.rafagasCPU; rafaga++) {
-        // TCP (cambio de contexto)
-        this.state.contadoresCPU.sistemaOperativo += this.state.tcp;
-        tiempoActual += this.state.tcp;
-
-        this.state.tiempoActual = tiempoActual;
-        agregarEventoInterno(this.state, 'Despacho', proceso.name, `Despacho ráfaga ${rafaga + 1}`);
-        agregarEventoExportacion(this.state, 'DESPACHO', proceso.name);
-
-        if (rafaga === 0) {
-          proceso.primerDespacho = tiempoActual;
-        }
-
-        // Ejecución de CPU
-        this.state.contadoresCPU.procesos += proceso.duracionRafagaCPU;
-        tiempoActual += proceso.duracionRafagaCPU;
-
-        this.state.tiempoActual = tiempoActual;
-        agregarEventoExportacion(this.state, 'FIN_RAFAGA_CPU', proceso.name);
-
-        // E/S (solo si no es la última ráfaga)
-        if (rafaga < proceso.rafagasCPU - 1) {
-          agregarEventoExportacion(this.state, 'INICIO_ES', proceso.name);
-          
-          // En nuestro modelo simplificado, E/S es instantánea
-          // (no afecta el tiempo del sistema)
-          
-          agregarEventoExportacion(this.state, 'FIN_ES', proceso.name);
-        }
-      }
-
-      // TFP
-      this.state.contadoresCPU.sistemaOperativo += this.state.tfp;
-      tiempoActual += this.state.tfp;
-      proceso.finTFP = tiempoActual;
-      proceso.estado = 'Terminado';
-
-      this.state.tiempoActual = tiempoActual;
-      agregarEventoInterno(this.state, 'FinTFP', proceso.name, 'Proceso terminado');
-      agregarEventoExportacion(this.state, 'TERMINACION_PROCESO', proceso.name);
-
-      // Calcular métricas del proceso
-      proceso.tiempoListoAcumulado = Math.max(0, 
-        (proceso.primerDespacho || tiempoActual) - proceso.finTIP! - 
-        (proceso.rafagasCPU - 1) * proceso.duracionRafagaES
-      );
-
-      console.log(`✅ ${proceso.name} completado en tiempo ${tiempoActual}`);
+    // Inicializar eventos futuros: arribo de cada proceso
+    const eventosFuturos: { tiempo: number; tipo: string; proceso: string }[] = [];
+    for (const proceso of this.state.procesos.values()) {
+      eventosFuturos.push({ tiempo: proceso.tiempoArribo, tipo: 'Arribo', proceso: proceso.name });
     }
 
-    this.state.tiempoActual = tiempoActual;
-    console.log(`🏁 Simulación completada en tiempo ${tiempoActual}`);
+    // Bucle principal de simulación
+    let tiempoAnterior = 0;
+    while (this.hayProcesosPendientes() && iteraciones < LIMITE_ITERACIONES) {
+      iteraciones++;
+      // Ordenar eventos futuros por tiempo, prioridad de evento y tie-break por nombre
+      const prioridadEvento: Record<string, number> = {
+        'FinRafagaCPU': 1,
+        'FinES': 2,
+        'AgotamientoQuantum': 3,
+        'FinTIP': 4,
+        'Arribo': 5,
+        'Despacho': 6
+      };
+      eventosFuturos.sort((a, b) => {
+        if (a.tiempo !== b.tiempo) return a.tiempo - b.tiempo;
+        // Prioridad de evento según consigna
+        const pa = prioridadEvento[a.tipo] !== undefined ? prioridadEvento[a.tipo] : 99;
+        const pb = prioridadEvento[b.tipo] !== undefined ? prioridadEvento[b.tipo] : 99;
+        if (pa !== pb) return pa - pb;
+        // Tie-break por nombre de proceso
+        return a.proceso.localeCompare(b.proceso);
+      });
+      const evento = eventosFuturos.shift();
+      if (!evento) break;
+
+      // Actualizar contadores de CPU entre eventos
+      const delta = evento.tiempo - tiempoAnterior;
+      if (delta > 0) {
+        // Determinar qué estaba usando la CPU en ese intervalo
+        if (this.state.procesoEjecutando) {
+          // CPU de procesos
+          this.state.contadoresCPU.procesos += delta;
+        } else {
+          // CPU ociosa
+          this.state.contadoresCPU.ocioso += delta;
+        }
+      }
+      tiempoAnterior = evento.tiempo;
+
+      // Avanzar el reloj
+      this.state.tiempoActual = evento.tiempo;
+      const proceso = this.state.procesos.get(evento.proceso);
+      if (!proceso) continue;
+
+      switch (evento.tipo) {
+        case 'Arribo':
+          // Nuevo → Listo (con TIP)
+          proceso.estado = 'Nuevo';
+          agregarEventoInterno(this.state, 'Arribo', proceso.name, 'Llegada al sistema');
+          agregarEventoExportacion(this.state, 'ARRIBO_TRABAJO', proceso.name, `TIP consumido: ${this.state.tip}`);
+          // TIP
+          this.state.contadoresCPU.sistemaOperativo += this.state.tip;
+          proceso.inicioTIP = this.state.tiempoActual;
+          proceso.finTIP = this.state.tiempoActual + this.state.tip;
+          proceso.tipCumplido = true;
+          // Programar fin de TIP
+          eventosFuturos.push({ tiempo: proceso.finTIP!, tipo: 'FinTIP', proceso: proceso.name });
+          break;
+        case 'FinTIP':
+          // ...existing code...
+          break;
+        case 'Despacho': {
+          // Listo → Corriendo (consume TCP)
+          proceso.estado = 'Ejecutando';
+          this.state.procesoEjecutando = proceso.name;
+          // RR: caso especial consigna, aplicar TCP en primer despacho y re-despacho único
+          let aplicarTCP = true;
+          if (this.state.policy === 'RR' && this.scheduler && typeof this.scheduler.esDespachoUnico === 'function') {
+            if (this.scheduler.esDespachoUnico()) {
+              aplicarTCP = true;
+            }
+          }
+          if (aplicarTCP) {
+            this.state.contadoresCPU.sistemaOperativo += this.state.tcp;
+            agregarEventoExportacion(this.state, 'CAMBIO_CONTEXTO', proceso.name, `TCP consumido: ${this.state.tcp}`);
+          }
+          agregarEventoInterno(this.state, 'Despacho', proceso.name);
+          agregarEventoExportacion(this.state, 'DESPACHO', proceso.name);
+          // Programar fin de ráfaga o quantum
+          if (this.state.policy === 'RR' && this.state.quantum) {
+            const quantumFin = this.state.tiempoActual + this.state.quantum;
+            eventosFuturos.push({ tiempo: quantumFin, tipo: 'AgotamientoQuantum', proceso: proceso.name });
+          }
+          const rafagaFin = this.state.tiempoActual + proceso.restanteEnRafaga;
+          eventosFuturos.push({ tiempo: rafagaFin, tipo: 'FinRafagaCPU', proceso: proceso.name });
+          break;
+        }
+        case 'FinRafagaCPU':
+          // Ejecutando → (Bloqueado | Terminado)
+          proceso.rafagasRestantes--;
+          proceso.restanteEnRafaga = proceso.duracionRafagaCPU;
+          agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.name);
+          agregarEventoExportacion(this.state, 'FIN_RAFAGA_CPU', proceso.name);
+          if (proceso.rafagasRestantes > 0) {
+            // Bloqueado (E/S)
+            proceso.estado = 'Bloqueado';
+            this.state.colaBloqueados.push(proceso.name);
+            // Programar fin de E/S (instantáneo según consigna)
+            eventosFuturos.push({ tiempo: this.state.tiempoActual, tipo: 'FinES', proceso: proceso.name });
+          } else {
+            // Terminado
+            proceso.estado = 'Terminado';
+            this.state.procesoEjecutando = undefined;
+            // TFP
+            this.state.contadoresCPU.sistemaOperativo += this.state.tfp;
+            proceso.finTFP = this.state.tiempoActual + this.state.tfp;
+            agregarEventoInterno(this.state, 'FinTFP', proceso.name, 'Proceso terminado');
+            agregarEventoExportacion(this.state, 'TERMINACION_PROCESO', proceso.name, `TFP consumido: ${this.state.tfp}`);
+          }
+          break;
+        case 'FinES':
+          // Bloqueado → Listo (instantáneo, 0 tiempo)
+          proceso.estado = 'Listo';
+          this.state.colaListos.push(proceso.name);
+          // Registrar evento, pero no sumar tiempo ni costo aquí
+          agregarEventoInterno(this.state, 'FinES', proceso.name);
+          agregarEventoExportacion(this.state, 'FIN_ES', proceso.name);
+          // El costo de TCP se suma en el próximo despacho
+          break;
+        case 'AgotamientoQuantum':
+          // Ejecutando → Listo (RR)
+          if (proceso.estado === 'Ejecutando' && this.state.policy === 'RR') {
+            proceso.estado = 'Listo';
+            this.state.colaListos.push(proceso.name);
+            this.state.procesoEjecutando = undefined;
+            agregarEventoInterno(this.state, 'AgotamientoQuantum', proceso.name);
+            agregarEventoExportacion(this.state, 'AGOTAMIENTO_QUANTUM', proceso.name);
+          }
+          break;
+        default:
+          break;
+      }
+
+      // Despacho: Listo → Corriendo (si no hay proceso ejecutando)
+      if (!this.state.procesoEjecutando && this.state.colaListos.length > 0) {
+        const siguiente = this.seleccionarProceso();
+        if (siguiente) {
+          // Eliminar de cola de listos
+          this.state.colaListos = this.state.colaListos.filter(n => n !== siguiente.name);
+          // Programar despacho inmediato
+          eventosFuturos.push({ tiempo: this.state.tiempoActual, tipo: 'Despacho', proceso: siguiente.name });
+        }
+      }
+
+      // Lógica de expropiación PRIORITY y SRTN
+      if (this.state.procesoEjecutando && this.state.colaListos.length > 0) {
+        const actual = this.state.procesos.get(this.state.procesoEjecutando);
+        const candidatos = this.state.colaListos.map(n => this.state.procesos.get(n)).filter(Boolean);
+        let debeExpropiar = false;
+        let nuevoProceso: ProcesoRT | undefined;
+        if (this.state.policy === 'PRIORITY') {
+          // Buscar si hay uno con mayor prioridad
+          const mayorPrioridad = candidatos.reduce((max, p) => p!.prioridad > max!.prioridad ? p : max, actual);
+          if (mayorPrioridad && mayorPrioridad !== actual && mayorPrioridad.prioridad > actual!.prioridad) {
+            debeExpropiar = true;
+            nuevoProceso = mayorPrioridad;
+          }
+        }
+        if (this.state.policy === 'SRTN') {
+          // Buscar si hay uno con menor tiempo restante
+          const menorRestante = candidatos.reduce((min, p) => (p!.rafagasRestantes * p!.duracionRafagaCPU) < (min!.rafagasRestantes * min!.duracionRafagaCPU) ? p : min, actual);
+          if (menorRestante && menorRestante !== actual && (menorRestante.rafagasRestantes * menorRestante.duracionRafagaCPU) < (actual!.rafagasRestantes * actual!.duracionRafagaCPU)) {
+            debeExpropiar = true;
+            nuevoProceso = menorRestante;
+          }
+        }
+        if (debeExpropiar && nuevoProceso) {
+          // Expropiar: el proceso actual pasa a listo, el nuevo toma la CPU
+          actual!.estado = 'Listo';
+          this.state.colaListos.push(actual!.name);
+          this.state.procesoEjecutando = undefined;
+          agregarEventoInterno(this.state, 'Despacho', nuevoProceso.name, 'Expropiación');
+          agregarEventoExportacion(this.state, 'EXPROPIACION', nuevoProceso.name);
+          // Eliminar de cola de listos
+          this.state.colaListos = this.state.colaListos.filter(n => n !== nuevoProceso!.name);
+          // Programar despacho inmediato
+          eventosFuturos.push({ tiempo: this.state.tiempoActual, tipo: 'Despacho', proceso: nuevoProceso.name });
+        }
+      }
+    }
+    // Finalización: actualizar métricas y contabilidad si es necesario
+    this.state.tiempoActual = Math.max(...Array.from(this.state.procesos.values()).map(p => p.finTFP || 0));
+    console.log(`🏁 Simulación por eventos completada en tiempo ${this.state.tiempoActual}`);
+  }
+
+  /**
+   * Selecciona el siguiente proceso a despachar según la política
+   */
+  private seleccionarProceso(): any {
+    const colaListos = this.state.colaListos.map(n => this.state.procesos.get(n)).filter(Boolean);
+    if (colaListos.length === 0) return undefined;
+    switch (this.state.policy) {
+      case 'FCFS':
+        colaListos.sort((a, b) => a!.tiempoArribo - b!.tiempoArribo);
+        return colaListos[0];
+      case 'PRIORITY':
+        colaListos.sort((a, b) => b!.prioridad - a!.prioridad);
+        return colaListos[0];
+      case 'RR':
+        return colaListos[0];
+      case 'SPN':
+        colaListos.sort((a, b) => a!.rafagasRestantes * a!.duracionRafagaCPU - b!.rafagasRestantes * b!.duracionRafagaCPU);
+        return colaListos[0];
+      case 'SRTN':
+        colaListos.sort((a, b) => (a!.rafagasRestantes * a!.duracionRafagaCPU) - (b!.rafagasRestantes * b!.duracionRafagaCPU));
+        return colaListos[0];
+      default:
+        return colaListos[0];
+    }
+  }
+
+  /**
+   * Verifica si quedan procesos pendientes de terminar
+   */
+  private hayProcesosPendientes(): boolean {
+    return Array.from(this.state.procesos.values()).some(p => p.estado !== 'Terminado');
   }
 }
