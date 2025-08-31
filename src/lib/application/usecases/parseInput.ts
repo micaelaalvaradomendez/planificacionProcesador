@@ -1,4 +1,4 @@
-import { analizarTandaJson, analizarTandaCsv } from '$lib/io/parseWorkload';
+import { analizarTandaJson, analizarTandaCsv } from '$lib/infrastructure/io/parseWorkload';
 import type { Workload, Policy } from '$lib/model/types';
 
 export async function cargarArchivo(file: File | null, mode: 'json' | 'csv', policy: Policy, tip: number, tfp: number, tcp: number, quantum?: number): Promise<{workload: Workload | null, errors: string[], loaded: boolean}> {

@@ -3,8 +3,8 @@
  * Debe aplicar tie-break estable por orden de arribo y nombre/ID
  */
 
-import { MotorSimulacion } from './src/lib/core/engine';
-import type { Workload } from './src/lib/model/types';
+import { MotorSimulacion } from '../../src/lib/core/engine';
+import type { Workload } from '../../src/lib/model/types';
 
 console.log('🧪 Test Arribos Simultáneos - Tie-break Estable');
 console.log('==============================================');

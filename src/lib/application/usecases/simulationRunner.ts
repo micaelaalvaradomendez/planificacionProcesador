@@ -17,7 +17,7 @@ export async function runSimulationWithTimeout(workload: Workload, timeoutMs = 3
   let tiempoTotalSimulacion = 0;
   let advertencias: string[] = [];
   let errors: string[] = [];
-  let timeoutId: number | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     const simulacionPromise = ejecutarSimulacionCompleta(workload);

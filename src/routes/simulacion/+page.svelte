@@ -8,7 +8,7 @@ import StatsPanel from '$lib/ui/components/StatsPanel.svelte';
 import LogViewer from '$lib/ui/components/LogViewer.svelte';
 import { construirDiagramaGantt, validarDiagramaGantt } from '$lib/application/usecases/buildGantt';
 import { simState } from '$lib/stores/simulation';
-import { exportarEventosCsv, exportarEventosJson } from '$lib/io/exportEvents';
+import { exportarEventosCsv, exportarEventosJson } from '$lib/infrastructure/io/exportEvents';
 
 import type { DiagramaGantt } from '$lib/application/usecases/buildGantt';
 
@@ -61,7 +61,7 @@ function exportJSON() {
 	<!-- 3. Ejecutar simulación y mostrar Gantt -->
 	{#if diagrama}
 		<h2>Diagrama de Gantt</h2>
-		<Gantt {diagrama} />
+		<Gantt gantt={diagrama} />
 		{#if validacion && !validacion.valido}
 			<div class="errores">
 				<h3>Errores en el diagrama:</h3>
@@ -83,8 +83,8 @@ function exportJSON() {
 			</div>
 		{/if}
 		<!-- 4. Métricas y logs -->
-		<StatsPanel />
-		<LogViewer />
+		<!-- <StatsPanel simState={$simState} onDescargarEventos={() => {}} onDescargarMetricas={() => {}} /> -->
+		<!-- <LogViewer simState={$simState} /> -->
 		<!-- 5. Botones de exportación -->
 		<button on:click={exportCSV}>Exportar CSV</button>
 		<button on:click={exportJSON}>Exportar JSON</button>

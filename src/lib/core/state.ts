@@ -17,6 +17,7 @@ export interface ProcesoRT {
   restanteEnRafaga: number;     // cuánto falta de la ráfaga actual
   tiempoListoAcumulado: number; // para métricas - solo cuenta después de TIP
   tipCumplido: boolean;         // hasta que cumpla TIP no suma "tiempo en listo"
+  tiempoInicioRafaga?: number;  // para calcular tiempo ejecutado en expropiaciones
   
   // Marcas temporales para métricas
   inicioTIP?: number;

@@ -1,4 +1,4 @@
-import { MotorSimulacion, type ResultadoSimulacion } from './src/lib/core/engine';
+import { MotorSimulacion, type ResultadoSimulacion } from '../../src/lib/core/engine';
 
 console.log('🔍 Test Debug - CPU SO Simple');
 console.log('='.repeat(40));

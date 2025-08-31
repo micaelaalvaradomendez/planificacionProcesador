@@ -1,0 +1,170 @@
+{
+  "metadata": {
+    "generadoEn": "2025-08-31T21:12:44.760Z",
+    "totalEventos": 23,
+    "simulador": "Planificador de Procesos v1.0"
+  },
+  "eventos": [
+    {
+      "tiempo": 0,
+      "tipo": "Arribo",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 llega al sistema",
+      "detalles": "Llegada al sistema - inicio TIP"
+    },
+    {
+      "tiempo": 0,
+      "tipo": "Arribo",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 arriba al sistema",
+      "detalles": "Iniciando incorporación al sistema (TIP: 1)"
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Cambio Contexto",
+      "proceso": "Proc1",
+      "descripcion": "Cambio de contexto para proceso Proc1",
+      "detalles": "TCP consumido: 1"
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Despacho",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 despachado para ejecución",
+      "detalles": "Inicio ejecución: restanteEnRafaga=4"
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Despacho",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 despachado para ejecución",
+      "detalles": null
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Despacho",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 despachado",
+      "detalles": null
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Incorporación Sistema",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 completó TIP, incorporado al sistema",
+      "detalles": "Proceso incorporado al sistema - ahora en Listo"
+    },
+    {
+      "tiempo": 1,
+      "tipo": "Incorporación Sistema",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 incorporado al sistema",
+      "detalles": "Proceso listo para ser despachado"
+    },
+    {
+      "tiempo": 2,
+      "tipo": "Arribo",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 llega al sistema",
+      "detalles": "Llegada al sistema - inicio TIP"
+    },
+    {
+      "tiempo": 2,
+      "tipo": "Arribo",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 arriba al sistema",
+      "detalles": "Iniciando incorporación al sistema (TIP: 1)"
+    },
+    {
+      "tiempo": 3,
+      "tipo": "Incorporación Sistema",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 completó TIP, incorporado al sistema",
+      "detalles": "Proceso incorporado al sistema - ahora en Listo"
+    },
+    {
+      "tiempo": 3,
+      "tipo": "Incorporación Sistema",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 incorporado al sistema",
+      "detalles": "Proceso listo para ser despachado"
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Agotamiento Quantum",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 agotó su quantum",
+      "detalles": "Quantum agotado: ejecutó 3, le restan 1 de ráfaga"
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Agotamiento Quantum",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 agota quantum",
+      "detalles": "TCP consumido: 1 - Proceso reasignado"
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Cambio Contexto",
+      "proceso": "Proc2",
+      "descripcion": "Cambio de contexto para proceso Proc2",
+      "detalles": "TCP consumido: 1"
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Despacho",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 despachado para ejecución",
+      "detalles": "Inicio ejecución: restanteEnRafaga=3"
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Despacho",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 despachado para ejecución",
+      "detalles": null
+    },
+    {
+      "tiempo": 4,
+      "tipo": "Despacho",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 despachado",
+      "detalles": null
+    },
+    {
+      "tiempo": 5,
+      "tipo": "Fin Ráfaga CPU",
+      "proceso": "Proc1",
+      "descripcion": "Proceso Proc1 completó ráfaga de CPU",
+      "detalles": "Evento obsoleto ignorado - proceso fue expropiado"
+    },
+    {
+      "tiempo": 7,
+      "tipo": "Fin E/S",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 completó E/S",
+      "detalles": "Fin E/S - Bloqueado a Listo instantáneo"
+    },
+    {
+      "tiempo": 7,
+      "tipo": "Fin E/S",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 termina E/S",
+      "detalles": "Proceso listo para continuar"
+    },
+    {
+      "tiempo": 7,
+      "tipo": "Fin Ráfaga CPU",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 completó ráfaga de CPU",
+      "detalles": "Ráfaga completada - proceso a E/S"
+    },
+    {
+      "tiempo": 7,
+      "tipo": "Fin Ráfaga CPU",
+      "proceso": "Proc2",
+      "descripcion": "Proceso Proc2 termina ráfaga CPU",
+      "detalles": "Proceso pasa a E/S"
+    }
+  ]
+}

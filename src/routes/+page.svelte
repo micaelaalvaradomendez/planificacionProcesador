@@ -257,7 +257,7 @@
             <tbody>
               {#each $simState.metrics.porProceso as proc}
                 <tr>
-                  <td><strong>{proc.nombre}</strong></td>
+                  <td><strong>{proc.name}</strong></td>
                   <td>{proc.tiempoRetorno?.toFixed(2) ?? '-'}</td>
                   <td>{proc.tiempoRetornoNormalizado?.toFixed(2) ?? '-'}</td>
                   <td>{proc.tiempoEnListo?.toFixed(2) ?? '-'}</td>

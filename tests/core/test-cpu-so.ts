@@ -1,4 +1,4 @@
-import { MotorSimulacion, type ResultadoSimulacion } from './src/lib/core/engine';
+import { MotorSimulacion, type ResultadoSimulacion } from '../../src/lib/core/engine';
 
 /**
  * Test específico para verificar que CPU SO = TIP + TFP + TCP (acumulado)

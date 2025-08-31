@@ -3,10 +3,10 @@
  * Conjunto mínimo de pruebas para verificar funcionalidad básica
  */
 
-import type { Workload } from '../model/types';
-import { ejecutarSimulacionCompleta } from '../application/usecases/runSimulation';
-import { construirDiagramaGantt } from '../application/usecases/buildGantt';
-import { calcularEstadisticasExtendidas } from '../application/usecases/computeStatistics';
+import type { Workload } from '../../src/lib/model/types.js';
+import { ejecutarSimulacionCompleta } from '../../src/lib/application/usecases/runSimulation.js';
+import { construirDiagramaGantt } from '../../src/lib/application/usecases/buildGantt.js';
+import { calcularEstadisticasExtendidas } from '../../src/lib/application/usecases/computeStatistics.js';
 
 /**
  * Caso de prueba básico: FCFS con un solo proceso sin E/S

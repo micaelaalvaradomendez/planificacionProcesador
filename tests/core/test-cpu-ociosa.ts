@@ -1,5 +1,5 @@
 
-import { MotorSimulacion, type ResultadoSimulacion } from './src/lib/core/engine';
+import { MotorSimulacion, type ResultadoSimulacion } from '../../src/lib/core/engine';
 
 const workload = {
   workloadName: 'Test CPU Ociosa',

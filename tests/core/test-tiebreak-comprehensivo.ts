@@ -3,8 +3,8 @@
  * Validar diferentes escenarios de arribos y eventos simultáneos
  */
 
-import { MotorSimulacion } from './src/lib/core/engine';
-import type { Workload } from './src/lib/model/types';
+import { MotorSimulacion } from '../../src/lib/core/engine';
+import type { Workload } from '../../src/lib/model/types';
 
 console.log('🧪 Test Comprehensivo - Tie-break Estable');
 console.log('=======================================');

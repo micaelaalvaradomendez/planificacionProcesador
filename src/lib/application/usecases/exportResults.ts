@@ -1,5 +1,5 @@
-import { exportarEventosCsv } from '$lib/io/exportEvents';
-import { exportarMetricasJson, conPorcentajes } from '$lib/io/exportMetrics';
+import { exportarEventosCsv } from '$lib/infrastructure/io/exportEvents';
+import { exportarMetricasJson, conPorcentajes } from '$lib/infrastructure/io/exportMetrics';
 import type { Metrics, Workload, SimEvent } from '$lib/model/types';
 
 export function descargarEventos(events: SimEvent[], workloadName?: string) {

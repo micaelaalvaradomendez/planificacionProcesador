@@ -1,4 +1,4 @@
-import { pruebaRapida, ejecutarTodasLasPruebas } from './src/lib/core/tests';
+import { pruebaRapida, ejecutarTodasLasPruebas } from './tests.js';
 
 async function main() {
   console.log('🚀 Iniciando validación del motor de simulación...\n');

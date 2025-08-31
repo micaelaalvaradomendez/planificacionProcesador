@@ -9,7 +9,7 @@
     <div class="gantt-container">
       <div class="gantt-header">
         <div class="time-labels">
-          {#each Array.from({length: Math.max(...gantt.map(event => event.instante))}, (_, i) => i + 1) as tiempo}
+          {#each Array.from({length: Math.max(...gantt.map((event: any) => event.instante))}, (_, i) => i + 1) as tiempo}
             <span class="time-label">{tiempo}</span>
           {/each}
         </div>
@@ -18,7 +18,7 @@
       <div class="gantt-tracks">
         <div class="track-label">CPU:</div>
         <div class="track-timeline">
-          {#each gantt as event}
+          {#each gantt as event (event.id || event.instante)}
             {#if event.tipo === 'rafaga_cpu'}
               <div 
                 class="gantt-block cpu-block" 

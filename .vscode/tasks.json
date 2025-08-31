@@ -4,7 +4,7 @@
 		{
 			"label": "test-motor-simulacion",
 			"type": "shell",
-			"command": "npx tsx test-motor.ts",
+			"command": "npx tsx tests/core/test-motor.ts",
 			"group": "test",
 			"isBackground": false,
 			"problemMatcher": [

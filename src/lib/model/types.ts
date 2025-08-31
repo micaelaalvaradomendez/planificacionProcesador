@@ -62,6 +62,8 @@ export type EventType =
   | 'INICIO_ES'
   | 'FIN_ES'
   | 'ATENCION_INTERRUPCION_ES'
+  | 'EXPROPIACION'              // cuando un proceso expropia a otro
+  | 'INICIO_TERMINACION'        // inicio del proceso de terminación (TFP)
   | 'TERMINACION_PROCESO';
 
 export interface SimEvent {

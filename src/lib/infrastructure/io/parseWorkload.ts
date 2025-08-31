@@ -1,5 +1,5 @@
-import type { Workload, ProcessSpec, RunConfig, Policy } from '../model/types';
-import { validarTandaDeProcesos, validarProceso } from '../model/validators';
+import type { Workload, ProcessSpec, RunConfig, Policy } from '../../model/types';
+import { validarTandaDeProcesos, validarProceso } from '../../model/validators';
 
 function normalizarPolitica(s: string | undefined): Policy {
   const up = (s || '').toUpperCase();
