@@ -1,6 +1,7 @@
 <script lang="ts">
   import { useSimulationUI } from '$lib/application/composables/useSimulationUI';
   import { useFileDownload } from '$lib/application/composables/useFileDownload';
+  import FileLoaderWithType from '$lib/ui/components/FileLoaderWithType.svelte';
 
   const {
     simState,
@@ -11,6 +12,8 @@
     necesitaQuantum,
     faltanCampos,
     cargarArchivoUI,
+    cambiarModoArchivo,
+    cargarArchivoConModo,
     establecerConfiguracion,
     ejecutarSimulacion,
     reiniciarTodo,
@@ -19,13 +22,20 @@
 
   const { descargarEventosUI, descargarMetricasUI } = useFileDownload();
 
-  // Handlers de eventos del DOM
-  function handleFileChange(e: Event) {
-    const target = e.target as HTMLInputElement;
-    simState.update(state => ({
-      ...state,
-      file: target.files?.[0] ?? null
-    }));
+  // Handlers para el nuevo componente de carga
+  function handleModeChange(event: CustomEvent) {
+    const { mode } = event.detail;
+    cambiarModoArchivo(mode);
+  }
+
+  function handleFileChange(event: CustomEvent) {
+    const { file, mode } = event.detail;
+    simState.update(state => ({ ...state, file, mode }));
+  }
+
+  function handleLoadFile(event: CustomEvent) {
+    const { file, mode } = event.detail;
+    cargarArchivoConModo(file, mode);
   }
 
   function handleConfigChange() {
@@ -54,32 +64,20 @@
   <!-- 1) Cargar tanda de procesos -->
   <div class="section card">
     <h2>1) Cargar tanda de procesos</h2>
+    
+    <FileLoaderWithType
+      selectedMode={$simState.mode}
+      file={$simState.file}
+      loading={$cargandoArchivo}
+      errors={$simState.errors}
+      on:modeChange={handleModeChange}
+      on:fileChange={handleFileChange}
+      on:loadFile={handleLoadFile}
+    />
+    
     <div class="btn-row">
-      <input
-        type="file"
-        accept=".json,.csv"
-        on:change={handleFileChange}
-      />
-      <button 
-        class="btn-primary" 
-        on:click={cargarArchivoUI} 
-        disabled={$cargandoArchivo || !$simState.file}
-      >
-        {$cargandoArchivo ? 'Cargando…' : 'Cargar archivo'}
-      </button>
-      <button class="btn-primary" on:click={reiniciarTodo}>Reiniciar</button>
+      <button class="btn-primary" on:click={reiniciarTodo}>Reiniciar Todo</button>
     </div>
-
-    {#if $simState.errors?.length > 0}
-      <div class="error-box">
-        <h4>❌ Errores</h4>
-        <ul>
-          {#each $simState.errors as err}
-            <li>{err}</li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
   </div>
 
   <!-- 2) Tabla de procesos cargados -->

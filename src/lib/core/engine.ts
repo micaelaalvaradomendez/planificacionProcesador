@@ -200,6 +200,12 @@ export class MotorSimulacion {
             break;
           }
           
+          // **ACUMULAR TIEMPO EN LISTO** - solo después de TIP
+          if (procesoSeleccionado.tipCumplido && procesoSeleccionado.ultimoTiempoEnListo !== undefined) {
+            const tiempoEnListoActual = this.state.tiempoActual - procesoSeleccionado.ultimoTiempoEnListo;
+            procesoSeleccionado.tiempoListoAcumulado += tiempoEnListoActual;
+          }
+          
           // Remover de cola de listos
           const index = this.state.colaListos.indexOf(procesoSeleccionado.name);
           if (index !== -1) {
@@ -331,6 +337,9 @@ export class MotorSimulacion {
             
             proceso.estado = 'Listo';
             this.state.procesoEjecutando = undefined;
+            
+            // **MARCAS TEMPORALES** - iniciar conteo de tiempo en listo
+            proceso.ultimoTiempoEnListo = this.state.tiempoActual;
             
             // Agregar a cola de listos (al final para rotación circular)
             if (!this.state.colaListos.includes(proceso.name)) {

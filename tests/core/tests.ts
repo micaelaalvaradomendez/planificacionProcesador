@@ -184,7 +184,7 @@ export async function ejecutarPrueba(
       // Métricas por proceso
       console.log('\n📋 Métricas por proceso:');
       for (const proc of resultado.metricas.porProceso) {
-        console.log(`   ${proc.name}: TR=${proc.tiempoRetorno.toFixed(2)}, TRn=${proc.tiempoRetornoNormalizado.toFixed(2)}`);
+        console.log(`   ${proc.name}: TR=${proc.tiempoRetorno.toFixed(2)}, TRn=${proc.tiempoRetornoNormalizado.toFixed(2)}, T_Listo=${proc.tiempoEnListo.toFixed(2)}`);
       }
       
       // Estadísticas extendidas

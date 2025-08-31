@@ -18,6 +18,8 @@
 		"test:logging": "find tests/logging -name '*.ts' -exec npx tsx {} \\;",
 		"test:gantt": "npx tsx tests/gantt/test-construccion-gantt.ts",
 		"test:integracion": "npx tsx tests/integracion/test-completo.ts",
+		"test:parser": "npx tsx tests/parsers/test-txt-parser.ts",
+		"demo:parser": "npx tsx demos/demo-parser-txt.ts",
 		"test:all": "npm run test:core && npm run test:algorithms && npm run test:logging && npm run test:gantt && npm run test:integracion",
 		"demo": "npx tsx demo-integrador.ts",
 		"demo:clean": "rm -f eventos.json eventos.csv && npm run demo",

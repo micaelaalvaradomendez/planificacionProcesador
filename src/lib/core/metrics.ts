@@ -103,13 +103,11 @@ function calcularTiempoRetorno(proceso: ProcesoRT): number {
 
 /**
  * Calcula el tiempo de servicio de un proceso
- * Tiempo efectivo de CPU que necesita el proceso
+ * CPU efectiva = solo tiempo de CPU real (sin E/S)
  */
 function calcularTiempoServicio(proceso: ProcesoRT): number {
-  const tiempoCPUTotal = proceso.rafagasCPU * proceso.duracionRafagaCPU;
-  const tiempoESTetal = Math.max(0, proceso.rafagasCPU - 1) * proceso.duracionRafagaES;
-  
-  return tiempoCPUTotal + tiempoESTetal;
+  // Solo tiempo de CPU efectiva, sin incluir E/S
+  return proceso.rafagasCPU * proceso.duracionRafagaCPU;
 }
 
 /**

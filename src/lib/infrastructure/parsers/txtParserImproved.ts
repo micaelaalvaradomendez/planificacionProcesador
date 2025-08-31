@@ -1,6 +1,6 @@
 /**
  * Parser de archivos TXT/CSV mejorado para cargar workloads de procesos
- * Formato según consigna del profesor: 6 campos exactos separados por comas
+ * Formato: 6 campos exactos como en los JSON de workloads
  * Con mensajes de error claros y útiles
  */
 
@@ -8,22 +8,26 @@ import type { ProcessSpec, Workload, Policy } from '../../model/types';
 import { ParseError, ErrorMessages } from './ParseError';
 
 /**
- * Formato esperado del archivo TXT/CSV según la consigna del profesor:
- * - Archivo TXT/CSV donde cada línea define un proceso
- * - Cada campo separado por comas (sin headers)
+ * Formato esperado del archivo TXT/CSV:
+ * - Primera línea (opcional): headers o comentario que inicie con #
+ * - Siguientes líneas: 6 campos separados por comas, espacios o tabs
  * 
- * Campos (en orden exacto según consigna):
- * 1. Nombre del proceso
- * 2. Tiempo de arribo
- * 3. Ráfagas de CPU para completarse
- * 4. Duración de ráfagas de CPU
- * 5. Duración de ráfagas de I/O
- * 6. Prioridad (1-100, mayor = más prioridad)
+ * Campos (en orden):
+ * 1. nombre (string)
+ * 2. tiempo_arribo (number)
+ * 3. cantidad_rafagas_cpu (number) 
+ * 4. duracion_rafaga_cpu (number)
+ * 5. duracion_rafaga_es (number)
+ * 6. prioridad_externa (number, 1-100, mayor = más prioridad)
  * 
- * Ejemplo según consigna:
- * P1,0,3,6,2,3
- * P2,1,2,4,3,1
- * P3,2,1,8,1,2
+ * Ejemplo CSV:
+ * nombre,tiempo_arribo,cantidad_rafagas_cpu,duracion_rafaga_cpu,duracion_rafaga_es,prioridad_externa
+ * P1,0,3,5,4,2
+ * P2,1,2,6,3,1
+ * 
+ * Ejemplo TXT separado por tabs:
+ * P1	0	3	5	4	2
+ * P2	1	2	6	3	1
  */
 
 export interface TxtParseConfig {

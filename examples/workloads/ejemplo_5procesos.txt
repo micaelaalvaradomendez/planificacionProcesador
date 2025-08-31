@@ -1,0 +1,7 @@
+# Ejemplo de archivo TXT con procesos
+# Formato: nombre, tiempo_arribo, cantidad_rafagas_cpu, duracion_rafaga_cpu, duracion_rafaga_es, prioridad_externa
+P1, 0, 3, 5, 4, 2
+P2, 1, 2, 6, 3, 1  
+P3, 3, 4, 3, 2, 3
+P4, 5, 3, 4, 2, 2
+P5, 6, 2, 7, 5, 1

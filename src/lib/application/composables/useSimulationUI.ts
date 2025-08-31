@@ -64,6 +64,54 @@ export function useSimulationUI() {
     }
   }
 
+  function cambiarModoArchivo(mode: 'json' | 'csv') {
+    simState.update(state => ({
+      ...state,
+      mode,
+      file: null, // Limpiar archivo cuando cambia el modo
+      loaded: false,
+      workload: null,
+      errors: []
+    }));
+    configEstablecida.set(false);
+    limpiarResultadosPrevios();
+  }
+
+  async function cargarArchivoConModo(file: File, mode: 'json' | 'csv') {
+    cargandoArchivo.set(true);
+    configEstablecida.set(false);
+    limpiarResultadosPrevios();
+    
+    try {
+      const currentState = get(simState);
+      const result = await cargarArchivo(
+        file,
+        mode,
+        currentState.policy,
+        currentState.tip,
+        currentState.tfp,
+        currentState.tcp,
+        currentState.quantum ?? undefined
+      );
+      
+      simState.update(state => ({
+        ...state,
+        file,
+        mode,
+        loaded: result.loaded,
+        workload: result.workload,
+        errors: result.errors ?? []
+      }));
+    } catch (e) {
+      simState.update(state => ({
+        ...state,
+        errors: ['No se pudo cargar el archivo. Verifica el formato.']
+      }));
+    } finally {
+      cargandoArchivo.set(false);
+    }
+  }
+
   function establecerConfiguracion() {
     const currentState = get(simState);
     const validation = validateConfiguration(currentState);
@@ -156,6 +204,8 @@ export function useSimulationUI() {
     
     // Acciones
     cargarArchivoUI,
+    cambiarModoArchivo,
+    cargarArchivoConModo,
     establecerConfiguracion,
     ejecutarSimulacion,
     reiniciarTodo,

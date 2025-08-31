@@ -1,4 +1,5 @@
-import { analizarTandaJson, analizarTandaCsv } from '$lib/infrastructure/io/parseWorkload';
+import { analizarTandaJson } from '$lib/infrastructure/io/parseWorkload';
+import { parseTxtToWorkload } from '$lib/infrastructure/parsers/txtParser';
 import type { Workload, Policy } from '$lib/model/types';
 
 export async function cargarArchivo(file: File | null, mode: 'json' | 'csv', policy: Policy, tip: number, tfp: number, tcp: number, quantum?: number): Promise<{workload: Workload | null, errors: string[], loaded: boolean}> {
@@ -14,7 +15,16 @@ export async function cargarArchivo(file: File | null, mode: 'json' | 'csv', pol
       workload = await analizarTandaJson(file);
       loaded = true;
     } else {
-      workload = await analizarTandaCsv(file, { policy, tip, tfp, tcp, quantum });
+      // Para CSV/TXT usamos el parser TXT que maneja el formato de la consigna del profesor
+      const content = await file.text();
+      workload = parseTxtToWorkload(content, {
+        separator: ',', // Usar coma para CSV/TXT según la consigna
+        policy,
+        tip,
+        tfp,
+        tcp,
+        quantum
+      }, file.name);
       loaded = true;
     }
   } catch (e) {

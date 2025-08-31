@@ -1,5 +1,6 @@
-import type { Workload, ProcessSpec, RunConfig, Policy } from '../../model/types';
+import type { ProcessSpec, RunConfig, Workload, Policy } from '../../model/types';
 import { validarTandaDeProcesos, validarProceso } from '../../model/validators';
+import { ParseError, ErrorMessages } from '../parsers/ParseError';
 
 function normalizarPolitica(s: string | undefined): Policy {
   const up = (s || '').toUpperCase();
@@ -8,58 +9,246 @@ function normalizarPolitica(s: string | undefined): Policy {
   throw new Error(`política inválida: ${s}`);
 }
 
-/** JSON esperado:
+/** 
+ * Parser JSON para workloads - Formato estandarizado
+ * Soporta los mismos 6 campos que el parser TXT/CSV para consistencia
+ */
+
+/** Formato JSON estándar (igual semántica que TXT/CSV):
 {
-  "workloadName":"tanda",
-  "processes":[
-    {"name":"P1","arrivalTime":0,"cpuBursts":3,"cpuBurstDuration":5,"ioBurstDuration":4,"priority":50}
+  "workloadName": "Nombre de la tanda",
+  "processes": [
+    {
+      "nombre": "P1",
+      "tiempo_arribo": 0,
+      "cantidad_rafagas_cpu": 3,
+      "duracion_rafaga_cpu": 5,
+      "duracion_rafaga_es": 4,
+      "prioridad_externa": 2
+    }
   ],
-  "policy":"RR",
-  "tip":1,"tfp":1,"tcp":1,"quantum":4
+  "config": {
+    "policy": "RR",
+    "tip": 1,
+    "tfp": 1,
+    "tcp": 1,
+    "quantum": 4
+  }
 }
+
+O formato de array simple (solo procesos):
+[
+  {
+    "nombre": "P1",
+    "tiempo_arribo": 0,
+    "cantidad_rafagas_cpu": 3,
+    "duracion_rafaga_cpu": 5,
+    "duracion_rafaga_es": 4,
+    "prioridad_externa": 2
+  }
+]
 */
 export async function analizarTandaJson(file: File): Promise<Workload> {
+  const filename = file.name;
+  
+  if (file.size === 0) {
+    throw ErrorMessages.emptyFile(filename);
+  }
+  
   const text = await file.text();
-  let procesosRaw;
+  if (!text.trim()) {
+    throw ErrorMessages.emptyFile(filename);
+  }
+  
+  let jsonData;
   try {
-    procesosRaw = JSON.parse(text);
+    jsonData = JSON.parse(text);
   } catch (e) {
-    throw new Error('Archivo JSON inválido');
+    throw ErrorMessages.invalidJson(filename);
   }
 
-  // Si el JSON es un array, lo interpretamos como la tanda de procesos
-  if (Array.isArray(procesosRaw)) {
-    const processes: ProcessSpec[] = procesosRaw.map((p: any) => ({
-      name: String(p.nombre || p.name),
-      tiempoArribo: Number(p.tiempo_arribo ?? p.tiempoArribo ?? p.arrivalTime),
-      rafagasCPU: Number(p.cantidad_rafagas_cpu ?? p.rafagasCPU ?? p.cpuBursts),
-      duracionRafagaCPU: Number(p.duracion_rafaga_cpu ?? p.duracionRafagaCPU ?? p.cpuBurstDuration),
-      duracionRafagaES: Number(p.duracion_rafaga_es ?? p.duracionRafagaES ?? p.ioBurstDuration),
-      prioridad: Number(p.prioridad_externa ?? p.prioridad ?? p.priority)
-    }));
+  // Caso 1: Array de procesos (formato estandarizado)
+  if (Array.isArray(jsonData)) {
+    const processes: ProcessSpec[] = jsonData.map((p: any, index: number) => {
+      try {
+        return parseProcessFromJson(p, filename);
+      } catch (error) {
+        if (error instanceof ParseError) {
+          throw error;
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ParseError(`Error en proceso ${index + 1}: ${errorMessage}`, filename);
+      }
+    });
 
-    // La política y parámetros se deben ingresar por la UI
     const wl: Workload = {
-      workloadName: 'tanda-json',
+      workloadName: `Workload desde JSON (${processes.length} procesos)`,
       processes,
       config: {
-        policy: null as any, // la UI debe asignar luego
+        policy: null as any, // La UI debe asignar después
         tip: 0,
         tfp: 0,
         tcp: 0,
         quantum: undefined
       }
     };
-    // Solo validar los procesos, no la configuración
-    const procErrors = processes.map(validarProceso).flat();
-    if (procErrors.length) throw new Error(`Entrada JSON inválida:\n- ${procErrors.join('\n- ')}`);
+
+    validateProcesses(processes, filename);
     return wl;
   }
 
-  // Si no es un array, intentamos el formato anterior
-  // ...existing code...
-  // (mantener el soporte para el formato anterior si es necesario)
-  throw new Error('Formato de archivo JSON no soportado');
+  // Caso 2: Objeto completo con workloadName, processes y config
+  if (jsonData && typeof jsonData === 'object' && Array.isArray(jsonData.processes)) {
+    const processes: ProcessSpec[] = jsonData.processes.map((p: any, index: number) => {
+      try {
+        return parseProcessFromJson(p, filename);
+      } catch (error) {
+        if (error instanceof ParseError) {
+          throw error;
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ParseError(`Error en proceso ${index + 1}: ${errorMessage}`, filename);
+      }
+    });
+
+    const wl: Workload = {
+      workloadName: jsonData.workloadName || `Workload desde JSON`,
+      processes,
+      config: jsonData.config ? parseConfigFromJson(jsonData.config) : {
+        policy: null as any,
+        tip: 0,
+        tfp: 0,
+        tcp: 0,
+        quantum: undefined
+      }
+    };
+
+    validateProcesses(processes, filename);
+    return wl;
+  }
+
+  throw ErrorMessages.invalidFileFormat(filename);
+}
+
+/**
+ * Parsea un proceso individual desde JSON con compatibilidad hacia atrás
+ */
+function parseProcessFromJson(p: any, filename?: string): ProcessSpec {
+  if (!p || typeof p !== 'object') {
+    throw new ParseError('Proceso debe ser un objeto', filename);
+  }
+
+  // Formato estándar (español, igual que TXT/CSV)
+  const nombre = p.nombre || p.name;
+  const tiempoArribo = p.tiempo_arribo ?? p.tiempoArribo ?? p.arrivalTime;
+  const rafagasCPU = p.cantidad_rafagas_cpu ?? p.rafagasCPU ?? p.cpuBursts;
+  const duracionRafagaCPU = p.duracion_rafaga_cpu ?? p.duracionRafagaCPU ?? p.cpuBurstDuration;
+  const duracionRafagaES = p.duracion_rafaga_es ?? p.duracionRafagaES ?? p.ioBurstDuration;
+  const prioridad = p.prioridad_externa ?? p.prioridad ?? p.priority;
+
+  // Validar campos requeridos con mensajes mejorados
+  if (!nombre) {
+    throw ErrorMessages.missingField('nombre', undefined, filename);
+  }
+  if (tiempoArribo === undefined || tiempoArribo === null) {
+    throw ErrorMessages.missingField('tiempo_arribo', undefined, filename);
+  }
+  if (!rafagasCPU) {
+    throw ErrorMessages.missingField('cantidad_rafagas_cpu', undefined, filename);
+  }
+  if (!duracionRafagaCPU) {
+    throw ErrorMessages.missingField('duracion_rafaga_cpu', undefined, filename);
+  }
+  if (duracionRafagaES === undefined || duracionRafagaES === null) {
+    throw ErrorMessages.missingField('duracion_rafaga_es', undefined, filename);
+  }
+  if (prioridad === undefined || prioridad === null) {
+    throw ErrorMessages.missingField('prioridad_externa', undefined, filename);
+  }
+
+  // Validar tipos y rangos
+  const tiempoArriboNum = Number(tiempoArribo);
+  const rafagasCPUNum = Number(rafagasCPU);
+  const duracionRafagaCPUNum = Number(duracionRafagaCPU);
+  const duracionRafagaESNum = Number(duracionRafagaES);
+  const prioridadNum = Number(prioridad);
+
+  if (isNaN(tiempoArriboNum)) {
+    throw ErrorMessages.invalidNumber('tiempo_arribo', String(tiempoArribo), undefined, filename);
+  }
+  if (isNaN(rafagasCPUNum)) {
+    throw ErrorMessages.invalidNumber('cantidad_rafagas_cpu', String(rafagasCPU), undefined, filename);
+  }
+  if (isNaN(duracionRafagaCPUNum)) {
+    throw ErrorMessages.invalidNumber('duracion_rafaga_cpu', String(duracionRafagaCPU), undefined, filename);
+  }
+  if (isNaN(duracionRafagaESNum)) {
+    throw ErrorMessages.invalidNumber('duracion_rafaga_es', String(duracionRafagaES), undefined, filename);
+  }
+  if (isNaN(prioridadNum)) {
+    throw ErrorMessages.invalidNumber('prioridad_externa', String(prioridad), undefined, filename);
+  }
+
+  // Validar rangos
+  if (tiempoArriboNum < 0) {
+    throw ErrorMessages.outOfRange('tiempo_arribo', tiempoArriboNum, 0, undefined, undefined, filename);
+  }
+  if (rafagasCPUNum < 1) {
+    throw ErrorMessages.outOfRange('cantidad_rafagas_cpu', rafagasCPUNum, 1, undefined, undefined, filename);
+  }
+  if (duracionRafagaCPUNum <= 0) {
+    throw ErrorMessages.outOfRange('duracion_rafaga_cpu', duracionRafagaCPUNum, 0.1, undefined, undefined, filename);
+  }
+  if (duracionRafagaESNum < 0) {
+    throw ErrorMessages.outOfRange('duracion_rafaga_es', duracionRafagaESNum, 0, undefined, undefined, filename);
+  }
+  if (prioridadNum < 1 || prioridadNum > 100) {
+    throw ErrorMessages.outOfRange('prioridad_externa', prioridadNum, 1, 100, undefined, filename);
+  }
+
+  return {
+    name: String(nombre),
+    tiempoArribo: tiempoArriboNum,
+    rafagasCPU: rafagasCPUNum,
+    duracionRafagaCPU: duracionRafagaCPUNum,
+    duracionRafagaES: duracionRafagaESNum,
+    prioridad: prioridadNum
+  };
+}
+
+/**
+ * Parsea configuración desde JSON
+ */
+function parseConfigFromJson(config: any): RunConfig {
+  return {
+    policy: normalizarPolitica(config.policy),
+    tip: Number(config.tip ?? 0),
+    tfp: Number(config.tfp ?? 0),
+    tcp: Number(config.tcp ?? 0),
+    quantum: config.quantum != null ? Number(config.quantum) : undefined
+  };
+}
+
+/**
+ * Valida array de procesos con mensajes mejorados
+ */
+function validateProcesses(processes: ProcessSpec[], filename?: string): void {
+  if (processes.length === 0) {
+    throw ErrorMessages.noProcesses(filename);
+  }
+
+  // Validar nombres únicos
+  const nombres = processes.map(p => p.name);
+  const duplicados = [...new Set(nombres.filter((nombre, index) => nombres.indexOf(nombre) !== index))];
+  if (duplicados.length > 0) {
+    throw ErrorMessages.duplicateNames(duplicados, filename);
+  }
+
+  // Validar cada proceso individualmente
+  const errores = processes.map(validarProceso).flat();
+  if (errores.length) {
+    throw new ParseError(`Procesos inválidos:\n- ${errores.join('\n- ')}`, filename);
+  }
 }
 
 /** CSV/TXT opcional (una línea por proceso):
