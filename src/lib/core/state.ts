@@ -28,6 +28,7 @@ export interface ProcesoRT {
 
 export type TipoEventoInterno =
   | 'Arribo'                    // Nuevo→Listo (con TIP si corresponde)
+  | 'FinTIP'                    // Nuevo→Listo (fin del tiempo de incorporación)
   | 'Despacho'                  // Listo→Ejecutando (consume TCP)
   | 'FinRafagaCPU'              // Ejecutando→(Bloqueado|Terminado)
   | 'AgotamientoQuantum'        // Ejecutando→Listo (RR)
@@ -68,6 +69,9 @@ export interface SimState {
   colaBloqueados: string[];
   procesoEjecutando?: string;
   
+  // Costos pendientes por transiciones instantáneas
+  costoBloqueadoListoPendiente: number;  // costo acumulado de transiciones Bloqueado→Listo instantáneas
+  
   // Contabilidad y logs
   contadoresCPU: ContadoresCPU;
   eventosInternos: EventoInterno[];     // log interno detallado
@@ -106,6 +110,7 @@ export function crearEstadoInicial(wl: Workload): SimState {
     procesos,
     colaListos: [],
     colaBloqueados: [],
+    costoBloqueadoListoPendiente: 0,
     contadoresCPU: {
       ocioso: 0,
       sistemaOperativo: 0,

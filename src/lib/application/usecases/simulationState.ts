@@ -61,3 +61,8 @@ export function resetSimulationState(state: SimulationState) {
   state.advertencias = [];
   state.errors = [];
 }
+
+export type ProcessSpec = {
+  id: string; // Add this line if you want to use 'id'
+  // ...other properties...
+};
