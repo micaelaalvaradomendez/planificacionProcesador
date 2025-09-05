@@ -1,11 +1,12 @@
 
 
 <script lang="ts">
-import UploadFile from '$lib/ui/components/UploadFile.svelte';
+import UploadFileWithPreview from '$lib/ui/components/UploadFileWithPreview.svelte';
 import Controls from '$lib/ui/components/Controls.svelte';
 import Gantt from '$lib/ui/components/Gantt.svelte';
 import StatsPanel from '$lib/ui/components/StatsPanel.svelte';
 import LogViewer from '$lib/ui/components/LogViewer.svelte';
+import EventsPanel from '$lib/ui/components/EventsPanel.svelte';
 import { construirDiagramaGantt, validarDiagramaGantt } from '$lib/application/usecases/buildGantt';
 import { simState } from '$lib/stores/simulation';
 import { exportarEventosCsv, exportarEventosJson } from '$lib/infrastructure/io/exportEvents';
@@ -46,7 +47,7 @@ function exportJSON() {
 
 
 <!-- 1. Cargar archivo y mostrar procesos -->
-<UploadFile />
+<UploadFileWithPreview />
 {#if $simState.loaded && $simState.workload}
 	<h3>Procesos cargados</h3>
 	<ul>
@@ -83,10 +84,18 @@ function exportJSON() {
 			</div>
 		{/if}
 		<!-- 4. Métricas y logs -->
-		<!-- <StatsPanel simState={$simState} onDescargarEventos={() => {}} onDescargarMetricas={() => {}} /> -->
+		<StatsPanel 
+			simState={$simState} 
+			onDescargarEventos={() => console.log('Descargar eventos')} 
+			onDescargarMetricas={() => console.log('Descargar métricas')} 
+		/>
 		<!-- <LogViewer simState={$simState} /> -->
-		<!-- 5. Botones de exportación -->
-		<button on:click={exportCSV}>Exportar CSV</button>
-		<button on:click={exportJSON}>Exportar JSON</button>
+		
+		<!-- Panel de eventos con descarga integrada -->
+		<EventsPanel events={$simState.events || []} />
+		
+		<!-- 5. Botones de exportación legacy (ahora redundantes) -->
+		<!-- <button on:click={exportCSV}>Exportar CSV</button>
+		<button on:click={exportJSON}>Exportar JSON</button> -->
 	{/if}
 {/if}

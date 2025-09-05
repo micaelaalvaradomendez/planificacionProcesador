@@ -88,7 +88,7 @@ export class MotorSimulacion {
 
     // Inicializar cola de eventos con arrivals
     const colaEventos = new ColaEventos();
-    for (const proceso of this.state.procesos.values()) {
+    for (const proceso of Array.from(this.state.procesos.values())) {
       colaEventos.agregar({ 
         tiempo: proceso.tiempoArribo, 
         tipo: 'Arribo', 
@@ -213,7 +213,7 @@ export class MotorSimulacion {
           }
           
           // Listo → Corriendo (siempre consume TCP según consigna)
-          procesoSeleccionado.estado = 'Ejecutando';
+          procesoSeleccionado.estado = 'Corriendo';
           this.state.procesoEjecutando = procesoSeleccionado.name;
           
           // Guardar momento de inicio de la ráfaga para cálculos de expropiación
@@ -254,9 +254,9 @@ export class MotorSimulacion {
           break;
         }
         case 'FinRafagaCPU':
-          // Ejecutando → (Bloqueado | Terminado)
-          // VALIDAR: Solo procesar si el proceso está realmente ejecutando
-          if (proceso.estado !== 'Ejecutando') {
+          // Corriendo → (Bloqueado | Terminado)
+          // VALIDAR: Solo procesar si el proceso está realmente corriendo
+          if (proceso.estado !== 'Corriendo') {
             // Proceso fue expropiado, ignorar este evento obsoleto
             agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.name, 
               'Evento obsoleto ignorado - proceso fue expropiado');
@@ -269,6 +269,7 @@ export class MotorSimulacion {
           if (proceso.rafagasRestantes > 0) {
             // Bloqueado (E/S)
             proceso.estado = 'Bloqueado';
+            this.state.procesoEjecutando = undefined; // CRÍTICO: liberar CPU
             this.state.colaBloqueados.push(proceso.name);
             
             agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.name, 'Ráfaga completada - proceso a E/S');
@@ -276,6 +277,12 @@ export class MotorSimulacion {
             
             // Programar fin de E/S (instantáneo según consigna)
             colaEventos.agregar({ tiempo: this.state.tiempoActual, tipo: 'FinES', proceso: proceso.name });
+            
+            // CRÍTICO: Si hay procesos en cola de listos, programar despacho del siguiente
+            if (this.state.colaListos.length > 0) {
+              const siguienteProceso = this.state.colaListos[0];
+              colaEventos.agregar({ tiempo: this.state.tiempoActual, tipo: 'Despacho', proceso: siguienteProceso });
+            }
           } else {
             // Última ráfaga completada: proceso debe terminar
             proceso.estado = 'Terminado';
@@ -299,6 +306,12 @@ export class MotorSimulacion {
           // "Un proceso pasa de bloqueado a listo instantáneamente y consume 0 unidades de tiempo"
           proceso.estado = 'Listo';
           
+          // CRÍTICO: Remover de cola de bloqueados
+          const indexBloqueado = this.state.colaBloqueados.indexOf(proceso.name);
+          if (indexBloqueado !== -1) {
+            this.state.colaBloqueados.splice(indexBloqueado, 1);
+          }
+          
           // Actualizar tiempo en listo - empieza a contar desde este momento
           proceso.ultimoTiempoEnListo = this.state.tiempoActual;
           
@@ -315,14 +328,20 @@ export class MotorSimulacion {
           // Según consigna: "este tiempo lo consideramos dentro del TCP posterior"
           this.state.costoBloqueadoListoPendiente += this.state.tcp;
           
+          // CRÍTICO: Si no hay proceso ejecutando, programar despacho inmediato
+          if (!this.state.procesoEjecutando && this.state.colaListos.length > 0) {
+            const siguienteProceso = this.state.colaListos[0];
+            colaEventos.agregar({ tiempo: this.state.tiempoActual, tipo: 'Despacho', proceso: siguienteProceso });
+          }
+          
           // Si hay política con expropiación (PRIORITY, SRTN), verificar si debe expropiar
           if (this.state.policy === 'PRIORITY' || this.state.policy === 'SRTN') {
             this.verificarExpropiacion(colaEventos);
           }
           break;
         case 'AgotamientoQuantum':
-          // Ejecutando → Listo (RR) - Agotamiento de quantum
-          if (proceso.estado === 'Ejecutando' && this.state.policy === 'RR') {
+          // Corriendo → Listo (RR) - Agotamiento de quantum
+          if (proceso.estado === 'Corriendo' && this.state.policy === 'RR') {
             
             // CRÍTICO: Calcular tiempo ejecutado y actualizar remanente de ráfaga
             if (proceso.tiempoInicioRafaga !== undefined) {
@@ -346,7 +365,7 @@ export class MotorSimulacion {
               this.state.colaListos.push(proceso.name);
             }
             
-            // Aplicar TCP por transición Ejecutando → Listo
+            // Aplicar TCP por transición Corriendo → Listo
             this.state.contadoresCPU.sistemaOperativo += this.state.tcp;
             
             agregarEventoExportacion(this.state, 'AGOTAMIENTO_QUANTUM', proceso.name, `TCP consumido: ${this.state.tcp} - Proceso reasignado`);

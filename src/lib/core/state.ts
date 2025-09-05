@@ -1,6 +1,6 @@
 import type { Workload, SimEvent, Policy } from '../model/types';
 
-export type ProcesoEstado = 'Nuevo' | 'Listo' | 'Ejecutando' | 'Bloqueado' | 'Terminado';
+export type ProcesoEstado = 'Nuevo' | 'Listo' | 'Corriendo' | 'Bloqueado' | 'Terminado';
 
 export interface ProcesoRT {
   name: string;
@@ -30,9 +30,9 @@ export interface ProcesoRT {
 export type TipoEventoInterno =
   | 'Arribo'                    // Nuevo→Listo (con TIP si corresponde)
   | 'FinTIP'                    // Nuevo→Listo (fin del tiempo de incorporación)
-  | 'Despacho'                  // Listo→Ejecutando (consume TCP)
-  | 'FinRafagaCPU'              // Ejecutando→(Bloqueado|Terminado)
-  | 'AgotamientoQuantum'        // Ejecutando→Listo (RR)
+  | 'Despacho'                  // Listo→Corriendo (consume TCP)
+  | 'FinRafagaCPU'              // Corriendo→(Bloqueado|Terminado)
+  | 'AgotamientoQuantum'        // Corriendo→Listo (RR)
   | 'FinES'                     // Bloqueado→Listo (instantáneo)
   | 'FinTFP';                   // cierre contable del proceso
 

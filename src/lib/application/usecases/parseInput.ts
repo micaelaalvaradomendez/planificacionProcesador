@@ -13,6 +13,14 @@ export async function cargarArchivo(file: File | null, mode: 'json' | 'csv', pol
   try {
     if (mode === 'json') {
       workload = await analizarTandaJson(file);
+      // Aplicar configuración de UI al workload JSON
+      if (workload && workload.config) {
+        workload.config.policy = policy;
+        workload.config.tip = tip;
+        workload.config.tfp = tfp;
+        workload.config.tcp = tcp;
+        workload.config.quantum = policy === 'RR' ? quantum : undefined;
+      }
       loaded = true;
     } else {
       // Para CSV/TXT usamos el parser TXT que maneja el formato de la consigna del profesor

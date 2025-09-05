@@ -231,7 +231,7 @@ export function exportarGanttComoSVG(
 
   // Leyenda de colores
   let leyendaY = alto - 60;
-  const tiposUsados = [...new Set(diagrama.segmentos.map(s => s.kind))].sort();
+  const tiposUsados = Array.from(new Set(diagrama.segmentos.map(s => s.kind))).sort();
   
   svg += `  <text x="20" y="${leyendaY - 15}" class="subtitulo">Leyenda:</text>\n`;
   

@@ -143,9 +143,16 @@ export function useSimulationUI() {
     }));
     
     try {
-      console.log('🔄 Iniciando simulación con workload:', currentState.workload);
+      console.log('🔄 Iniciando simulación...');
+      console.log('Workload config:', currentState.workload.config);
+      console.log('Workload procesos:', currentState.workload.processes.length);
+      
       const result = await runSimulationWithTimeout(currentState.workload);
-      console.log('✅ Simulación completada, resultado:', result);
+      
+      console.log('✅ Simulación terminada');
+      console.log('Resultado completo:', result);
+      console.log('Métricas por proceso:', result.metrics?.porProceso?.length || 0);
+      console.log('Métricas tanda:', result.metrics?.tanda);
       
       simState.update(state => {
         updateSimulationResults(state, result);
@@ -156,7 +163,6 @@ export function useSimulationUI() {
       });
       
     } catch (e) {
-      console.error('❌ Error en simulación:', e);
       simState.update(state => ({
         ...state,
         errors: ['La simulación falló. Revisa parámetros y dataset.']

@@ -2,16 +2,27 @@
   export let simState: any;
   export let onDescargarEventos: () => void;
   export let onDescargarMetricas: () => void;
+
+  // Debug temporal para ver exactamente qué llega a la UI
+  $: if (simState?.simulacionCompletada) {
+    console.log('🔍 DEBUG StatsPanel - Datos recibidos:');
+    console.log('- simulacionCompletada:', simState.simulacionCompletada);
+    console.log('- metrics existe:', !!simState.metrics);
+    console.log('- metrics.porProceso:', simState.metrics?.porProceso);
+    console.log('- metrics.tanda:', simState.metrics?.tanda);
+    console.log('- tiempoTotalSimulacion:', simState.tiempoTotalSimulacion);
+    console.log('- events length:', simState.events?.length);
+  }
 </script>
 
-{#if simState.simulacionCompletada && simState.estadisticasExtendidas}
+{#if simState.simulacionCompletada && simState.metrics && simState.metrics.porProceso}
   <!-- Resumen de Resultados -->
   <div class="card p-3 my-3 success-card">
     <h2>✅ Simulación Completada</h2>
     <div class="summary-grid">
       <div class="metric">
         <span class="metric-label">Tiempo Total:</span>
-        <span class="metric-value">{simState.tiempoTotalSimulacion.toFixed(2)}</span>
+        <span class="metric-value">{simState.tiempoTotalSimulacion?.toFixed(2) || 'N/A'}</span>
       </div>
       <div class="metric">
         <span class="metric-label">Procesos Terminados:</span>
@@ -19,11 +30,11 @@
       </div>
       <div class="metric">
         <span class="metric-label">Eventos Generados:</span>
-        <span class="metric-value">{simState.events.length}</span>
+        <span class="metric-value">{simState.events?.length || 0}</span>
       </div>
       <div class="metric">
         <span class="metric-label">Eficiencia CPU:</span>
-        <span class="metric-value">{simState.estadisticasExtendidas.analisis.eficienciaCPU.toFixed(1)}%</span>
+        <span class="metric-value">{simState.estadisticasExtendidas?.analisis?.eficienciaCPU?.toFixed(1) || simState.metrics.tanda?.porcentajeCpuProcesos?.toFixed(1) || 'N/A'}%</span>
       </div>
     </div>
   </div>
@@ -54,32 +65,36 @@
   <!-- Métricas por Proceso -->
   <div class="card p-3 my-3">
     <h2>📊 Métricas por Proceso</h2>
-    <table class="metrics-table">
-      <thead>
-        <tr>
-          <th>Proceso</th>
-          <th>Tiempo Retorno (TR)</th>
-          <th>TR Normalizado (TRn)</th>
-          <th>Tiempo en Listo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each simState.metrics.porProceso as proc}
+    {#if simState.metrics?.porProceso && simState.metrics.porProceso.length > 0}
+      <table class="metrics-table">
+        <thead>
           <tr>
-            <td class="process-name">{proc.name}</td>
-            <td>{proc.tiempoRetorno.toFixed(2)}</td>
-            <td>{proc.tiempoRetornoNormalizado.toFixed(2)}</td>
-            <td>{proc.tiempoEnListo.toFixed(2)}</td>
+            <th>Proceso</th>
+            <th>Tiempo Retorno (TR)</th>
+            <th>TR Normalizado (TRn)</th>
+            <th>Tiempo en Listo</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each simState.metrics.porProceso as proc}
+            <tr>
+              <td class="process-name">{proc.name}</td>
+              <td>{proc.tiempoRetorno?.toFixed(2) || 'N/A'}</td>
+              <td>{proc.tiempoRetornoNormalizado?.toFixed(2) || 'N/A'}</td>
+              <td>{proc.tiempoEnListo?.toFixed(2) || 'N/A'}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <p>No hay métricas por proceso disponibles.</p>
+    {/if}
     
     <div class="batch-metrics">
       <h3>Métricas de Tanda</h3>
-      <p><strong>Tiempo Retorno Tanda:</strong> {simState.metrics.tanda.tiempoRetornoTanda.toFixed(2)}</p>
-      <p><strong>Tiempo Medio Retorno:</strong> {simState.metrics.tanda.tiempoMedioRetorno.toFixed(2)}</p>
-      <p><strong>Throughput:</strong> {simState.estadisticasExtendidas.analisis.throughput.toFixed(3)} procesos/tiempo</p>
+      <p><strong>Tiempo Retorno Tanda:</strong> {simState.metrics.tanda?.tiempoRetornoTanda?.toFixed(2) || 'N/A'}</p>
+      <p><strong>Tiempo Medio Retorno:</strong> {simState.metrics.tanda?.tiempoMedioRetorno?.toFixed(2) || 'N/A'}</p>
+      <p><strong>Throughput:</strong> {simState.estadisticasExtendidas?.analisis?.throughput?.toFixed(3) || 'N/A'} procesos/tiempo</p>
     </div>
   </div>
 

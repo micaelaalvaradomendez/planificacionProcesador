@@ -1,7 +1,9 @@
 <script lang="ts">
   import { useSimulationUI } from '$lib/application/composables/useSimulationUI';
   import { useFileDownload } from '$lib/application/composables/useFileDownload';
-  import FileLoaderWithType from '$lib/ui/components/FileLoaderWithType.svelte';
+  import UploadFileWithPreview from '$lib/ui/components/UploadFileWithPreview.svelte';
+  import EventsPanel from '$lib/ui/components/EventsPanel.svelte';
+  import StatsPanel from '$lib/ui/components/StatsPanel.svelte';
 
   const {
     simState,
@@ -22,20 +24,27 @@
 
   const { descargarEventosUI, descargarMetricasUI } = useFileDownload();
 
-  // Handlers para el nuevo componente de carga
-  function handleModeChange(event: CustomEvent) {
-    const { mode } = event.detail;
-    cambiarModoArchivo(mode);
+  // Handlers para el nuevo componente de carga con preview
+  function handleUploadFile() {
+    const state = $simState;
+    if (state.file) {
+      // Detectar tipo automáticamente basado en extensión
+      const fileName = state.file.name.toLowerCase();
+      const mode = fileName.endsWith('.json') ? 'json' : 'csv';
+      cargarArchivoConModo(state.file, mode);
+    }
   }
 
-  function handleFileChange(event: CustomEvent) {
-    const { file, mode } = event.detail;
-    simState.update(state => ({ ...state, file, mode }));
-  }
-
-  function handleLoadFile(event: CustomEvent) {
-    const { file, mode } = event.detail;
-    cargarArchivoConModo(file, mode);
+  function handleResetFile() {
+    simState.update(state => ({ 
+      ...state, 
+      file: null, 
+      loaded: false, 
+      workload: null, 
+      errors: [] 
+    }));
+    configEstablecida.set(false);
+    limpiarResultadosPrevios();
   }
 
   function handleConfigChange() {
@@ -65,14 +74,12 @@
   <div class="section card">
     <h2>1) Cargar tanda de procesos</h2>
     
-    <FileLoaderWithType
-      selectedMode={$simState.mode}
-      file={$simState.file}
-      loading={$cargandoArchivo}
-      errors={$simState.errors}
-      on:modeChange={handleModeChange}
-      on:fileChange={handleFileChange}
-      on:loadFile={handleLoadFile}
+    <UploadFileWithPreview
+      bind:file={$simState.file}
+      bind:cargandoArchivo={$cargandoArchivo}
+      bind:errors={$simState.errors}
+      on:uploadFile={handleUploadFile}
+      on:reset={handleResetFile}
     />
     
     <div class="btn-row">
@@ -239,35 +246,42 @@
       </div>
     </div>
 
-    {#if $simState.metrics}
-      <div class="section card">
-        <h2>📊 Métricas por Proceso</h2>
-        {#if $simState.metrics.porProceso?.length > 0}
-          <table>
-            <thead>
-              <tr>
-                <th>Proceso</th>
-                <th>Tiempo de Retorno (TR)</th>
-                <th>Tiempo de Retorno Normalizado (TRn)</th>
-                <th>Tiempo en Estado Listo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each $simState.metrics.porProceso as proc}
-                <tr>
-                  <td><strong>{proc.name}</strong></td>
-                  <td>{proc.tiempoRetorno?.toFixed(2) ?? '-'}</td>
-                  <td>{proc.tiempoRetornoNormalizado?.toFixed(2) ?? '-'}</td>
-                  <td>{proc.tiempoEnListo?.toFixed(2) ?? '-'}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {:else}
-          <p>No hay métricas por proceso disponibles.</p>
-        {/if}
+    {#if $simState.simulacionCompletada}
+      <!-- Debug: Mostrar siempre si la simulación está completada -->
+      <div class="section card" style="background: #fff3cd; border: 1px solid #ffeaa7; margin: 1rem 0;">
+        <h3>🔍 Debug Estado Simulación</h3>
+        <p><strong>Simulación Completada:</strong> {$simState.simulacionCompletada}</p>
+        <p><strong>Métricas Existen:</strong> {!!$simState.metrics}</p>
+        <p><strong>Métricas por Proceso Existen:</strong> {!!$simState.metrics?.porProceso}</p>
+        <p><strong>Cantidad Procesos:</strong> {$simState.metrics?.porProceso?.length || 0}</p>
+        <details>
+          <summary>Estado completo</summary>
+          <pre style="font-size: 10px; max-height: 300px; overflow: auto;">{JSON.stringify($simState, null, 2)}</pre>
+        </details>
+      </div>
+      
+      {#if $simState.metrics && $simState.metrics.porProceso}
+        <!-- Panel completo de métricas según consigna -->
+        <StatsPanel 
+          simState={$simState} 
+          onDescargarEventos={handleDescargarEventos}
+          onDescargarMetricas={handleDescargarMetricas}
+        />
+      {:else}
+        <div class="section card">
+          <h2>⚠️ Métricas no disponibles</h2>
+          <p>Las métricas no están disponibles o no se pudieron calcular.</p>
+        </div>
+      {/if}
+    {:else}
+      <!-- Mostrar solo si no se ha completado la simulación -->
+      <div class="section card" style="background: #f8f9fa;">
+        <p>Ejecute una simulación para ver las métricas</p>
       </div>
     {/if}
+
+    <!-- Panel de eventos -->
+    <EventsPanel events={$simState.events || []} />
   {/if}
 
   <!-- 6) Advertencias -->

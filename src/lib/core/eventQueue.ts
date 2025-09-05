@@ -127,6 +127,7 @@ export class ColaEventos {
         return 4; // Bloqueado a Listo
       
       case 'Arribo':
+      case 'FinTIP':
       case 'FinTFP':
         return 5; // Nuevo a Listo
       
