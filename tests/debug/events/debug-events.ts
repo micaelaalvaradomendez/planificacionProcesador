@@ -1,14 +1,14 @@
 #!/usr/bin/env npx tsx
 
 // Script para analizar eventos y estados de procesos
-import { analizarTandaJson } from './src/lib/infrastructure/io/parseWorkload';
-import { ejecutarSimulacionCompleta } from './src/lib/application/usecases/runSimulation';
+import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { ejecutarSimulacionCompleta } from '../../../src/lib/application/usecases/runSimulation';
 import fs from 'fs';
 
 async function analyzeEvents() {
   console.log('🔍 ANÁLISIS: Eventos y estados de procesos\n');
   
-  const content = fs.readFileSync('./examples/workloads/procesos_tanda_7p.json', 'utf8');
+  const content = fs.readFileSync('../../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
   const workload = await analizarTandaJson(file);

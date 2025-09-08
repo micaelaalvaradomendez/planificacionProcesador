@@ -1,4 +1,4 @@
-import { runSimulationWithTimeout } from './src/lib/application/usecases/simulationRunner.js';
+import { runSimulationWithTimeout } from '../../src/lib/application/usecases/simulationRunner.js';
 
 // Simular carga de workload desde UI
 const workload = {

@@ -1,9 +1,9 @@
 /**
  * Script para debuggear el problema de mapeo de campos
  */
-import { analizarTandaJson } from './src/lib/infrastructure/io/parseWorkload';
-import { MotorSimulacion } from './src/lib/core/engine';
-import { calcularMetricasCompletas } from './src/lib/core/metrics';
+import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { MotorSimulacion } from '../../../src/lib/core/engine';
+import { calcularMetricasCompletas } from '../../../src/lib/core/metrics';
 
 async function debugMapeoArchivo() {
   console.log('🔍 DEBUG: Mapeo de campos en archivo JSON');

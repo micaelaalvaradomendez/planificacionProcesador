@@ -1,14 +1,14 @@
 #!/usr/bin/env npx tsx
 
 // Debug específico para simular exactamente lo que hace la UI
-import { cargarArchivo } from './src/lib/application/usecases/parseInput';
-import { runSimulationWithTimeout } from './src/lib/application/usecases/simulationRunner';
+import { cargarArchivo } from '../../../src/lib/application/usecases/parseInput';
+import { runSimulationWithTimeout } from '../../../src/lib/application/usecases/simulationRunner';
 import fs from 'fs';
 
 async function debugUIFlow() {
   console.log('🔍 DEBUG: Simulando flujo exacto de la UI\n');
   
-  const content = fs.readFileSync('./examples/workloads/procesos_tanda_7p.json', 'utf8');
+  const content = fs.readFileSync('../../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
   // 1. Cargar archivo como lo hace la UI

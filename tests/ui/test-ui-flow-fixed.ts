@@ -1,15 +1,15 @@
 #!/usr/bin/env npx tsx
 
 // Script para probar el flujo completo de la UI después del fix
-import { cargarArchivo } from './src/lib/application/usecases/parseInput';
-import { runSimulationWithTimeout } from './src/lib/application/usecases/simulationRunner';
+import { cargarArchivo } from '../../src/lib/application/usecases/parseInput';
+import { runSimulationWithTimeout } from '../../src/lib/application/usecases/simulationRunner';
 import fs from 'fs';
 
 async function testUIFlowFixed() {
   console.log('🧪 TEST: Flujo completo UI después del FIX\n');
   
   // 1. Simular carga de archivo JSON con configuración de UI (como hace cargarArchivo ahora)
-  const content = fs.readFileSync('./examples/workloads/procesos_tanda_7p.json', 'utf8');
+  const content = fs.readFileSync('../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
   console.log('📁 Cargando archivo con cargarArchivo (simulando UI)...');

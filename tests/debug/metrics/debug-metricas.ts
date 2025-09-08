@@ -1,6 +1,6 @@
-import { MotorSimulacion } from './src/lib/core/engine.js';
-import { calcularMetricasCompletas } from './src/lib/core/metrics.js';
-import { calcularEstadisticasExtendidas } from './src/lib/application/usecases/computeStatistics.js';
+import { MotorSimulacion } from '../../../src/lib/core/engine.js';
+import { calcularMetricasCompletas } from '../../../src/lib/core/metrics.js';
+import { calcularEstadisticasExtendidas } from '../../../src/lib/application/usecases/computeStatistics.js';
 
 const workload = {
   workloadName: 'Debug Métricas',

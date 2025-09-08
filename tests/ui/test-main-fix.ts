@@ -1,13 +1,13 @@
 #!/usr/bin/env npx tsx
 
 // Test simple para verificar el fix principal
-import { cargarArchivo } from './src/lib/application/usecases/parseInput';
+import { cargarArchivo } from '../../src/lib/application/usecases/parseInput';
 import fs from 'fs';
 
 async function testMainFix() {
   console.log('🧪 TEST: Verificar fix principal\n');
   
-  const content = fs.readFileSync('./examples/workloads/procesos_tanda_7p.json', 'utf8');
+  const content = fs.readFileSync('../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
   console.log('📁 Cargando archivo con configuración de UI...');

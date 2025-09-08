@@ -1,4 +1,4 @@
-import { runSimulationWithTimeout } from './src/lib/application/usecases/simulationRunner.js';
+import { runSimulationWithTimeout } from '../../src/lib/application/usecases/simulationRunner.js';
 
 // Simular el workload que se cargaría desde un archivo CSV/TXT simple
 const workloadFromFile = {

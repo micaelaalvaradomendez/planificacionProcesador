@@ -1,4 +1,4 @@
-import { ejecutarSimulacionCompleta } from './src/lib/application/usecases/runSimulation.js';
+import { ejecutarSimulacionCompleta } from '../../../src/lib/application/usecases/runSimulation.js';
 
 // Cargar workload desde el archivo de ejemplo
 const workload = {

@@ -56,6 +56,8 @@ export function construirDiagramaGantt(eventos: SimEvent[]): DiagramaGantt {
  * Genera segmentos de Gantt a partir de eventos ordenados cronológicamente
  */
 function generarSegmentosGantt(eventos: SimEvent[]): GanttSlice[] {
+  console.log('🔄 Generando segmentos desde eventos:', eventos.length);
+  
   const segmentos: GanttSlice[] = [];
   const eventosOrdenados = [...eventos].sort((a, b) => a.tiempo - b.tiempo);
   
@@ -63,6 +65,8 @@ function generarSegmentosGantt(eventos: SimEvent[]): GanttSlice[] {
   let procesoActual: string | null = null;
   let tiempoInicioSegmento = 0;
   let ultimoTiempo = 0;
+
+  console.log('📊 Primeros eventos:', eventosOrdenados.slice(0, 3));
 
   for (const evento of eventosOrdenados) {
     // Cerrar segmento anterior si hay cambio de estado
@@ -172,11 +176,19 @@ function determinarNuevoProceso(
  * Mapea estados internos a tipos de segmento del Gantt
  */
 function mapearEstadoAKind(estado: 'OCIOSO' | 'SO' | 'CPU' | 'ES'): GanttSlice['kind'] {
+  console.log('🔍 Mapeando estado:', estado);
   switch (estado) {
-    case 'OCIOSO': return 'OCIOSO';
-    case 'SO': return 'TIP'; // Simplificado, podría ser TIP/TFP/TCP
-    case 'CPU': return 'CPU';
-    case 'ES': return 'ES';
+    case 'OCIOSO': 
+      return 'OCIOSO';
+    case 'SO': 
+      return 'TIP'; // TIP es uno de los posibles estados del SO
+    case 'CPU': 
+      return 'CPU';
+    case 'ES': 
+      return 'ES';
+    default:
+      console.warn('Estado no reconocido:', estado);
+      return 'OCIOSO';
   }
 }
 

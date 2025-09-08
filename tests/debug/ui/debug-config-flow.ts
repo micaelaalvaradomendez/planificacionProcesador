@@ -1,16 +1,16 @@
 #!/usr/bin/env npx tsx
 
 // Script para probar el flujo de configuración en la UI
-import { analizarTandaJson } from './src/lib/infrastructure/io/parseWorkload';
-import { ejecutarSimulacionCompleta } from './src/lib/application/usecases/runSimulation';
-import { calcularMetricasPorProceso } from './src/lib/core/metrics';
+import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { ejecutarSimulacionCompleta } from '../../../src/lib/application/usecases/runSimulation';
+import { calcularMetricasPorProceso } from '../../../src/lib/core/metrics';
 import fs from 'fs';
 
 async function testConfigFlow() {
   console.log('🧪 TEST: Flujo de configuración UI\n');
   
   // 1. Simular carga de archivo (como lo hace la UI)
-  const content = fs.readFileSync('./examples/workloads/procesos_tanda_7p.json', 'utf8');
+  const content = fs.readFileSync('../../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
   console.log('📁 Cargando archivo con analizarTandaJson...');

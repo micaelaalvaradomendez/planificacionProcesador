@@ -38,4 +38,3 @@ console.log('  cantidad_rafagas_cpu:', data[0].cantidad_rafagas_cpu);
 
 console.log('\n🎯 DIAGNÓSTICO: El archivo JSON usa campos en ESPAÑOL');
 console.log('   El parser debe mapear estos campos a campos en INGLÉS');
-console.log('   Necesitamos verificar que el mapeo funcione correctamente');

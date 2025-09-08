@@ -2,16 +2,16 @@
  * Debug del motor de simulación para encontrar por qué los procesos no terminan en la UI
  */
 
-import { MotorSimulacion } from './src/lib/core/engine';
-import { analizarTandaJson } from './src/lib/infrastructure/io/parseWorkload';
-import { calcularMetricasCompletas } from './src/lib/core/metrics';
+import { MotorSimulacion } from '../../../src/lib/core/engine';
+import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { calcularMetricasCompletas } from '../../../src/lib/core/metrics';
 import { readFile } from 'fs/promises';
 
 async function debugMotorDetallado() {
   console.log('🔍 DEBUG DETALLADO DEL MOTOR DE SIMULACIÓN');
   
   // Usar el mismo archivo que en la UI
-  const archivoEntrada = './examples/workloads/procesos_tanda_7p.json';
+  const archivoEntrada = '../../../examples/workloads/procesos_tanda_7p.json';
   
   // Configuración idéntica a la UI
   const config = {

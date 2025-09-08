@@ -2,8 +2,8 @@
  * Debug de eventos detallado para ver qué pasa con la cola de eventos
  */
 
-import { MotorSimulacion } from './src/lib/core/engine';
-import { analizarTandaJson } from './src/lib/infrastructure/io/parseWorkload';
+import { MotorSimulacion } from '../../../src/lib/core/engine';
+import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
 import { readFile } from 'fs/promises';
 
 async function debugEventosDetallado() {
@@ -20,7 +20,7 @@ async function debugEventosDetallado() {
   
   try {
     // Cargar archivo
-    const contenido = await readFile('./examples/workloads/procesos_tanda_7p.json', 'utf-8');
+    const contenido = await readFile('../../../examples/workloads/procesos_tanda_7p.json', 'utf-8');
     const file = new File([contenido], 'procesos_tanda_7p.json', { type: 'application/json' });
     
     let workload = await analizarTandaJson(file);

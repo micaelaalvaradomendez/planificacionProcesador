@@ -3,6 +3,7 @@ import type { SimulationState } from '../usecases/simulationState';
 import { getInitialSimulationState } from '../usecases/simulationState';
 import { cargarArchivo } from '../usecases/parseInput';
 import { runSimulationWithTimeout } from '../usecases/simulationRunner';
+import { construirDiagramaGantt } from '../usecases/buildGantt';
 
 export function useSimulationUI() {
   // Estado principal usando stores
@@ -154,11 +155,22 @@ export function useSimulationUI() {
       console.log('Métricas por proceso:', result.metrics?.porProceso?.length || 0);
       console.log('Métricas tanda:', result.metrics?.tanda);
       
+      // Construir datos del Gantt
+      console.log('🎨 Generando diagrama de Gantt...');
+      const ganttData = construirDiagramaGantt(result.events);
+      console.log('✅ Diagrama construido:', {
+        tiempoTotal: ganttData.tiempoTotal,
+        segmentos: ganttData.segmentos.length,
+        procesos: ganttData.procesos.length
+      });
+      
       simState.update(state => {
         updateSimulationResults(state, result);
         return {
           ...state,
-          simulacionCompletada: true
+          simulacionCompletada: true,
+          ganttSlices: ganttData.segmentos,
+          tiempoTotalSimulacion: ganttData.tiempoTotal
         };
       });
       
