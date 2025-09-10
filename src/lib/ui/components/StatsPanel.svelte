@@ -109,7 +109,7 @@
 
 <style>
   .section { margin-bottom: 1.5rem; }
-  .card { border: 1px solid var(--border-color, #ddd); border-radius: 12px; padding: 1rem; background: var(--bg-card, #111); }
+  .card { border: 1px solid var(--border-color, #ddd); border-radius: 12px; padding: 1rem; background: var(--bg-card, #ffffff); }
   .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; }
   .btn-primary { padding: .6rem 1rem; border-radius: .75rem; border: 1px solid #444; cursor: pointer; }
   .success-card { border-left: 4px solid #28a745; background: #f8fff9; }

@@ -162,7 +162,7 @@
 
 <style>
   .events-panel {
-    background: var(--bg-card, #1a1a1a);
+    background: var(--bg-card, #fffefe);
     border: 1px solid var(--border-color, #333);
     border-radius: 12px;
     padding: 1.5rem;
@@ -172,7 +172,7 @@
   .events-empty {
     text-align: center;
     padding: 2rem;
-    color: var(--text-muted, #888);
+    color: var(--text-muted, #000000);
   }
 
   .empty-message {
@@ -191,7 +191,7 @@
 
   .events-header h3 {
     margin: 0;
-    color: var(--text-primary, #ffffff);
+    color: var(--text-primary, #000000);
   }
 
   .events-summary {
@@ -199,7 +199,7 @@
     flex-direction: column;
     align-items: flex-end;
     font-size: 0.85rem;
-    color: var(--text-muted, #888);
+    color: var(--text-muted, #111010);
   }
 
   .event-count {
@@ -230,15 +230,15 @@
     padding: 0.5rem 1rem;
     border: 1px solid var(--border-color, #333);
     border-radius: 6px;
-    background: var(--bg-secondary, #2a2a2a);
-    color: var(--text-primary, #ffffff);
+    background: var(--bg-secondary, #c1f882);
+    color: var(--text-primary, #000000);
     cursor: pointer;
     font-size: 0.875rem;
     transition: all 0.2s ease;
   }
 
   .btn:hover:not(:disabled) {
-    background: var(--bg-hover, #3a3a3a);
+    background: var(--bg-hover, #618ec9);
     border-color: var(--border-hover, #555);
   }
 
@@ -274,8 +274,8 @@
   }
 
   .events-table th {
-    background: var(--bg-secondary, #2a2a2a);
-    color: var(--text-primary, #ffffff);
+    background: var(--bg-secondary, #ffffff);
+    color: var(--text-primary, #000000);
     font-weight: 600;
     padding: 0.75rem;
     text-align: left;
@@ -317,8 +317,8 @@
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
-    background: var(--bg-secondary, #374151);
-    color: var(--text-primary, #ffffff);
+    background: var(--bg-secondary, #8ec9ff);
+    color: var(--text-primary, #000000);
   }
 
   .badge-arrival {
