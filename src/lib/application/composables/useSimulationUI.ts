@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { SimulationState } from '../usecases/simulationState';
 import { getInitialSimulationState } from '../usecases/simulationState';
-import { cargarArchivo } from '../usecases/parseInput';
+import { cargarArchivo } from '$lib/infrastructure/parsers/workloadParser';
 import { runSimulationWithTimeout } from '../usecases/simulationRunner';
 import { construirDiagramaGantt } from '../usecases/buildGantt';
 

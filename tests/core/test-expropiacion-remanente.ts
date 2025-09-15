@@ -4,7 +4,7 @@
  */
 
 import { MotorSimulacion } from '../../src/lib/core/engine.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 // Test para Priority: proceso con mayor prioridad expropia en medio de ráfaga
 function testPriorityExpropiacionRemanente() {

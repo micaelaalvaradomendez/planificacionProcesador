@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 // Script para analizar los eventos generados en detalle
-import { cargarArchivo } from '../../src/lib/application/usecases/parseInput';
+import { cargarArchivo } from '../../src/lib/infrastructure/parsers/workloadParser';
 import { runSimulationWithTimeout } from '../../src/lib/application/usecases/simulationRunner';
 import fs from 'fs';
 

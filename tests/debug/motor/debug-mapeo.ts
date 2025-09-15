@@ -1,7 +1,7 @@
 /**
  * Script para debuggear el problema de mapeo de campos
  */
-import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from "../../src/lib/infrastructure/parsers/jsonParser"';
 import { MotorSimulacion } from '../../../src/lib/core/engine';
 import { calcularMetricasCompletas } from '../../../src/lib/core/metrics';
 
@@ -37,8 +37,8 @@ async function debugMapeoArchivo() {
     console.log('\n📄 Contenido del archivo JSON:');
     console.log(contenidoArchivo);
 
-    console.log('\n🔧 Parseando con analizarTandaJson...');
-    const workload = await analizarTandaJson(file);
+    console.log('\n🔧 Parseando con parseJsonToWorkload...');
+    const workload = await parseJsonToWorkload(file);
 
     console.log('\n✅ Workload parseado:');
     console.log('Nombre:', workload.workloadName);

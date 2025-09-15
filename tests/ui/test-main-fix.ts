@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 // Test simple para verificar el fix principal
-import { cargarArchivo } from '../../src/lib/application/usecases/parseInput';
+import { cargarArchivo } from '../../src/lib/infrastructure/parsers/workloadParser';
 import fs from 'fs';
 
 async function testMainFix() {

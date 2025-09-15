@@ -10,7 +10,7 @@ import {
   exportarEventosCSV,
   generarResumenEventos
 } from '../../src/lib/infrastructure/io/eventLogger.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 function testEventosBasicos() {
   console.log('\n🧪 Test Eventos Básicos');

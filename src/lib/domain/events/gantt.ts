@@ -1,4 +1,4 @@
-import type { GanttSlice } from '../../model/types';
+import type { GanttSlice } from '../types';
 
 export function ordenarGantt(segmentos: GanttSlice[]): GanttSlice[] {
   return [...segmentos].sort((a, b) => a.tStart - b.tStart || a.tEnd - b.tEnd);

@@ -1,5 +1,5 @@
 /**
- * Exportador de Diagramas de Gantt
+ * Exportador de Diagramas de Gantt para Infrastructure/IO
  * 
  * Genera exportaciones del diagrama de Gantt en múltiples formatos:
  * - JSON de tramos (estructura detallada)
@@ -8,8 +8,27 @@
  * - Datos para gráficas externas
  */
 
-import type { EventoLog } from './eventLogger.js';
-import type { DiagramaGanttEventos } from './ganttBuilder.js';
+import type { GanttSlice } from '../../domain/types';
+
+/**
+ * Estructura simplificada para construcción de Gantt desde eventos
+ */
+export interface DiagramaGantt {
+  segmentos: GanttSlice[];
+  tiempoTotal: number;
+  procesos: string[];
+  estadisticas: {
+    utilizacionCPU: number;
+    tiempoOcioso: number;
+    tiempoSO: number;
+    distribucionTiempos: Record<string, number>;
+  };
+  validacion?: {
+    sinSolapes: boolean;
+    errores: string[];
+    advertencias: string[];
+  };
+}
 
 /**
  * Estructura de un tramo del diagrama de Gantt para exportación
@@ -75,7 +94,7 @@ const COLORES_GANTT = {
  * Exporta el diagrama de Gantt como JSON estructurado de tramos
  */
 export function exportarGanttComoJSON(
-  diagrama: DiagramaGanttEventos,
+  diagrama: DiagramaGantt,
   algoritmo: string = 'Desconocido',
   titulo: string = 'Diagrama de Gantt'
 ): GanttJSON {
@@ -124,10 +143,10 @@ export function exportarGanttComoJSON(
       escala: Math.max(1, Math.floor(diagrama.tiempoTotal / 20))
     },
     validacion: {
-      sinSolapes: diagrama.validacion.sinSolapes,
-      continuidadTemporal: diagrama.validacion.errores.length === 0,
-      errores: diagrama.validacion.errores,
-      advertencias: diagrama.validacion.advertencias
+      sinSolapes: diagrama.validacion?.sinSolapes ?? true,
+      continuidadTemporal: (diagrama.validacion?.errores?.length ?? 0) === 0,
+      errores: diagrama.validacion?.errores ?? [],
+      advertencias: diagrama.validacion?.advertencias ?? []
     }
   };
 
@@ -139,7 +158,7 @@ export function exportarGanttComoJSON(
  * Exporta el diagrama de Gantt como imagen SVG
  */
 export function exportarGanttComoSVG(
-  diagrama: DiagramaGanttEventos,
+  diagrama: DiagramaGantt,
   opciones: {
     ancho?: number;
     alto?: number;
@@ -253,7 +272,7 @@ export function exportarGanttComoSVG(
  * Exporta el diagrama de Gantt como representación ASCII
  */
 export function exportarGanttComoASCII(
-  diagrama: DiagramaGanttEventos,
+  diagrama: DiagramaGantt,
   opciones: {
     ancho?: number;
     algoritmo?: string;
@@ -317,54 +336,54 @@ export function exportarGanttComoASCII(
 }
 
 /**
- * Guarda el diagrama de Gantt en archivos múltiples
+ * Descarga el diagrama de Gantt como archivo JSON
  */
-export async function exportarGanttAArchivos(
-  diagrama: DiagramaGanttEventos,
-  nombreBase: string,
-  carpeta: string = './',
+export function descargarGanttJSON(
+  diagrama: DiagramaGantt,
+  nombreArchivo: string,
   algoritmo: string = 'Planificador'
-): Promise<{
-  archivoJSON: string;
-  archivoSVG: string;
-  archivoASCII: string;
-}> {
+): void {
+  const ganttJSON = exportarGanttComoJSON(diagrama, algoritmo);
+  const json = JSON.stringify(ganttJSON, null, 2);
   
-  console.log(`💾 Exportando Gantt a archivos: ${nombreBase}`);
-
-  // Preparar contenidos
-  const ganttJSON = exportarGanttComoJSON(diagrama, algoritmo, `Diagrama de Gantt - ${algoritmo}`);
-  const ganttSVG = exportarGanttComoSVG(diagrama, { algoritmo, titulo: `Gantt - ${algoritmo}` });
-  const ganttASCII = exportarGanttComoASCII(diagrama, { algoritmo });
-
-  // Rutas de archivos
-  const rutaJSON = `${carpeta}${nombreBase}-gantt.json`;
-  const rutaSVG = `${carpeta}${nombreBase}-gantt.svg`;
-  const rutaASCII = `${carpeta}${nombreBase}-gantt.txt`;
-
-  // En entornos de prueba, solo simulamos la escritura
-  console.log(`📄 Archivos que se generarían:`);
-  console.log(`  JSON (${JSON.stringify(ganttJSON, null, 2).length} caracteres): ${rutaJSON}`);
-  console.log(`  SVG (${ganttSVG.length} caracteres): ${rutaSVG}`);
-  console.log(`  ASCII (${ganttASCII.length} caracteres): ${rutaASCII}`);
-
-  console.log(`✅ Archivos de Gantt exportados:`);
-  console.log(`  📄 JSON: ${rutaJSON}`);
-  console.log(`  🎨 SVG: ${rutaSVG}`);
-  console.log(`  📝 ASCII: ${rutaASCII}`);
-
-  return {
-    archivoJSON: rutaJSON,
-    archivoSVG: rutaSVG,
-    archivoASCII: rutaASCII
-  };
+  import('./fileDownloader').then(({ descargarTexto }) => {
+    descargarTexto(json, `${nombreArchivo}-gantt.json`, 'application/json;charset=utf-8');
+  });
 }
 
-// ========================================
-// FUNCIONES AUXILIARES
-// ========================================
+/**
+ * Descarga el diagrama de Gantt como archivo SVG
+ */
+export function descargarGanttSVG(
+  diagrama: DiagramaGantt,
+  nombreArchivo: string,
+  algoritmo: string = 'Planificador'
+): void {
+  const svg = exportarGanttComoSVG(diagrama, { algoritmo });
+  
+  import('./fileDownloader').then(({ descargarTexto }) => {
+    descargarTexto(svg, `${nombreArchivo}-gantt.svg`, 'image/svg+xml;charset=utf-8');
+  });
+}
 
-function generarDescripcionTramo(segmento: any): string {
+/**
+ * Descarga el diagrama de Gantt como archivo de texto ASCII
+ */
+export function descargarGanttASCII(
+  diagrama: DiagramaGantt,
+  nombreArchivo: string,
+  algoritmo: string = 'Planificador'
+): void {
+  const ascii = exportarGanttComoASCII(diagrama, { algoritmo });
+  
+  import('./fileDownloader').then(({ descargarTexto }) => {
+    descargarTexto(ascii, `${nombreArchivo}-gantt.txt`, 'text/plain;charset=utf-8');
+  });
+}
+
+// FUNCIONES AUXILIARES
+
+function generarDescripcionTramo(segmento: GanttSlice): string {
   switch (segmento.kind) {
     case 'CPU': return `${segmento.process} ejecutando en CPU`;
     case 'ES': return `${segmento.process} realizando E/S`;

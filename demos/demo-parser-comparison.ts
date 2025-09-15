@@ -4,7 +4,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { analizarTandaJson } from '../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from '../src/lib/infrastructure/parsers/jsonParser';
 import { parseWorkloadTxt } from '../src/lib/infrastructure/parsers/txtParser';
 
 console.log('🔄 DEMO: COMPARACIÓN JSON vs TXT/CSV');
@@ -59,7 +59,7 @@ P3,3,3,4,2,90`;
     const fileJson = createMockFile(contenidoJson, 'test.json', 'application/json');
     const fileCsv = createMockFile(contenidoCsv, 'test.csv', 'text/csv');
     
-    const workloadJson = await analizarTandaJson(fileJson);
+    const workloadJson = await parseJsonToWorkload(fileJson);
     const workloadTxt = await parseWorkloadTxt(fileCsv);
     
     console.log('📊 Resultados del parser JSON:');
@@ -112,7 +112,7 @@ async function compararArchivosReales(): Promise<void> {
     const fileJson = createMockFile(contenidoJsonEquivalente, 'equivalente.json', 'application/json');
     
     const workloadCsv = await parseWorkloadTxt(fileCsv);
-    const workloadJson = await analizarTandaJson(fileJson);
+    const workloadJson = await parseJsonToWorkload(fileJson);
     
     console.log('\n📊 CSV parseado:');
     for (const proc of workloadCsv.processes) {
@@ -150,7 +150,7 @@ async function compararValidacionErrores(): Promise<void> {
   try {
     const contenidoJson = `[{"nombre": "P1", "tiempo_arribo": 0}]`;
     const fileJson = createMockFile(contenidoJson, 'incomplete.json', 'application/json');
-    await analizarTandaJson(fileJson);
+    await parseJsonToWorkload(fileJson);
     console.log('❌ JSON: No detectó campo faltante');
   } catch (error) {
     console.log('✅ JSON: Detectó campo faltante correctamente');
@@ -175,7 +175,7 @@ async function compararValidacionErrores(): Promise<void> {
       {"nombre": "P1", "tiempo_arribo": 1, "cantidad_rafagas_cpu": 1, "duracion_rafaga_cpu": 3, "duracion_rafaga_es": 0, "prioridad_externa": 60}
     ]`;
     const fileJson = createMockFile(contenidoJson, 'duplicated.json', 'application/json');
-    await analizarTandaJson(fileJson);
+    await parseJsonToWorkload(fileJson);
     console.log('❌ JSON: No detectó nombres duplicados');
   } catch (error) {
     console.log('✅ JSON: Detectó nombres duplicados correctamente');

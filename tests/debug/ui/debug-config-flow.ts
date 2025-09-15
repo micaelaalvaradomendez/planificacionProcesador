@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 // Script para probar el flujo de configuración en la UI
-import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from '../../../src/lib/infrastructure/parsers/jsonParser';
 import { ejecutarSimulacionCompleta } from '../../../src/lib/application/usecases/runSimulation';
 import { calcularMetricasPorProceso } from '../../../src/lib/core/metrics';
 import fs from 'fs';
@@ -13,8 +13,8 @@ async function testConfigFlow() {
   const content = fs.readFileSync('../../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
-  console.log('📁 Cargando archivo con analizarTandaJson...');
-  const workload = await analizarTandaJson(file);
+  console.log('📁 Cargando archivo con parseJsonToWorkload...');
+  const workload = await parseJsonToWorkload(file);
   console.log('Config inicial del workload:', workload.config);
   console.log('Procesos cargados:', workload.processes.length);
   
@@ -63,7 +63,7 @@ async function testConfigFlow() {
   
   // 6. Test con config errónea (como el bug)
   console.log('\n🐛 TEST con config errónea (tip=0, tfp=0, tcp=0)...');
-  const workloadBuggy = await analizarTandaJson(file);
+  const workloadBuggy = await parseJsonToWorkload(file);
   // No aplicar configuración UI (simular el bug)
   console.log('Config buggy:', workloadBuggy.config);
   

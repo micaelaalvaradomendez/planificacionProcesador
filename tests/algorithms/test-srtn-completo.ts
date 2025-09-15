@@ -3,7 +3,7 @@
  */
 
 import { MotorSimulacion } from '../../src/lib/core/engine';
-import type { Workload } from '../../src/lib/model/types';
+import type { Workload } from '../../src/lib/domain/types';
 
 console.log('🧪 Test SRTN (Shortest Remaining Time Next) - Expropiativo');
 console.log('==========================================================');

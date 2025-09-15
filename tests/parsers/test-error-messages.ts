@@ -4,7 +4,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { analizarTandaJson } from '../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from '../../src/lib/infrastructure/parsers/jsonParser';
 import { parseWorkloadTxt } from '../../src/lib/infrastructure/parsers/txtParser';
 
 console.log('🚨 TEST: MENSAJES DE ERROR CLAROS');
@@ -23,7 +23,7 @@ async function testErroresSintaxis(): Promise<void> {
   console.log('\n🧪 JSON malformado:');
   try {
     const file = createMockFile('{ "processes": [ invalid json', 'malformed.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.log('❌ No detectó error de sintaxis JSON');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -69,7 +69,7 @@ async function testErroresCampos(): Promise<void> {
       {"nombre": "P1", "tiempo_arribo": 0}
     ]`;
     const file = createMockFile(contenido, 'missing_fields.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.log('❌ No detectó campos faltantes en JSON');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -115,7 +115,7 @@ async function testErroresLogicos(): Promise<void> {
       {"nombre": "P1", "tiempo_arribo": 1, "cantidad_rafagas_cpu": 1, "duracion_rafaga_cpu": 3, "duracion_rafaga_es": 0, "prioridad_externa": 60}
     ]`;
     const file = createMockFile(contenido, 'duplicated.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.log('❌ No detectó nombres duplicados');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -177,7 +177,7 @@ async function testErroresContextuales(): Promise<void> {
   console.log('\n🧪 Archivo vacío:');
   try {
     const file = createMockFile('', 'empty.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.log('❌ No detectó archivo vacío');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

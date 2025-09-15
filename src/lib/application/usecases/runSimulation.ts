@@ -1,10 +1,13 @@
 /**
  * Caso de uso: Ejecutar simulación de planificación de procesos
- * Orquesta la ejecución completa del simulador y el cálculo de métricas
+ * USA ÚNICAMENTE las entidades del dominio (Proceso.ts y Simulador.ts)
  */
 
-import type { Workload, SimEvent, Metrics } from '../../model/types';
-import { ejecutarSimulacion, validarWorkloadParaSimulacion } from '../../core';
+import type { Workload, SimEvent, Metrics, EventType } from '../../domain/types';
+import { TipoEvento } from '../../domain/types';
+import { validarWorkloadParaSimulacion, calcularMetricasCompletas } from '../../core';
+import { AdaptadorSimuladorDominio } from '../../core/adaptadorSimuladorDominio';
+import { convertirEventosInternos } from '../../infrastructure/io/eventLogger';
 
 export interface ResultadoEjecucion {
   exitoso: boolean;
@@ -17,6 +20,7 @@ export interface ResultadoEjecucion {
 
 /**
  * Ejecuta una simulación completa del planificador de procesos
+ * USA SOLO EL MOTOR DEL DOMINIO (Proceso.ts + Simulador.ts)
  */
 export async function ejecutarSimulacionCompleta(
   workload: Workload
@@ -40,21 +44,56 @@ export async function ejecutarSimulacionCompleta(
       };
     }
 
-    // Ejecutar simulación
-    const resultado = await ejecutarSimulacion(workload);
+    console.log('🏛️ Ejecutando simulación con entidades del dominio...');
+    
+    // Ejecutar con motor del dominio (ÚNICO MOTOR)
+    const motor = new AdaptadorSimuladorDominio(workload);
+    const resultado = motor.ejecutar();
+    
+    if (!resultado.exitoso) {
+      throw new Error(resultado.error || 'Error en la simulación');
+    }
+    
+    // Calcular métricas (ya incluye porcentajes)
+    const metricas = calcularMetricasCompletas(resultado.estadoFinal);
     
     // Calcular tiempo total
-    const tiempoTotal = resultado.metricas.tanda.cpuOcioso + 
-                       resultado.metricas.tanda.cpuSO + 
-                       resultado.metricas.tanda.cpuProcesos;
+    const tiempoTotal = metricas.tanda.cpuOcioso + 
+                       metricas.tanda.cpuSO + 
+                       metricas.tanda.cpuProcesos;
 
     // Generar advertencias si es necesario
-    const advertencias = generarAdvertencias(resultado.metricas);
+    const advertencias = generarAdvertencias(metricas);
+
+    // Mapear tipos de eventos del core hacia tipos del dominio
+    const mapeoTiposEventos: Record<string, TipoEvento> = {
+      'Arribo': TipoEvento.JOB_LLEGA,
+      'FinTIP': TipoEvento.NUEVO_A_LISTO,
+      'Despacho': TipoEvento.LISTO_A_CORRIENDO,
+      'FinRafagaCPU': TipoEvento.FIN_RAFAGA_CPU,
+      'FinTFP': TipoEvento.CORRIENDO_A_TERMINADO,
+      'FinES': TipoEvento.BLOQUEADO_A_LISTO,
+      'InicioES': TipoEvento.CORRIENDO_A_BLOQUEADO
+    };
+
+    // Convertir eventos del core a eventos del dominio
+    const eventosParaGantt: SimEvent[] = resultado.eventosInternos.map(evento => ({
+      tiempo: evento.tiempo,
+      tipo: mapeoTiposEventos[evento.tipo] || TipoEvento.DISPATCH,
+      proceso: evento.proceso || 'SISTEMA',
+      extra: evento.extra
+    }));    // Convertir eventos internos a formato SimEvent
+    const eventosConvertidos: SimEvent[] = resultado.eventosInternos.map(evento => ({
+      tiempo: evento.tiempo,
+      tipo: mapeoTiposEventos[evento.tipo] || TipoEvento.DISPATCH as EventType,
+      proceso: evento.proceso || 'SISTEMA',
+      extra: evento.extra
+    }));
 
     return {
       exitoso: true,
-      eventos: resultado.eventos,
-      metricas: resultado.metricas,
+      eventos: eventosConvertidos,
+      metricas,
       tiempoTotal,
       advertencias
     };
@@ -74,6 +113,25 @@ export async function ejecutarSimulacionCompleta(
       error: error instanceof Error ? error.message : 'Error desconocido durante la simulación'
     };
   }
+}
+
+/**
+ * FUNCIÓN PRINCIPAL: Para compatibilidad con el código existente
+ * Usa directamente las entidades del dominio
+ */
+export async function ejecutarSimulacion(workload: Workload) {
+  const resultado = await ejecutarSimulacionCompleta(workload);
+  
+  if (!resultado.exitoso) {
+    throw new Error(resultado.error || 'Error desconocido en la simulación');
+  }
+  
+  return {
+    eventos: resultado.eventos,
+    metricas: resultado.metricas,
+    // Nota: estadoFinal y eventosInternos no están disponibles en el resultado simplificado
+    // pero el código UI no los necesita
+  };
 }
 
 /**

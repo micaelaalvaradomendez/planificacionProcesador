@@ -3,7 +3,7 @@
  */
 
 import { MotorSimulacion } from '../../../src/lib/core/engine';
-import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from "../../src/lib/infrastructure/parsers/jsonParser"';
 import { calcularMetricasCompletas } from '../../../src/lib/core/metrics';
 import { readFile } from 'fs/promises';
 
@@ -28,7 +28,7 @@ async function debugMotorDetallado() {
     const contenido = await readFile(archivoEntrada, 'utf-8');
     const file = new File([contenido], 'procesos_tanda_7p.json', { type: 'application/json' });
     
-    let workload = await analizarTandaJson(file);
+    let workload = await parseJsonToWorkload(file);
     
     // Aplicar configuración de UI al workload JSON
     if (workload && workload.config) {

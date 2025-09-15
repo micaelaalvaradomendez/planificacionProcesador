@@ -11,7 +11,7 @@
  */
 
 import { MotorSimulacion } from '../../src/lib/core/engine';
-import type { Workload } from '../../src/lib/model/types';
+import type { Workload } from '../../src/lib/domain/types';
 
 export function testOrdenEventosSimultaneos() {
   console.log('\n🧪 Verificando orden de eventos simultáneos según consigna...\n');

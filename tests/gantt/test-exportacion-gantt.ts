@@ -17,7 +17,7 @@ import {
   exportarGanttAArchivos 
 } from '../../src/lib/infrastructure/io/ganttExporter.js';
 import { combinarEventos } from '../../src/lib/infrastructure/io/eventLogger.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 async function testExportacionJSON() {
   console.log('📊 Test: Exportación JSON de tramos');

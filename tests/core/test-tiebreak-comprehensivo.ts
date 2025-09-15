@@ -4,7 +4,7 @@
  */
 
 import { MotorSimulacion } from '../../src/lib/core/engine';
-import type { Workload } from '../../src/lib/model/types';
+import type { Workload } from '../../src/lib/domain/types';
 
 console.log('🧪 Test Comprehensivo - Tie-break Estable');
 console.log('=======================================');

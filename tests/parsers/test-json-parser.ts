@@ -4,7 +4,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { analizarTandaJson } from '../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from '../../src/lib/infrastructure/parsers/jsonParser';
 
 console.log('🧪 TESTS DEL PARSER JSON ESTANDARIZADO');
 console.log('==================================================');
@@ -24,7 +24,7 @@ async function testFormatoCompleto(): Promise<boolean> {
     console.log(contenido);
     
     const file = createMockFile(contenido, 'ejemplo_fcfs_estandarizado.json');
-    const workload = await analizarTandaJson(file);
+    const workload = await parseJsonToWorkload(file);
     
     console.log('\n✅ JSON parseado correctamente');
     console.log(`📋 Workload: ${workload.workloadName}`);
@@ -63,7 +63,7 @@ async function testFormatoArray(): Promise<boolean> {
     console.log(contenido);
     
     const file = createMockFile(contenido, 'ejemplo_array_simple.json');
-    const workload = await analizarTandaJson(file);
+    const workload = await parseJsonToWorkload(file);
     
     console.log('\n✅ Array JSON parseado correctamente');
     console.log(`📋 Workload: ${workload.workloadName}`);
@@ -94,7 +94,7 @@ async function testCompatibilidadLegacy(): Promise<boolean> {
     const contenido = readFileSync('src/lib/mocks/ejemplo.json', 'utf-8');
     
     const file = createMockFile(contenido, 'ejemplo_legacy.json');
-    const workload = await analizarTandaJson(file);
+    const workload = await parseJsonToWorkload(file);
     
     console.log('✅ Formato legacy parseado correctamente');
     console.log(`📋 Workload: ${workload.workloadName}`);
@@ -120,7 +120,7 @@ async function testArchivosTandas(): Promise<boolean> {
     const contenido = readFileSync('examples/workloads/procesos_tanda_5p.json', 'utf-8');
     
     const file = createMockFile(contenido, 'procesos_tanda_5p.json');
-    const workload = await analizarTandaJson(file);
+    const workload = await parseJsonToWorkload(file);
     
     console.log('✅ Tanda de 5 procesos parseada correctamente');
     console.log(`📊 Procesos: ${workload.processes.length}`);
@@ -149,7 +149,7 @@ async function testValidacionErrores(): Promise<boolean> {
   // Test 1: JSON inválido
   try {
     const file = createMockFile('{ invalid json', 'invalid.json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.error('❌ No se detectó error en JSON inválido');
   } catch (error) {
     console.log('✅ Error detectado correctamente: JSON inválido');
@@ -159,7 +159,7 @@ async function testValidacionErrores(): Promise<boolean> {
   // Test 2: Campo faltante
   try {
     const file = createMockFile('[{"nombre": "P1"}]', 'incomplete.json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.error('❌ No se detectó error en campos faltantes');
   } catch (error) {
     console.log('✅ Error detectado correctamente: campos faltantes');
@@ -173,7 +173,7 @@ async function testValidacionErrores(): Promise<boolean> {
       {"nombre": "P1", "tiempo_arribo": 1, "cantidad_rafagas_cpu": 1, "duracion_rafaga_cpu": 3, "duracion_rafaga_es": 0, "prioridad_externa": 60}
     ]`;
     const file = createMockFile(contenido, 'duplicated.json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
     console.error('❌ No se detectó error en nombres duplicados');
   } catch (error) {
     console.log('✅ Error detectado correctamente: nombres duplicados');

@@ -1,1 +1,0 @@
-// Exportador TXT

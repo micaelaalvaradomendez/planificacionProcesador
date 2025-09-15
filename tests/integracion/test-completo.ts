@@ -12,7 +12,7 @@
 import { MotorSimulacion } from '../../src/lib/core/engine.js';
 import { construirGanttDesdeEventos } from '../../src/lib/infrastructure/io/ganttBuilder.js';
 import { combinarEventos } from '../../src/lib/infrastructure/io/eventLogger.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 // Casos de prueba según diferentes algoritmos
 const CASOS_PRUEBA: Array<{

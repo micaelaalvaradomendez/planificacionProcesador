@@ -1,12 +1,12 @@
 /**
  * Punto de entrada principal del núcleo de simulación
- * Exporta todas las funciones públicas del motor de simulación
+ * USA ÚNICAMENTE las entidades del dominio (Proceso.ts + Simulador.ts)
  */
 
 export * from './state';
 export * from './priorityQueue';
-export * from './scheduler';
-export * from './engine';
+export * from './adaptadorSimuladorDominio';
+export * from './adaptadorEntidadesDominio';
 export * from './metrics';
 
 // Re-exportar tipos importantes
@@ -25,39 +25,34 @@ export type {
 } from './priorityQueue';
 
 export type { 
-  Scheduler 
-} from './scheduler';
-
-export type { 
-  ResultadoSimulacion 
-} from './engine';
+  ResultadoSimulacionDominio 
+} from './adaptadorSimuladorDominio';
 
 // Funciones principales para usar desde fuera del núcleo
-import { MotorSimulacion } from './engine';
-import { calcularMetricasCompletas, agregarPorcentajesCPU } from './metrics';
-import type { Workload } from '../model/types';
+import { AdaptadorSimuladorDominio } from './adaptadorSimuladorDominio';
+import { calcularMetricasCompletas } from './metrics';
+import type { Workload } from '../domain/types';
 
 /**
  * Función principal para ejecutar una simulación completa
+ * USA SOLO LAS ENTIDADES DEL DOMINIO
  */
 export async function ejecutarSimulacion(workload: Workload) {
-  const motor = new MotorSimulacion(workload);
+  console.log('🏛️ Iniciando simulación con entidades del dominio...');
+  
+  const motor = new AdaptadorSimuladorDominio(workload);
   const resultado = motor.ejecutar();
   
   if (!resultado.exitoso) {
     throw new Error(resultado.error || 'Error desconocido en la simulación');
   }
   
-  // Calcular métricas
+  // Calcular métricas (ya incluye porcentajes)
   const metricas = calcularMetricasCompletas(resultado.estadoFinal);
-  const metricasConPorcentajes = {
-    ...metricas,
-    tanda: agregarPorcentajesCPU(metricas.tanda)
-  };
   
   return {
     eventos: resultado.eventosExportacion,
-    metricas: metricasConPorcentajes,
+    metricas,
     estadoFinal: resultado.estadoFinal,
     eventosInternos: resultado.eventosInternos // para debugging
   };

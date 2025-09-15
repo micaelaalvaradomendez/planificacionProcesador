@@ -4,7 +4,7 @@
  * Con mensajes de error claros y útiles
  */
 
-import type { ProcessSpec, Workload, Policy } from '../../model/types';
+import type { ProcessSpec, Workload, Policy } from '../../domain/types';
 import { ParseError, ErrorMessages } from './ParseError';
 
 /**

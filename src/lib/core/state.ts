@@ -1,4 +1,4 @@
-import type { Workload, SimEvent, Policy } from '../model/types';
+import type { Workload, SimEvent, Policy } from '../domain/types';
 
 export type ProcesoEstado = 'Nuevo' | 'Listo' | 'Corriendo' | 'Bloqueado' | 'Terminado';
 

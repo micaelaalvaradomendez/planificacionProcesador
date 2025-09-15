@@ -1,4 +1,4 @@
-import type { Metrics } from '../../model/types';
+import type { Metrics } from '../../domain/types';
 
 export function exportarMetricasJson(m: Metrics): Blob {
   return new Blob([JSON.stringify(m, null, 2)], { type: 'application/json' });

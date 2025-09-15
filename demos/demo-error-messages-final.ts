@@ -4,7 +4,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { analizarTandaJson } from '../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from '../src/lib/infrastructure/parsers/jsonParser';
 import { parseWorkloadTxt } from '../src/lib/infrastructure/parsers/txtParser';
 
 console.log('🎯 DEMO: MENSAJES DE ERROR MEJORADOS');
@@ -40,7 +40,7 @@ async function demostrarMejoras(): Promise<void> {
   // Ejemplo 1: JSON malformado
   try {
     const file = createMockFile('{ "processes": [ invalid', 'workload_roto.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
   } catch (error) {
     mostrarError('🔴 JSON Malformado', error);
   }
@@ -51,7 +51,7 @@ async function demostrarMejoras(): Promise<void> {
       {"nombre": "P1", "tiempo_arribo": 0, "cantidad_rafagas_cpu": 1}
     ]`;
     const file = createMockFile(contenido, 'proceso_incompleto.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
   } catch (error) {
     mostrarError('🔴 Campo Faltante', error);
   }
@@ -91,7 +91,7 @@ P1,abc,1,5,0,50`;
   // Ejemplo 6: Archivo vacío
   try {
     const file = createMockFile('', 'archivo_vacio.json', 'application/json');
-    await analizarTandaJson(file);
+    await parseJsonToWorkload(file);
   } catch (error) {
     mostrarError('🔴 Archivo Vacío', error);
   }

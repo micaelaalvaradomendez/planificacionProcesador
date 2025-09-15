@@ -9,7 +9,7 @@ import {
   exportarEventosAArchivos,
   generarResumenEventos
 } from '../../src/lib/infrastructure/io/eventLogger.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 async function ejemploSimulacionCompleta() {
   console.log('🚀 Ejemplo: Simulación Completa con Exportación');

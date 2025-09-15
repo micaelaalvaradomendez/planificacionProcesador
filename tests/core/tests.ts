@@ -3,7 +3,7 @@
  * Conjunto mínimo de pruebas para verificar funcionalidad básica
  */
 
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 import { ejecutarSimulacionCompleta } from '../../src/lib/application/usecases/runSimulation.js';
 import { construirDiagramaGantt } from '../../src/lib/application/usecases/buildGantt.js';
 import { calcularEstadisticasExtendidas } from '../../src/lib/application/usecases/computeStatistics.js';

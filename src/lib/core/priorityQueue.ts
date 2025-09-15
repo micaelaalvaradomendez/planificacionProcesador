@@ -3,7 +3,7 @@
  * Implementa diferentes estrategias según la política de planificación
  */
 
-import type { Policy } from '../model/types';
+import type { Policy } from '../domain/types';
 import type { ProcesoRT } from './state';
 
 export interface ColaComparator {
@@ -23,9 +23,9 @@ export const comparadores: Record<Policy, ColaComparator> = {
   },
 
   PRIORITY: (a, b) => {
-    // Mayor prioridad primero (100 > 1), luego FCFS para empates
+    // Menor número = mayor prioridad (1 > 4), luego FCFS para empates
     if (a.prioridad !== b.prioridad) {
-      return b.prioridad - a.prioridad; // orden descendente por prioridad
+      return a.prioridad - b.prioridad; // orden ascendente por prioridad (1 antes que 4)
     }
     if (a.tiempoArribo !== b.tiempoArribo) {
       return a.tiempoArribo - b.tiempoArribo;

@@ -3,7 +3,7 @@
  * Genera logs en formato JSON y CSV con todos los eventos del sistema
  */
 
-import type { SimEvent } from '../../model/types';
+import type { SimEvent } from '../../domain/types';
 import type { EventoInterno } from '../../core/state';
 
 export interface EventoLog {

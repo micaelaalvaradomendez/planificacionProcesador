@@ -1,5 +1,5 @@
-import type { Workload, SimEvent, Metrics, Policy, GanttSlice } from '$lib/model/types';
-import type { EstadisticasExtendidas } from '$lib/application/usecases/computeStatistics';
+import type { Workload, SimEvent, Metrics, Policy, GanttSlice } from '$lib/domain/types';
+import type { EstadisticasExtendidas } from '$lib/domain/services';
 
 export interface SimulationState {
   file: File | null;
@@ -61,8 +61,3 @@ export function resetSimulationState(state: SimulationState) {
   state.advertencias = [];
   state.errors = [];
 }
-
-export type ProcessSpec = {
-  id: string; // Add this line if you want to use 'id'
-  // ...other properties...
-};

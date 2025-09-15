@@ -3,7 +3,7 @@
  */
 
 import { MotorSimulacion } from '../../../src/lib/core/engine';
-import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from "../../src/lib/infrastructure/parsers/jsonParser"';
 import { readFile } from 'fs/promises';
 
 async function debugEventosDetallado() {
@@ -23,7 +23,7 @@ async function debugEventosDetallado() {
     const contenido = await readFile('../../../examples/workloads/procesos_tanda_7p.json', 'utf-8');
     const file = new File([contenido], 'procesos_tanda_7p.json', { type: 'application/json' });
     
-    let workload = await analizarTandaJson(file);
+    let workload = await parseJsonToWorkload(file);
     
     // Aplicar configuración
     if (workload && workload.config) {

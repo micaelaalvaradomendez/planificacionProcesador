@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 // Script para analizar eventos y estados de procesos
-import { analizarTandaJson } from '../../../src/lib/infrastructure/io/parseWorkload';
+import { parseJsonToWorkload } from "../../src/lib/infrastructure/parsers/jsonParser"';
 import { ejecutarSimulacionCompleta } from '../../../src/lib/application/usecases/runSimulation';
 import fs from 'fs';
 
@@ -11,7 +11,7 @@ async function analyzeEvents() {
   const content = fs.readFileSync('../../../examples/workloads/procesos_tanda_7p.json', 'utf8');
   const file = new File([content], 'procesos_tanda_7p.json', { type: 'application/json' });
   
-  const workload = await analizarTandaJson(file);
+  const workload = await parseJsonToWorkload(file);
   
   // Aplicar configuración correcta
   workload.config.policy = 'FCFS';

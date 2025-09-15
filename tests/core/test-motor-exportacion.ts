@@ -4,7 +4,7 @@
  */
 
 import { MotorSimulacion } from '../../src/lib/core/engine.js';
-import type { Workload } from '../../src/lib/model/types.js';
+import type { Workload } from '../../src/lib/domain/types.js';
 
 async function testMotorConExportacion() {
   console.log('🧪 Test Motor de Simulación con Exportación Integrada');

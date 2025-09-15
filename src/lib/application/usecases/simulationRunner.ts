@@ -1,8 +1,8 @@
 import { ejecutarSimulacionCompleta } from '$lib/application/usecases/runSimulation';
 import { construirDiagramaGantt } from '$lib/application/usecases/buildGantt';
 import { calcularEstadisticasExtendidas } from '$lib/application/usecases/computeStatistics';
-import type { Workload, SimEvent, Metrics, GanttSlice } from '$lib/model/types';
-import type { EstadisticasExtendidas } from '$lib/application/usecases/computeStatistics';
+import type { Workload, SimEvent, Metrics, GanttSlice } from '$lib/domain/types';
+import type { EstadisticasExtendidas } from '$lib/domain/services';
 
 export async function runSimulationWithTimeout(workload: Workload, timeoutMs = 30000) {
   let simulacionCompletada = false;
@@ -38,7 +38,7 @@ export async function runSimulationWithTimeout(workload: Workload, timeoutMs = 3
     advertencias = resultado.advertencias || [];
     const diagramaGantt = construirDiagramaGantt(events);
     ganttSlices = diagramaGantt.segmentos;
-    estadisticasExtendidas = calcularEstadisticasExtendidas(metrics, events, tiempoTotalSimulacion);
+    estadisticasExtendidas = calcularEstadisticasExtendidas(metrics, events);
     simulacionCompletada = true;
     simulacionEnCurso = false;
   } catch (error) {

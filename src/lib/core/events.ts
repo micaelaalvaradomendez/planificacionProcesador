@@ -1,11 +1,7 @@
-import type { SimEvent } from '../model/types';
+// Este archivo ya no contiene funciones de exportación CSV
+// Las funciones se han movido a infrastructure/io/csvUtils.ts
 
-export function ordenarEventosParaExportar(eventos: SimEvent[]): SimEvent[] {
-  // Orden cronológico; si empatan en tiempo, mantené el orden de creación (estable)
-  return [...eventos].sort((a, b) => a.tiempo - b.tiempo);
-}
+import type { SimEvent } from '../domain/types';
 
-export function eventoALineaCsv(e: SimEvent): string {
-  const extra = e.extra ? e.extra.replaceAll(';', ',') : '';
-  return `${e.tiempo};${e.tipo};${e.proceso};${extra}`;
-}
+// Aquí pueden ir otras funciones relacionadas con eventos que no sean de exportación
+// Por ahora, el archivo queda como referencia para futuras funciones de eventos

@@ -1,5 +1,5 @@
-import { descargarEventos, descargarMetricas } from '../usecases/exportResults';
-import type { SimEvent, Metrics } from '$lib/model/types';
+import { descargarEventos, descargarMetricas } from '$lib/infrastructure/io/fileDownloader';
+import type { SimEvent, Metrics } from '$lib/domain/types';
 
 export function useFileDownload() {
   function descargarEventosUI(events: SimEvent[]) {

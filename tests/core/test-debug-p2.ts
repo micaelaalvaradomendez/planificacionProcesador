@@ -1,5 +1,5 @@
 import { MotorSimulacion } from '../../src/lib/core/engine';
-import type { Workload } from '../../src/lib/model/types';
+import type { Workload } from '../../src/lib/domain/types';
 
 // Test específico para debuggear qué pasa con P2
 console.log('🔍 Debug P2 en FCFS');
