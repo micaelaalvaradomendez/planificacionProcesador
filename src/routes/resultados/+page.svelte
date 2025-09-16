@@ -5,6 +5,9 @@
   import IndicadoresTanda from '$lib/ui/components/IndicadoresTanda.svelte';
   import UtilizacionCPU from '$lib/ui/components/UtilizacionCPU.svelte';
   import GanttFixed from '$lib/ui/components/GanttFixed.svelte';
+  import TablaResumenComparativa from '$lib/ui/components/TablaResumenComparativa.svelte';
+  import PanelExportacion from '$lib/ui/components/PanelExportacion.svelte';
+  import EventosSimulacion from '$lib/ui/components/EventosSimulacion.svelte';
   
   import { 
     cargarDatosSimulacion, 
@@ -83,9 +86,7 @@
         {/if}
       </div>
       <div class="header-actions">
-        <button class="btn-secundario" on:click={recargarDatos} disabled={cargando}>
-          🔄 Recargar
-        </button>
+
         <button class="btn-primario" on:click={nuevaSimulacion}>
           ➕ Nueva Simulación
         </button>
@@ -106,9 +107,6 @@
         <h3>Error al cargar resultados</h3>
         <p>{error}</p>
         <div class="error-actions">
-          <button class="btn-secundario" on:click={recargarDatos}>
-            🔄 Intentar de nuevo
-          </button>
           <button class="btn-primario" on:click={nuevaSimulacion}>
             🏠 Ir al inicio
           </button>
@@ -137,7 +135,17 @@
         />
       </section>
       
-      <!-- Sección 4: Diagrama de Gantt -->
+      <!-- Sección 4: Tabla Resumen Comparativa -->
+      <section class="seccion-resultados">
+        <TablaResumenComparativa {datosSimulacion} />
+      </section>
+      
+      <!-- Sección 5: Panel de Exportación -->
+      <section class="seccion-resultados">
+        <PanelExportacion {datosSimulacion} />
+      </section>
+      
+      <!-- Sección 6: Diagrama de Gantt -->
       <section class="seccion-resultados">
         {#if datosSimulacion.resultados.gantt}
           <!-- @ts-ignore -->
@@ -155,12 +163,9 @@
         {/if}
       </section>
       
-      <!-- Placeholder para futuras secciones -->
+      <!-- Sección 7: Eventos de Simulación -->
       <section class="seccion-resultados">
-        <div class="componente-placeholder">
-          <h3>📋 Eventos de Simulación</h3>
-          <p>Próximo componente: Cronología de eventos</p>
-        </div>
+        <EventosSimulacion {datosSimulacion} />
       </section>
     {/if}
   </div>
@@ -221,8 +226,7 @@
     gap: 12px;
   }
 
-  .btn-primario,
-  .btn-secundario {
+  .btn-primario {
     padding: 12px 20px;
     border-radius: 8px;
     font-weight: 600;
@@ -243,23 +247,6 @@
   .btn-primario:hover {
     background: var(--marfil-claro);
     transform: translateY(-1px);
-  }
-
-  .btn-secundario {
-    background: rgba(255, 255, 255, 0.2);
-    color: var(--blanco-puro);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-  }
-
-  .btn-secundario:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateY(-1px);
-  }
-
-  .btn-secundario:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
   }
 
   /* Contenido */
@@ -336,18 +323,12 @@
     gap: 12px;
   }
 
-  .error-actions .btn-primario,
-  .error-actions .btn-secundario {
+  .error-actions .btn-primario {
     background: var(--turquesa-intenso);
     color: var(--blanco-puro);
   }
 
-  .error-actions .btn-secundario {
-    background: var(--gris-medio);
-  }
-
-  .error-actions .btn-primario:hover,
-  .error-actions .btn-secundario:hover {
+  .error-actions .btn-primario:hover{
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
   }

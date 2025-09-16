@@ -12,9 +12,17 @@ El simulador permite cargar una tanda de procesos desde un archivo de entrada (T
 📁 planificacionProcesador/
 ├── 📄 README.md                    # Esta documentación
 ├── 📁 src/                         # Código fuente principal
+│   ├── 📁 lib/ui/components/       # Componentes de interfaz
+│   │   ├── EventosSimulacion.svelte # 🆕 Cronología de eventos
+│   │   ├── TablaResumen.svelte     # 🆕 Tabla comparativa
+│   │   ├── PanelExportacion.svelte # 🆕 Sistema de exportación
+│   │   └── ...                     # Otros componentes
+│   └── ...
 ├── 📁 demos/                       # 🆕 Demos de funcionalidades
 ├── 📁 examples/                    # 🆕 Datos de ejemplo y salidas
 ├── 📁 docs/                        # 🆕 Documentación técnica
+│   ├── EVENTOS_SIMULACION_COMPONENTE.md # 📋 EventosSimulacion
+│   └── ...
 ├── 📁 tests/                       # Suite de pruebas
 └── 📁 static/                      # Archivos estáticos
 ```

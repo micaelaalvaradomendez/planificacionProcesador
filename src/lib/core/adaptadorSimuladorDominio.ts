@@ -226,6 +226,15 @@ export class AdaptadorSimuladorDominio {
       if (this.estrategia.debeExpropiar && this.estrategia.debeExpropiar(procesoActual, proceso, this.simuladorDominio.tiempoActual)) {
         console.log(`🔄 EXPROPIACIÓN: ${proceso.id} expropia a ${procesoActual.id}`);
         
+        // Calcular cuánto tiempo ya ejecutó el proceso actual
+        const tiempoEjecutado = this.simuladorDominio.tiempoActual - (procesoActual.ultimoDispatch || this.simuladorDominio.tiempoActual);
+        console.log(`   Proceso ${procesoActual.id} ejecutó ${tiempoEjecutado} unidades antes de expropiación`);
+        
+        // Actualizar tiempo restante del proceso expropiado
+        if (tiempoEjecutado > 0) {
+          procesoActual.procesarCPU(tiempoEjecutado);
+        }
+        
         // Expropiar el proceso actual
         procesoActual.expropiar(this.simuladorDominio.tiempoActual);
         
@@ -320,9 +329,11 @@ export class AdaptadorSimuladorDominio {
     
     // Para Round Robin, programar vencimiento de quantum si es necesario
     if (this.estrategia.requiereQuantum && this.simuladorDominio.parametros.quantum && this.simuladorDominio.parametros.quantum > 0) {
-      const tiempoVencimientoQuantum = this.simuladorDominio.tiempoActual + 
-                                       this.simuladorDominio.parametros.TCP + 
-                                       this.simuladorDominio.parametros.quantum;
+      // CORRECCIÓN: El quantum debe contar SOLO el tiempo de CPU real, NO incluir TCP
+      // El TCP ya está incluido en tiempoFinRafaga, pero el quantum debe medirse desde el momento
+      // en que el proceso realmente empieza a ejecutar (después del TCP)
+      const tiempoInicioEjecucionReal = this.simuladorDominio.tiempoActual + this.simuladorDominio.parametros.TCP;
+      const tiempoVencimientoQuantum = tiempoInicioEjecucionReal + this.simuladorDominio.parametros.quantum;
       
       // Solo programar quantum si es menor que el tiempo de fin de ráfaga
       if (tiempoVencimientoQuantum < tiempoFinRafaga) {
@@ -333,7 +344,7 @@ export class AdaptadorSimuladorDominio {
           'Vencimiento de quantum RR'
         );
         
-        console.log(`⏰ Quantum programado para ${procesoSeleccionado.id} en tiempo ${tiempoVencimientoQuantum}`);
+        console.log(`⏰ Quantum programado para ${procesoSeleccionado.id} en tiempo ${tiempoVencimientoQuantum} (quantum real: ${this.simuladorDominio.parametros.quantum})`);
       }
     }
     
@@ -349,6 +360,12 @@ export class AdaptadorSimuladorDominio {
    */
   private manejarFinRafagaCPU(proceso: Proceso): void {
     console.log(`⚡ Fin ráfaga CPU del proceso ${proceso.id} en tiempo ${this.simuladorDominio.tiempoActual}`);
+    
+    // Verificar que el proceso realmente esté ejecutando (no haya sido expropiado)
+    if (this.simuladorDominio.procesoActualCPU?.id !== proceso.id) {
+      console.log(`⚠️ Ignorando fin de ráfaga obsoleto de ${proceso.id} - no está ejecutando`);
+      return;
+    }
     
     this.simuladorDominio.procesoActualCPU = undefined;
     proceso.completarCPU(this.simuladorDominio.tiempoActual);

@@ -122,6 +122,35 @@ export function exportarEventosTXT(eventos: SimEvent[]): string {
 }
 
 /**
+ * Exporta eventos como CSV y devuelve un Blob
+ */
+export function exportarEventosComoCSV(
+  eventos: SimEvent[], 
+  config: ConfiguracionExportacion
+): Blob {
+  const csvConfig: CSVConfig = {
+    separator: config.separadorCSV,
+    encoding: config.codificacion,
+    withHeader: config.incluirHeader,
+    lineEnding: '\n'
+  };
+  
+  const csvContent = exportarEventosCSV(eventos, csvConfig);
+  return new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+}
+
+/**
+ * Exporta eventos como TXT y devuelve un Blob
+ */
+export function exportarEventosComoTXT(
+  eventos: SimEvent[], 
+  config: ConfiguracionExportacion
+): Blob {
+  const txtContent = exportarEventosTXT(eventos);
+  return new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+}
+
+/**
  * Filtra eventos según los criterios especificados
  */
 export function filtrarEventos(

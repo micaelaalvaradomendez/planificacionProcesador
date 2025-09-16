@@ -1,5 +1,4 @@
-procesos
-
+proceso
 
 La administración de procesos es una de las tareas más fundamentales y complejas de cualquier sistema operativo (SO) moderno. Su función principal es crear, gestionar y finalizar los procesos.
 1. ¿Qué es un Proceso?
@@ -291,4 +290,5 @@ Ejemplos:
 MINIX 3: Un sistema operativo parecido a UNIX basado en un microkernel, donde el administrador de memoria, el sistema de archivos y cada driver de dispositivo son procesos de usuario separados.
 Symbian OS: Utiliza un diseño de microkernel con un "nanokernel" muy pequeño en su núcleo, y sus servicios del sistema se implementan como servidores en espacio de usuario.
 En síntesis, la elección entre estas arquitecturas y modos de ejecución refleja compromisos entre rendimiento, seguridad, flexibilidad y facilidad de desarrollo, y ha evolucionado con la complejidad de los sistemas informáticos.
+
 

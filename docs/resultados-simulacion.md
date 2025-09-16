@@ -25,28 +25,6 @@ Basándome en la consigna del Trabajo Práctico Integrador, después de ejecutar
 5. Nuevo a Listo
 6. Finalmente el despacho de Listo a Corriendo
 
-
-## 📋 6. TABLA RESUMEN COMPARATIVA
-
-### Configuración utilizada:
-- Algoritmo de planificación empleado
-- TIP, TFP, TCP utilizados
-- Quantum (si aplica)
-
-### Resumen de resultados:
-- Tiempo total de simulación
-- Número total de procesos
-- Número total de eventos
-- Eficiencia de la CPU
-- Tiempo promedio de respuesta
-
-## 💾 7. EXPORTACIÓN DE DATOS
-
-### Formatos de salida:
-- **Archivo de eventos**: Formato CSV o TXT con timestamp y descripción
-- **Tabla de métricas**: Exportable a CSV para análisis posterior
-- **Diagrama de Gantt**: Exportable como imagen o datos estructurados
-
 ## 🔍 8. ANÁLISIS Y OBSERVACIONES
 
 ### Sección para comentarios:
@@ -57,31 +35,6 @@ Basándome en la consigna del Trabajo Práctico Integrador, después de ejecutar
 
 ---
 
-## ✅ IMPLEMENTACIÓN TÉCNICA
-
-### Estructura de datos requerida:
-```typescript
-interface ResultadosSimulacion {
-  // Configuración
-  configuracion: ConfiguracionSimulacion;
-  procesos: ProcesoSimple[];
-  
-  // Eventos cronológicos
-  eventos: EventoSimulacion[];
-  
-  // Métricas por proceso
-  metricasPorProceso: MetricasProceso[];
-  
-  // Métricas globales
-  metricasGlobales: MetricasGlobales;
-  
-  // Utilización CPU
-  utilizacionCPU: UtilizacionCPU;
-  
-  // Diagrama de Gantt
-  gantt: EventoGantt[];
-}
-```
 
 ### Componentes UI necesarios:
 1. **EventosPanel**: Lista cronológica de eventos

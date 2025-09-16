@@ -73,12 +73,12 @@ export class EstrategiaSchedulerSrtf extends EstrategiaSchedulerBase {
       return false;
     }
 
-    // Buscar si hay algún proceso en READY con menor tiempo restante
+    // Buscar si hay algún proceso en READY con menor tiempo restante DE RÁFAGA ACTUAL
     const masCortoPorLlegar = colaListos.reduce((masCorto, proceso) => 
-      proceso.restanteTotalCPU < masCorto.restanteTotalCPU ? proceso : masCorto
+      proceso.restanteCPU < masCorto.restanteCPU ? proceso : masCorto
     );
 
-    return masCortoPorLlegar.restanteTotalCPU < procesoActual.restanteTotalCPU;
+    return masCortoPorLlegar.restanteCPU < procesoActual.restanteCPU;
   }
 
   /**

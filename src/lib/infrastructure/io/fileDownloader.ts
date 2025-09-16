@@ -53,3 +53,11 @@ export function descargarTexto(contenido: string, nombreArchivo: string, mimeTyp
   const blob = new Blob([contenido], { type: `${mimeType};charset=utf-8` });
   descargarBlob(blob, nombreArchivo);
 }
+
+/**
+ * Descarga diagrama de Gantt como JSON
+ */
+export function descargarGanttJSON(gantt: any, nombreBase: string): void {
+  const json = JSON.stringify(gantt, null, 2);
+  descargarTexto(json, `${nombreBase}_gantt.json`, 'application/json');
+}

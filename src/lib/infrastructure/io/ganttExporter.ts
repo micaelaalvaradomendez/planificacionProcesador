@@ -381,6 +381,17 @@ export function descargarGanttASCII(
   });
 }
 
+/**
+ * Funciones de exportación simplificadas para uso directo
+ */
+export function exportarGanttSVG(gantt: any): string {
+  return exportarGanttComoSVG(gantt);
+}
+
+export function exportarGanttASCII(gantt: any): string {
+  return exportarGanttComoASCII(gantt);
+}
+
 // FUNCIONES AUXILIARES
 
 function generarDescripcionTramo(segmento: GanttSlice): string {
