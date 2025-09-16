@@ -30,7 +30,9 @@ export class EstrategiaSchedulerSjf extends EstrategiaSchedulerBase {
   }
 
   /**
-   * Ordena la cola por tiempo total de CPU (SJF)
+   * Ordena la cola por duración de ráfaga de CPU (SJF)
+   * NOTA IMPORTANTE: SJF debe usar duracionCPU (duración de cada ráfaga),
+   * NO duracionTotalCPU ni restanteTotalCPU
    */
   public ordenarColaListos(colaListos: Proceso[]): void {
     colaListos.sort((a, b) => a.duracionCPU - b.duracionCPU);

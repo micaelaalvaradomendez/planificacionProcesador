@@ -31,18 +31,20 @@ export class EstrategiaSchedulerSrtf extends EstrategiaSchedulerBase {
   }
 
   /**
-   * Ordena la cola por tiempo restante de CPU
+   * Ordena la cola por tiempo restante de ráfaga de CPU actual (SRTF)
+   * NOTA IMPORTANTE: SRTF debe usar restanteCPU (tiempo restante de ráfaga actual),
+   * NO restanteTotalCPU (tiempo restante total del proceso)
    */
   public ordenarColaListos(colaListos: Proceso[]): void {
-    colaListos.sort((a, b) => a.restanteTotalCPU - b.restanteTotalCPU);
+    colaListos.sort((a, b) => a.restanteCPU - b.restanteCPU);
   }
 
   /**
-   * En SRTF, expropia si llega un proceso con menor tiempo restante
+   * En SRTF, expropia si llega un proceso con menor tiempo restante en su ráfaga actual
    */
   public debeExpropiar(procesoActual: Proceso, procesoCandidato: Proceso, tiempoActual: number): boolean {
-    // Preempt si el proceso candidato tiene menor tiempo restante
-    return procesoCandidato.restanteTotalCPU < procesoActual.restanteTotalCPU;
+    // Preempt si el proceso candidato tiene menor tiempo restante en su ráfaga actual
+    return procesoCandidato.restanteCPU < procesoActual.restanteCPU;
   }
 
   /**
