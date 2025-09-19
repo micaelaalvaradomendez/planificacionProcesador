@@ -238,6 +238,10 @@ export class AdaptadorSimuladorDominio {
         // Expropiar el proceso actual
         procesoActual.expropiar(this.simuladorDominio.tiempoActual);
         
+        // GENERAR EVENTO CORRIENDO_A_LISTO para el proceso expropiado
+        agregarEventoInterno(this.state, 'AgotamientoQuantum', procesoActual.id, 
+          `Proceso expropiado por ${proceso.id}`);
+        
         // Remover proceso actual de CPU y agregarlo a la cola
         this.simuladorDominio.procesoActualCPU = undefined;
         this.simuladorDominio.readyQueue.unshift(procesoActual); // Al frente para Round Robin
@@ -249,9 +253,6 @@ export class AdaptadorSimuladorDominio {
           '',
           'Despacho por expropiación'
         );
-        
-        agregarEventoInterno(this.state, 'Despacho', proceso.id, 
-          `Expropia a ${procesoActual.id} por ${this.estrategia.nombre}`);
         
         return;
       }

@@ -73,7 +73,8 @@ export async function ejecutarSimulacionCompleta(
       'FinRafagaCPU': TipoEvento.FIN_RAFAGA_CPU,
       'FinTFP': TipoEvento.CORRIENDO_A_TERMINADO,
       'FinES': TipoEvento.BLOQUEADO_A_LISTO,
-      'InicioES': TipoEvento.CORRIENDO_A_BLOQUEADO
+      'InicioES': TipoEvento.CORRIENDO_A_BLOQUEADO,
+      'AgotamientoQuantum': TipoEvento.CORRIENDO_A_LISTO  // Round Robin expropiación
     };
 
     // Convertir eventos del core a eventos del dominio

@@ -12,13 +12,13 @@
   
   // Tipos de eventos según la consigna
   const EVENTOS_PRINCIPALES = [
-    'ARRIBO_TRABAJO',
-    'INCORPORACION_SISTEMA', 
-    'FIN_RAFAGA_CPU',
-    'AGOTAMIENTO_QUANTUM',
-    'FIN_ES',
-    'ATENCION_INTERRUPCION_ES',
-    'TERMINACION_PROCESO'
+    'JOB_LLEGA',                    // Arribo de trabajo
+    'NUEVO_A_LISTO',               // Incorporación al sistema (tras TIP)
+    'FIN_RAFAGA_CPU',              // Fin de ráfaga
+    'QUANTUM_EXPIRES',             // Agotamiento quantum
+    'IO_COMPLETA',                 // Fin de E/S
+    'IO_INTERRUPCION_ATENDIDA',    // Atención interrupción
+    'PROCESO_TERMINA'              // Terminación proceso
   ];
   
   const TRANSICIONES_ESTADO = [
@@ -51,26 +51,22 @@
     const extra = evento.extra || '';
     
     switch (tipo) {
-      case 'ARRIBO_TRABAJO':
+      case 'JOB_LLEGA':
         return `📩 Proceso ${proceso} arriba al sistema`;
-      case 'INCORPORACION_SISTEMA':
+      case 'NUEVO_A_LISTO':
         return `🔄 Proceso ${proceso} se incorpora al sistema (NUEVO → LISTO) ${extra}`;
-      case 'DESPACHO':
+      case 'DISPATCH':
         return `🎯 Dispatcher asigna CPU a proceso ${proceso} ${extra}`;
       case 'FIN_RAFAGA_CPU':
         return `⚡ Proceso ${proceso} completa ráfaga de CPU ${extra}`;
-      case 'AGOTAMIENTO_QUANTUM':
+      case 'QUANTUM_EXPIRES':
         return `⏰ Quantum agotado para proceso ${proceso} (Round Robin) ${extra}`;
-      case 'INICIO_ES':
-        return `💾 Proceso ${proceso} inicia operación de E/S ${extra}`;
-      case 'FIN_ES':
+      case 'IO_COMPLETA':
         return `✅ Proceso ${proceso} termina operación de E/S ${extra}`;
-      case 'ATENCION_INTERRUPCION_ES':
+      case 'IO_INTERRUPCION_ATENDIDA':
         return `📨 Atendida interrupción de E/S para proceso ${proceso} ${extra}`;
-      case 'TERMINACION_PROCESO':
+      case 'PROCESO_TERMINA':
         return `🏁 Proceso ${proceso} termina completamente ${extra}`;
-      case 'INICIO_TERMINACION':
-        return `🔚 Inicio del proceso de terminación para ${proceso} ${extra}`;
       
       // Transiciones de estado según teoría de SO
       case 'CORRIENDO_A_TERMINADO':
@@ -105,16 +101,14 @@
     }
     
     switch (tipo) {
-      case 'ARRIBO_TRABAJO': return '📩';
-      case 'INCORPORACION_SISTEMA': return '🔄';
-      case 'DESPACHO': return '🎯';
+      case 'JOB_LLEGA': return '📩';
+      case 'NUEVO_A_LISTO': return '🔄';
+      case 'DISPATCH': return '🎯';
       case 'FIN_RAFAGA_CPU': return '⚡';
-      case 'AGOTAMIENTO_QUANTUM': return '⏰';
-      case 'INICIO_ES': return '💾';
-      case 'FIN_ES': return '✅';
-      case 'ATENCION_INTERRUPCION_ES': return '📨';
-      case 'TERMINACION_PROCESO': return '🏁';
-      case 'INICIO_TERMINACION': return '🔚';
+      case 'QUANTUM_EXPIRES': return '⏰';
+      case 'IO_COMPLETA': return '✅';
+      case 'IO_INTERRUPCION_ATENDIDA': return '📨';
+      case 'PROCESO_TERMINA': return '🏁';
       default: return '📝';
     }
   }
