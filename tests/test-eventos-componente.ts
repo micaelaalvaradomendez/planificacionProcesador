@@ -3,7 +3,7 @@
  * Verifica que el orden de eventos cumple con la consigna del TP Integrador
  */
 
-import type { SimEvent } from './src/lib/domain/types';
+import type { SimEvent } from '../src/lib/domain/types';
 
 // Eventos de prueba que simulan un caso real con orden específico
 const eventosTestOrden: SimEvent[] = [

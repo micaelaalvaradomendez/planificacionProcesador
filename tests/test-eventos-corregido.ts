@@ -3,7 +3,7 @@
  * Verifica compatibilidad con los tipos de eventos reales del simulador
  */
 
-import type { SimEvent, TipoEvento } from './src/lib/domain/types';
+import type { SimEvent, TipoEvento } from '../src/lib/domain/types';
 
 // Eventos de prueba usando los tipos reales del enum TipoEvento
 const eventosPruebaReal: SimEvent[] = [

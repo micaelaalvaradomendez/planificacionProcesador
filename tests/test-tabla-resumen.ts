@@ -3,7 +3,7 @@
  * Verifica que el componente se renderiza correctamente con datos reales
  */
 
-import { ejecutarSimulacion, guardarDatosSimulacion, type DatosSimulacionCompleta } from './src/lib/application/simuladorLogic';
+import { ejecutarSimulacion, guardarDatosSimulacion, type DatosSimulacionCompleta } from '../src/lib/application/simuladorLogic';
 
 console.log('🧪 Test TablaResumenComparativa');
 console.log('===============================');

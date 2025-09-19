@@ -3,8 +3,8 @@
  * Identifica inconsistencias en el comportamiento según la teoría de SO
  */
 
-import type { Workload, ProcessSpec, RunConfig } from './src/lib/domain/types';
-import { AdaptadorSimuladorDominio } from './src/lib/core/adaptadorSimuladorDominio';
+import type { Workload, ProcessSpec, RunConfig } from '../src/lib/domain/types';
+import { AdaptadorSimuladorDominio } from '../src/lib/core/adaptadorSimuladorDominio';
 
 // Dataset de prueba común para todas las políticas
 const procesosBasicos: ProcessSpec[] = [

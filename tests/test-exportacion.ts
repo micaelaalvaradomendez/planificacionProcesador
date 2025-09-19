@@ -3,10 +3,10 @@
  * Prueba que todas las funciones de exportación funcionen correctamente
  */
 
-import { exportarEventosComoCSV, exportarEventosComoTXT } from './src/lib/infrastructure/io/exportEvents';
-import { exportarMetricasCSV } from './src/lib/infrastructure/io/exportMetrics';
-import { exportarGanttSVG, exportarGanttASCII } from './src/lib/infrastructure/io/ganttExporter';
-import type { SimEvent, Metrics, GanttSlice } from './src/lib/domain/types';
+import { exportarEventosComoCSV, exportarEventosComoTXT } from '../src/lib/infrastructure/io/exportEvents';
+import { exportarMetricasCSV } from '../src/lib/infrastructure/io/exportMetrics';
+import { exportarGanttSVG, exportarGanttASCII } from '../src/lib/infrastructure/io/ganttExporter';
+import type { SimEvent, Metrics, GanttSlice } from '../src/lib/domain/types';
 
 // Datos de prueba simples
 const eventosPrueba: SimEvent[] = [

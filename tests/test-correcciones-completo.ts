@@ -3,8 +3,8 @@
  * Este test demuestra los problemas identificados y las correcciones implementadas
  */
 
-import { AdaptadorSimuladorDominio } from './src/lib/core/adaptadorSimuladorDominio';
-import type { Workload } from './src/lib/domain/types';
+import { AdaptadorSimuladorDominio } from '../src/lib/core/adaptadorSimuladorDominio';
+import type { Workload } from '../src/lib/domain/types';
 
 console.log('🚨 Test de CORRECCIONES en Políticas de Planificación');
 console.log('=====================================================');
