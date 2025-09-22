@@ -3,7 +3,7 @@
  * Contiene la lógica de negocio para generar representaciones visuales de la ejecución
  */
 
-import type { SimEvent, GanttSlice } from '../types';
+import type { SimEvent, GanttSlice, RunConfig } from '../types';
 import { TipoEvento } from '../types';
 
 export interface DiagramaGantt {
@@ -28,8 +28,10 @@ export class GanttBuilder {
   
   /**
    * Construye un diagrama de Gantt completo a partir de eventos de simulación
+   * @param eventos Lista de eventos de la simulación
+   * @param config Configuración con parámetros TIP/TCP/TFP para determinar segmentos
    */
-  static construirDiagramaGantt(eventos: SimEvent[]): DiagramaGantt {
+  static construirDiagramaGantt(eventos: SimEvent[], config?: RunConfig): DiagramaGantt {
     if (eventos.length === 0) {
       return {
         segmentos: [],
@@ -45,7 +47,7 @@ export class GanttBuilder {
       };
     }
 
-    const segmentos = this.generarSegmentosAlternativos(eventos);
+    const segmentos = this.generarSegmentosAlternativos(eventos, config);
     // const segmentos = this.generarSegmentosGantt(eventos);
     const procesos = this.extraerProcesosUnicos(eventos);
     const tiempoTotal = this.calcularTiempoTotal(segmentos);
@@ -141,98 +143,234 @@ export class GanttBuilder {
   }
 
   /**
-   * MÉTODO ALTERNATIVO: Genera segmentos basado en intervalos de ejecución real
+   * MÉTODO CORREGIDO: Genera solo segmentos que consumen tiempo real
+   * TIP/TCP/TFP son eventos instantáneos cuando duración=0, segmentos cuando duración>0
+   * I/O debe ser secuencial, no simultáneo con CPU
+   * @param eventos Lista de eventos ordenados cronológicamente
+   * @param config Configuración con parámetros TIP/TCP/TFP para determinar si generar segmentos
    */
-  private static generarSegmentosAlternativos(eventos: SimEvent[]): GanttSlice[] {
+  private static generarSegmentosAlternativos(eventos: SimEvent[], config?: RunConfig): GanttSlice[] {
     const segmentos: GanttSlice[] = [];
     const eventosOrdenados = [...eventos].sort((a, b) => a.tiempo - b.tiempo);
     
-    console.log('🔧 Generando segmentos de Gantt desde eventos ordenados:', eventosOrdenados.length);
+    console.log('🔧 Generando segmentos de Gantt corregidos (solo tiempo real):', eventosOrdenados.length);
     
-    // Procesar eventos para crear segmentos de Gantt
-    for (let i = 0; i < eventosOrdenados.length; i++) {
-      const evento = eventosOrdenados[i];
+    // Estado de la CPU: quien está ejecutando actualmente
+    let procesoEjecutando: string | null = null;
+    let tiempoInicioEjecucion: number | null = null;
+    
+    for (const evento of eventosOrdenados) {
+      console.log(`⏱️  Procesando: T=${evento.tiempo} | ${evento.tipo} | ${evento.proceso}`);
       
-      // TIP: Desde llegada hasta ingreso al sistema
-      if (evento.tipo === TipoEvento.JOB_LLEGA) {
-        const siguienteEvento = eventosOrdenados.find(e => 
-          e.tiempo > evento.tiempo && 
-          e.proceso === evento.proceso && 
-          e.tipo === TipoEvento.NUEVO_A_LISTO
-        );
-        if (siguienteEvento) {
+      // INICIO DE EJECUCIÓN EN CPU (DISPATCH)
+      if (evento.tipo === TipoEvento.LISTO_A_CORRIENDO || evento.tipo === TipoEvento.DISPATCH) {
+        // Terminar ejecución anterior si existe
+        if (procesoEjecutando && tiempoInicioEjecucion !== null) {
           segmentos.push({
-            process: evento.proceso,
-            tStart: evento.tiempo,
-            tEnd: siguienteEvento.tiempo,
-            kind: 'TIP'
-          });
-          console.log(`  + TIP: ${evento.proceso} [${evento.tiempo}-${siguienteEvento.tiempo}]`);
-        }
-      }
-      
-      // TCP: Durante el despacho (antes de la ejecución)
-      if (evento.tipo === TipoEvento.LISTO_A_CORRIENDO) {
-        // Buscar el siguiente evento de fin de ráfaga para calcular el tiempo de TCP
-        const tiempoDespacho = 1; // Tiempo de cambio de contexto (asumir 1 unidad)
-        segmentos.push({
-          process: evento.proceso,
-          tStart: evento.tiempo,
-          tEnd: evento.tiempo + tiempoDespacho,
-          kind: 'TCP'
-        });
-        console.log(`  + TCP: ${evento.proceso} [${evento.tiempo}-${evento.tiempo + tiempoDespacho}]`);
-        
-        // CPU: Desde después del TCP hasta fin de ráfaga
-        const finRafagaEvento = eventosOrdenados.find(e => 
-          e.tiempo > evento.tiempo && 
-          e.proceso === evento.proceso && 
-          e.tipo === TipoEvento.FIN_RAFAGA_CPU
-        );
-        if (finRafagaEvento) {
-          segmentos.push({
-            process: evento.proceso,
-            tStart: evento.tiempo + tiempoDespacho,
-            tEnd: finRafagaEvento.tiempo,
+            process: procesoEjecutando,
+            tStart: tiempoInicioEjecucion,
+            tEnd: evento.tiempo,
             kind: 'CPU'
           });
-          console.log(`  + CPU: ${evento.proceso} [${evento.tiempo + tiempoDespacho}-${finRafagaEvento.tiempo}]`);
+          console.log(`  📦 CPU: ${procesoEjecutando} [${tiempoInicioEjecucion}-${evento.tiempo}]`);
         }
-      }
-      
-      // ES: Entrada/Salida (si hay eventos de bloqueo)
-      if (evento.tipo === TipoEvento.CORRIENDO_A_BLOQUEADO) {
-        const finESEvento = eventosOrdenados.find(e => 
-          e.tiempo > evento.tiempo && 
-          e.proceso === evento.proceso && 
-          e.tipo === TipoEvento.BLOQUEADO_A_LISTO
-        );
-        if (finESEvento) {
+        
+        // TCP: Si duración > 0, generar segmento ANTES de la ejecución real
+        let tiempoInicioReal = evento.tiempo;
+        if (config && config.tcp > 0) {
           segmentos.push({
-            process: evento.proceso,
+            process: 'SO',
             tStart: evento.tiempo,
-            tEnd: finESEvento.tiempo,
-            kind: 'ES'
+            tEnd: evento.tiempo + config.tcp,
+            kind: 'TCP'
           });
-          console.log(`  + ES: ${evento.proceso} [${evento.tiempo}-${finESEvento.tiempo}]`);
+          console.log(`  📦 TCP segmento: SO [${evento.tiempo}-${evento.tiempo + config.tcp}]`);
+          tiempoInicioReal = evento.tiempo + config.tcp;
+        }
+        
+        // Iniciar nueva ejecución (después del TCP si existe)
+        procesoEjecutando = evento.proceso;
+        tiempoInicioEjecucion = tiempoInicioReal;
+        console.log(`  🚀 Iniciando CPU: ${evento.proceso} desde ${tiempoInicioReal}`);
+      }
+      
+      // FIN DE RÁFAGA CPU
+      else if (evento.tipo === TipoEvento.FIN_RAFAGA_CPU) {
+        if (procesoEjecutando === evento.proceso && tiempoInicioEjecucion !== null) {
+          segmentos.push({
+            process: procesoEjecutando,
+            tStart: tiempoInicioEjecucion,
+            tEnd: evento.tiempo,
+            kind: 'CPU'
+          });
+          console.log(`  📦 CPU: ${procesoEjecutando} [${tiempoInicioEjecucion}-${evento.tiempo}]`);
+          
+          // Si el proceso va a I/O, crear segmento I/O
+          if (evento.extra && evento.extra.includes('I/O')) {
+            // Buscar el evento FinES correspondiente
+            const finESEvento = eventosOrdenados.find(e => 
+              e.tiempo > evento.tiempo && 
+              e.proceso === evento.proceso && 
+              (e.tipo as string) === 'FinES'
+            );
+            
+            if (finESEvento) {
+              segmentos.push({
+                process: evento.proceso,
+                tStart: evento.tiempo,
+                tEnd: finESEvento.tiempo,
+                kind: 'ES'
+              });
+              console.log(`  📦 I/O: ${evento.proceso} [${evento.tiempo}-${finESEvento.tiempo}]`);
+            }
+          }
+          
+          // CPU libre
+          procesoEjecutando = null;
+          tiempoInicioEjecucion = null;
         }
       }
       
-      // TFP: Tiempo de finalización del proceso
-      if (evento.tipo === TipoEvento.CORRIENDO_A_TERMINADO) {
-        const tiempoFinalizacion = 1; // Tiempo de finalización (asumir 1 unidad)
-        segmentos.push({
-          process: evento.proceso,
-          tStart: evento.tiempo,
-          tEnd: evento.tiempo + tiempoFinalizacion,
-          kind: 'TFP'
-        });
-        console.log(`  + TFP: ${evento.proceso} [${evento.tiempo}-${evento.tiempo + tiempoFinalizacion}]`);
+      // PREEMPCIÓN (AGOTAMIENTO QUANTUM)
+      else if (evento.tipo === TipoEvento.CORRIENDO_A_LISTO) {
+        if (procesoEjecutando === evento.proceso && tiempoInicioEjecucion !== null) {
+          segmentos.push({
+            process: procesoEjecutando,
+            tStart: tiempoInicioEjecucion,
+            tEnd: evento.tiempo,
+            kind: 'CPU'
+          });
+          console.log(`  📦 CPU (preemption): ${procesoEjecutando} [${tiempoInicioEjecucion}-${evento.tiempo}]`);
+          
+          // CPU libre tras preempción
+          procesoEjecutando = null;
+          tiempoInicioEjecucion = null;
+        }
+      }
+      
+      // TERMINACIÓN DE PROCESO
+      else if (evento.tipo === TipoEvento.CORRIENDO_A_TERMINADO) {
+        if (procesoEjecutando === evento.proceso && tiempoInicioEjecucion !== null) {
+          segmentos.push({
+            process: procesoEjecutando,
+            tStart: tiempoInicioEjecucion,
+            tEnd: evento.tiempo,
+            kind: 'CPU'
+          });
+          console.log(`  📦 CPU (hasta terminar): ${procesoEjecutando} [${tiempoInicioEjecucion}-${evento.tiempo}]`);
+          
+          // CPU libre tras terminación
+          procesoEjecutando = null;
+          tiempoInicioEjecucion = null;
+        }
+        
+        // TFP: Si duración > 0, generar segmento
+        if (config && config.tfp > 0) {
+          segmentos.push({
+            process: 'SO',
+            tStart: evento.tiempo,
+            tEnd: evento.tiempo + config.tfp,
+            kind: 'TFP'
+          });
+          console.log(`  📦 TFP segmento: SO [${evento.tiempo}-${evento.tiempo + config.tfp}]`);
+        } else {
+          console.log(`  ⚡ TFP instantáneo: ${evento.proceso} en ${evento.tiempo}`);
+        }
+      }
+      
+      // LLEGADA DE PROCESO: TIP
+      else if (evento.tipo === TipoEvento.JOB_LLEGA) {
+        if (config && config.tip > 0) {
+          segmentos.push({
+            process: 'SO',
+            tStart: evento.tiempo,
+            tEnd: evento.tiempo + config.tip,
+            kind: 'TIP'
+          });
+          console.log(`  📦 TIP segmento: SO [${evento.tiempo}-${evento.tiempo + config.tip}]`);
+        } else {
+          console.log(`  ⚡ TIP instantáneo: ${evento.proceso} en ${evento.tiempo}`);
+        }
       }
     }
+    
+    // Cerrar última ejecución si quedó abierta
+    if (procesoEjecutando && tiempoInicioEjecucion !== null) {
+      const tiempoFinal = Math.max(...eventosOrdenados.map(e => e.tiempo));
+      segmentos.push({
+        process: procesoEjecutando,
+        tStart: tiempoInicioEjecucion,
+        tEnd: tiempoFinal,
+        kind: 'CPU'
+      });
+      console.log(`  📦 CPU (final): ${procesoEjecutando} [${tiempoInicioEjecucion}-${tiempoFinal}]`);
+    }
 
-    console.log(`📊 Total segmentos generados: ${segmentos.length}`);
-    return segmentos;
+    console.log(`📊 Total segmentos generados (solo tiempo real): ${segmentos.length}`);
+    
+    // Agregar segmentos OCIOSO para llenar huecos en la timeline
+    const segmentosConOcioso = this.agregarSegmentosOcioso(segmentos);
+    
+    console.log(`📊 Segmentos finales con OCIOSO: ${segmentosConOcioso.length}`);
+    return segmentosConOcioso;
+  }
+
+  /**
+   * Agrega segmentos OCIOSO solo en huecos donde NO hay CPU activa
+   * I/O puede ejecutarse en paralelo y no cuenta como "hueco" en la CPU
+   */
+  private static agregarSegmentosOcioso(segmentos: GanttSlice[]): GanttSlice[] {
+    if (segmentos.length === 0) return segmentos;
+    
+    // Separar segmentos de CPU de segmentos de I/O
+    const segmentosCPU = segmentos.filter(s => s.kind === 'CPU');
+    const segmentosIO = segmentos.filter(s => s.kind === 'ES');
+    
+    console.log(`  🔍 Segmentos CPU: ${segmentosCPU.length}, I/O: ${segmentosIO.length}`);
+    
+    const resultado: GanttSlice[] = [];
+    const tiempoInicial = 0;
+    const tiempoFinal = Math.max(...segmentos.map(s => s.tEnd));
+    
+    // Ordenar solo segmentos de CPU para detectar huecos
+    const segmentosCPUOrdenados = [...segmentosCPU].sort((a, b) => a.tStart - b.tStart);
+    
+    let tiempoActual = tiempoInicial;
+    
+    // Procesar huecos entre segmentos de CPU
+    for (const segmentoCPU of segmentosCPUOrdenados) {
+      // Agregar OCIOSO si hay hueco antes de este segmento de CPU
+      if (tiempoActual < segmentoCPU.tStart) {
+        resultado.push({
+          process: 'SISTEMA',
+          tStart: tiempoActual,
+          tEnd: segmentoCPU.tStart,
+          kind: 'OCIOSO'
+        });
+        console.log(`  📦 OCIOSO (CPU libre): [${tiempoActual}-${segmentoCPU.tStart}]`);
+      }
+      
+      // Agregar el segmento de CPU
+      resultado.push(segmentoCPU);
+      tiempoActual = segmentoCPU.tEnd;
+    }
+    
+    // Agregar OCIOSO final si la CPU está libre al final
+    if (tiempoActual < tiempoFinal) {
+      resultado.push({
+        process: 'SISTEMA',
+        tStart: tiempoActual,
+        tEnd: tiempoFinal,
+        kind: 'OCIOSO'
+      });
+      console.log(`  📦 OCIOSO final (CPU libre): [${tiempoActual}-${tiempoFinal}]`);
+    }
+    
+    // Agregar todos los segmentos de I/O (sin modificar)
+    resultado.push(...segmentosIO);
+    
+    // Ordenar el resultado final por tiempo de inicio
+    return resultado.sort((a, b) => a.tStart - b.tStart);
   }
 
   /**
@@ -365,12 +503,16 @@ export class GanttBuilder {
         case 'CPU':
           tiempoCPU += duracion;
           break;
+        case 'ES':
+          // I/O no cuenta como tiempo de CPU ni como ocioso
+          break;
         case 'OCIOSO':
           tiempoOcioso += duracion;
           break;
         case 'TCP':
         case 'TIP':
         case 'TFP':
+          // Ya no deberían existir estos segmentos, pero por si acaso
           tiempoSO += duracion;
           break;
       }

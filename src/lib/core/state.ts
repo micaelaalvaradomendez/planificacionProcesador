@@ -1,40 +1,42 @@
 import type { Workload, SimEvent, Policy } from '../domain/types';
+import { EstadoProceso, TipoEvento } from '../domain/types';
+import { Proceso } from '../domain/entities/Proceso';
 
-export type ProcesoEstado = 'Nuevo' | 'Listo' | 'Corriendo' | 'Bloqueado' | 'Terminado';
+// Usamos la entidad canónica del dominio - NO duplicaciones
+export type ProcesoEstado = EstadoProceso;
 
-export interface ProcesoRT {
-  name: string;
-  // Especificación "estática" (del archivo)
-  tiempoArribo: number;
-  rafagasCPU: number;
-  duracionRafagaCPU: number;
-  duracionRafagaES: number;
-  prioridad: number;
-  
-  // Estado de ejecución dinámico
-  estado: ProcesoEstado;
-  rafagasRestantes: number;
-  restanteEnRafaga: number;     // cuánto falta de la ráfaga actual
-  tiempoListoAcumulado: number; // para métricas - solo cuenta después de TIP
-  tipCumplido: boolean;         // hasta que cumpla TIP no suma "tiempo en listo"
-  tiempoInicioRafaga?: number;  // para calcular tiempo ejecutado en expropiaciones
-  
-  // Marcas temporales para métricas
-  inicioTIP?: number;
-  finTIP?: number;
-  primerDespacho?: number;      // primer despacho real (post-TIP)
-  finTFP?: number;              // fin completo con TFP
-  ultimoTiempoEnListo?: number; // para acumular tiempo en listo
-}
+// ELIMINADO: ProcesoRT interface - usar directamente Proceso del dominio
 
+// Mapeo de eventos internos a tipos canónicos del dominio
 export type TipoEventoInterno =
   | 'Arribo'                    // Nuevo→Listo (con TIP si corresponde)
   | 'FinTIP'                    // Nuevo→Listo (fin del tiempo de incorporación)
   | 'Despacho'                  // Listo→Corriendo (consume TCP)
   | 'FinRafagaCPU'              // Corriendo→(Bloqueado|Terminado)
   | 'AgotamientoQuantum'        // Corriendo→Listo (RR)
-  | 'FinES'                     // Bloqueado→Listo (instantáneo)
+  | 'FinES'                     // Bloqueado→Listo (INSTANTÁNEO: Δt=0, NO consume TCP)
   | 'FinTFP';                   // cierre contable del proceso
+
+/**
+ * DOCUMENTACIÓN CRÍTICA DE TIEMPOS:
+ * - Bloqueado→Listo (FinES): INSTANTÁNEO (Δt=0), sin overhead del SO
+ * - Listo→Corriendo (Despacho): Consume TCP (tiempo de cambio de contexto)
+ * - TCP se cobra ÚNICAMENTE en L→C, NUNCA en B→L
+ * 
+ * Mapea TipoEventoInterno a TipoEvento canónico del dominio
+ */
+export function mapearEventoADominio(tipoInterno: TipoEventoInterno): TipoEvento {
+  const mapeo: Record<TipoEventoInterno, TipoEvento> = {
+    'Arribo': TipoEvento.JOB_LLEGA,
+    'FinTIP': TipoEvento.NUEVO_A_LISTO,
+    'Despacho': TipoEvento.LISTO_A_CORRIENDO,
+    'FinRafagaCPU': TipoEvento.FIN_RAFAGA_CPU,
+    'AgotamientoQuantum': TipoEvento.QUANTUM_EXPIRES,
+    'FinES': TipoEvento.BLOQUEADO_A_LISTO,
+    'FinTFP': TipoEvento.PROCESO_TERMINA
+  };
+  return mapeo[tipoInterno];
+}
 
 export interface EventoInterno {
   tiempo: number;
@@ -64,8 +66,8 @@ export interface SimState {
   tcp: number; 
   quantum?: number;
   
-  // Procesos y colas
-  procesos: Map<string, ProcesoRT>;
+  // Procesos y colas - USA ENTIDADES DEL DOMINIO
+  procesos: Map<string, Proceso>;
   colaListos: string[];         // orden depende de la política
   colaBloqueados: string[];
   procesoEjecutando?: string;
@@ -80,23 +82,20 @@ export interface SimState {
 }
 
 export function crearEstadoInicial(wl: Workload): SimState {
-  const procesos = new Map<string, ProcesoRT>();
+  const procesos = new Map<string, Proceso>();
   
-  // Crear ProcesoRT para cada proceso del workload
+  // Crear entidades Proceso del dominio para cada proceso del workload
   for (const p of wl.processes) {
-    procesos.set(p.name, {
-      name: p.name,
-      tiempoArribo: p.tiempoArribo,
+    const proceso = new Proceso({
+      nombre: p.id,
+      arribo: p.arribo,
       rafagasCPU: p.rafagasCPU,
-      duracionRafagaCPU: p.duracionRafagaCPU,
-      duracionRafagaES: p.duracionRafagaES,
-      prioridad: p.prioridad,
-      estado: 'Nuevo',
-      rafagasRestantes: p.rafagasCPU,
-      restanteEnRafaga: p.duracionRafagaCPU,
-      tiempoListoAcumulado: 0,
-      tipCumplido: false
+      duracionCPU: p.duracionCPU,
+      duracionIO: p.duracionIO,
+      prioridad: p.prioridad
     });
+    
+    procesos.set(p.id, proceso);
   }
 
   return {
@@ -131,10 +130,11 @@ export function agregarEventoInterno(state: SimState, tipo: TipoEventoInterno, p
   });
 }
 
-export function agregarEventoExportacion(state: SimState, tipo: string, proceso: string, extra?: string) {
+export function agregarEventoExportacion(state: SimState, tipoInterno: TipoEventoInterno, proceso: string, extra?: string) {
+  const tipoCanonica = mapearEventoADominio(tipoInterno);
   state.eventosExportacion.push({
     tiempo: state.tiempoActual,
-    tipo: tipo as any, // mapearemos los tipos después
+    tipo: tipoCanonica,
     proceso,
     extra
   });

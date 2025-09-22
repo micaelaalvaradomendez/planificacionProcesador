@@ -42,6 +42,22 @@ export interface DatosSimulacionCompleta {
 }
 
 /**
+ * Estructura versionada para persistencia en localStorage
+ * Previene problemas de compatibilidad al cambiar esquemas
+ */
+export interface DatosVersionados {
+  version: string;                    // Versión del esquema de datos
+  data: DatosSimulacionCompleta;     // Datos reales de la simulación
+  metadata: {
+    timestamp: string;               // Cuándo se guardó
+    appVersion?: string;             // Versión de la aplicación que lo guardó
+  };
+}
+
+// Versión actual del esquema de datos
+export const SCHEMA_VERSION = '1.0.0';
+
+/**
  * Detecta el tipo de archivo basado en la extensión
  */
 function detectarTipoArchivo(filename: string): 'json' | 'csv' {
@@ -84,9 +100,9 @@ export async function cargarArchivoProcesos(file: File): Promise<{
       const procesos: ProcesoSimple[] = workload.processes.map((p: ProcessSpec) => {
         console.log('🔄 Convirtiendo proceso:', p);
         return {
-          nombre: p.name,
-          llegada: p.tiempoArribo,
-          rafaga: p.duracionRafagaCPU,
+          nombre: p.id,
+          llegada: p.arribo,
+          rafaga: p.duracionCPU,
           prioridad: p.prioridad
         };
       });
@@ -163,11 +179,11 @@ export async function ejecutarSimulacion(
   const workload: Workload = {
     workloadName: 'Simulación Manual',
     processes: procesos.map((p): ProcessSpec => ({
-      name: p.nombre,
-      tiempoArribo: p.llegada,
+      id: p.nombre,
+      arribo: p.llegada,
       rafagasCPU: 1,
-      duracionRafagaCPU: p.rafaga,
-      duracionRafagaES: 0,
+      duracionCPU: p.rafaga,
+      duracionIO: 0,
       prioridad: p.prioridad
     })),
     config: {
@@ -189,7 +205,7 @@ export async function ejecutarSimulacion(
     
     // Generar diagrama de Gantt
     console.log('🎨 Generando diagrama de Gantt...');
-    const gantt = GanttBuilder.construirDiagramaGantt(resultado.eventos);
+    const gantt = GanttBuilder.construirDiagramaGantt(resultado.eventos, workload.config);
     console.log('📊 Gantt generado:', {
       segmentos: gantt.segmentos.length,
       tiempoTotal: gantt.tiempoTotal,
@@ -210,28 +226,76 @@ export async function ejecutarSimulacion(
 }
 
 /**
- * Guarda los datos de simulación en localStorage
+ * Guarda los datos de simulación en localStorage con versionado de esquema
  */
 export function guardarDatosSimulacion(datos: DatosSimulacionCompleta): void {
   try {
-    localStorage.setItem('ultimaSimulacion', JSON.stringify(datos));
-    console.log('💾 Datos guardados en localStorage');
+    const datosVersionados: DatosVersionados = {
+      version: SCHEMA_VERSION,
+      data: datos,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        appVersion: '1.0.0' // TODO: obtener desde package.json
+      }
+    };
+    
+    localStorage.setItem('ultimaSimulacion', JSON.stringify(datosVersionados));
+    console.log(`💾 Datos guardados en localStorage (schema v${SCHEMA_VERSION})`);
   } catch (error) {
     console.error('❌ Error al guardar datos de simulación:', error);
   }
 }
 
 /**
- * Carga los datos de simulación desde localStorage
+ * Carga los datos de simulación desde localStorage con validación de esquema
  */
 export function cargarDatosSimulacion(): DatosSimulacionCompleta | null {
   try {
-    const datos = localStorage.getItem('ultimaSimulacion');
-    const resultado = datos ? JSON.parse(datos) : null;
-    console.log('💾 Datos cargados desde localStorage:', resultado ? 'Encontrados' : 'No encontrados');
-    return resultado;
+    const rawData = localStorage.getItem('ultimaSimulacion');
+    if (!rawData) {
+      console.log('💾 No hay datos guardados en localStorage');
+      return null;
+    }
+    
+    const parsed = JSON.parse(rawData);
+    
+    // Verificar si es el formato versionado nuevo
+    if (parsed.version && parsed.data) {
+      const datosVersionados = parsed as DatosVersionados;
+      
+      if (datosVersionados.version !== SCHEMA_VERSION) {
+        console.warn(`⚠️ Esquema incompatible: guardado v${datosVersionados.version}, actual v${SCHEMA_VERSION}`);
+        console.warn('🗑️ Invalidando datos antiguos para evitar errores');
+        localStorage.removeItem('ultimaSimulacion');
+        return null;
+      }
+      
+      console.log(`💾 Datos cargados desde localStorage (schema v${datosVersionados.version})`);
+      return datosVersionados.data;
+    }
+    
+    // Formato legacy (sin versionado) - migrar automáticamente
+    if (parsed.procesos && parsed.configuracion && parsed.resultados) {
+      console.warn('🔄 Detectado formato legacy, migrando a formato versionado...');
+      
+      const datosLegacy = parsed as DatosSimulacionCompleta;
+      
+      // Guardar en formato versionado
+      guardarDatosSimulacion(datosLegacy);
+      
+      console.log('✅ Migración completada');
+      return datosLegacy;
+    }
+    
+    // Formato desconocido
+    console.error('❌ Formato de datos no reconocido, limpiando localStorage');
+    localStorage.removeItem('ultimaSimulacion');
+    return null;
+    
   } catch (error) {
     console.error('❌ Error al cargar datos de simulación:', error);
+    console.warn('🗑️ Limpiando localStorage por error de parseo');
+    localStorage.removeItem('ultimaSimulacion');
     return null;
   }
 }

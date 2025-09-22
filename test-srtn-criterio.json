@@ -1,0 +1,26 @@
+{
+  "parametros": {
+    "TIP": 1,
+    "TCP": 1,
+    "TFP": 1,
+    "quantum": 4
+  },
+  "procesos": [
+    {
+      "nombre": "P1",
+      "arribo": 0,
+      "rafagasCPU": 5,
+      "duracionCPU": 2,
+      "duracionIO": 1,
+      "prioridad": 1
+    },
+    {
+      "nombre": "P2",
+      "arribo": 1,
+      "rafagasCPU": 1,
+      "duracionCPU": 3,
+      "duracionIO": 1,
+      "prioridad": 1
+    }
+  ]
+}

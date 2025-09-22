@@ -11,8 +11,8 @@ import {
   agregarEventoInterno, 
   agregarEventoExportacion 
 } from './state';
-import type { EstadoProceso, ParametrosSimulacion, TipoEvento, Algoritmo } from '../domain/types';
-import { TipoEvento as TipoEventoDominio } from '../domain/types';
+import type { ParametrosSimulacion, TipoEvento, Algoritmo } from '../domain/types';
+import { TipoEvento as TipoEventoDominio, EstadoProceso } from '../domain/types';
 import type { EstrategiaScheduler } from '../domain/algorithms/Scheduler';
 import { EstrategiaSchedulerFcfs } from '../domain/algorithms/fcfs';
 import { EstrategiaSchedulerSjf } from '../domain/algorithms/sjf';
@@ -186,6 +186,20 @@ export class AdaptadorSimuladorDominio {
   }
 
   /**
+   * Verifica si hay procesos en Ready Queue y programa despacho si CPU está libre
+   */
+  private programarDespachoSiNecesario(): void {
+    if (!this.simuladorDominio.procesoActualCPU && this.simuladorDominio.readyQueue.length > 0) {
+      this.simuladorDominio.programarEvento(
+        this.simuladorDominio.tiempoActual,
+        TipoEventoDominio.DISPATCH,
+        '',
+        'CPU libre, despachar proceso'
+      );
+    }
+  }
+
+  /**
    * Maneja la llegada de un proceso al sistema
    */
   private manejarLlegadaProceso(proceso: Proceso): void {
@@ -218,6 +232,10 @@ export class AdaptadorSimuladorDominio {
     proceso.finalizarTIP(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.readyQueue.push(proceso);
     
+    // CORRECCIÓN: Agregar evento para mostrar TIP en Gantt
+    agregarEventoInterno(this.state, 'FinTIP', proceso.id, 
+      `TIP completado en ${this.simuladorDominio.parametros.TIP} unidades`);
+    
     // Para algoritmos expropitativos, verificar si debe expropiar
     if (this.estrategia.soportaExpropiacion && this.simuladorDominio.procesoActualCPU) {
       const procesoActual = this.simuladorDominio.procesoActualCPU;
@@ -227,12 +245,14 @@ export class AdaptadorSimuladorDominio {
         console.log(`🔄 EXPROPIACIÓN: ${proceso.id} expropia a ${procesoActual.id}`);
         
         // Calcular cuánto tiempo ya ejecutó el proceso actual
-        const tiempoEjecutado = this.simuladorDominio.tiempoActual - (procesoActual.ultimoDispatch || this.simuladorDominio.tiempoActual);
+        // CORRECCIÓN: El tiempo de ejecución debe descontar el TCP
+        const tiempoInicioEjecucionReal = (procesoActual.ultimoDispatch || this.simuladorDominio.tiempoActual) + this.simuladorDominio.parametros.TCP;
+        const tiempoEjecutado = Math.max(0, this.simuladorDominio.tiempoActual - tiempoInicioEjecucionReal);
         console.log(`   Proceso ${procesoActual.id} ejecutó ${tiempoEjecutado} unidades antes de expropiación`);
         
         // Actualizar tiempo restante del proceso expropiado
         if (tiempoEjecutado > 0) {
-          procesoActual.procesarCPU(tiempoEjecutado);
+          this.procesarTiempoCPU(procesoActual, tiempoEjecutado);
         }
         
         // Expropiar el proceso actual
@@ -240,18 +260,23 @@ export class AdaptadorSimuladorDominio {
         
         // GENERAR EVENTO CORRIENDO_A_LISTO para el proceso expropiado
         agregarEventoInterno(this.state, 'AgotamientoQuantum', procesoActual.id, 
-          `Proceso expropiado por ${proceso.id}`);
+          `Proceso expropiado por ${proceso.id} (SRTN)`);
         
-        // Remover proceso actual de CPU y agregarlo a la cola
+        // Remover proceso actual de CPU y agregarlo a la cola ordenadamente
         this.simuladorDominio.procesoActualCPU = undefined;
-        this.simuladorDominio.readyQueue.unshift(procesoActual); // Al frente para Round Robin
+        this.simuladorDominio.readyQueue.push(procesoActual); // Agregar al final
         
-        // Programar despacho inmediato del nuevo proceso
+        // CRITICAL: Para SRTN, reordenar la cola según tiempo restante
+        if (this.estrategia.nombre.includes('SRTF') || this.estrategia.nombre.includes('SRTN')) {
+          this.estrategia.ordenarColaListos?.(this.simuladorDominio.readyQueue);
+        }
+        
+        // PROGRAMAR DESPACHO inmediato tras expropiación
         this.simuladorDominio.programarEvento(
           this.simuladorDominio.tiempoActual,
           TipoEventoDominio.DISPATCH,
           '',
-          'Despacho por expropiación'
+          'Despacho tras expropiación'
         );
         
         return;
@@ -259,14 +284,7 @@ export class AdaptadorSimuladorDominio {
     }
     
     // Si no hay expropiación, programar despacho solo si CPU está libre
-    if (!this.simuladorDominio.procesoActualCPU) {
-      this.simuladorDominio.programarEvento(
-        this.simuladorDominio.tiempoActual,
-        TipoEventoDominio.DISPATCH,
-        '',
-        'CPU libre, despachar proceso'
-      );
-    }
+    this.programarDespachoSiNecesario();
     
     agregarEventoInterno(this.state, 'FinTIP', proceso.id, 'Proceso listo para despacho');
   }
@@ -286,7 +304,7 @@ export class AdaptadorSimuladorDominio {
     if (!procesoSeleccionado) return;
     
     // Verificar que el proceso esté en estado LISTO
-    if (procesoSeleccionado.estado !== 'LISTO') {
+    if (procesoSeleccionado.estado !== EstadoProceso.LISTO) {
       console.log(`⚠️ Proceso ${procesoSeleccionado.id} no está LISTO (estado: ${procesoSeleccionado.estado}), removiendo de cola`);
       // Remover proceso inválido de la cola
       const index = this.simuladorDominio.readyQueue.indexOf(procesoSeleccionado);
@@ -314,12 +332,22 @@ export class AdaptadorSimuladorDominio {
     }
     
     this.simuladorDominio.procesoActualCPU = procesoSeleccionado;
-    procesoSeleccionado.activar(this.simuladorDominio.tiempoActual + this.simuladorDominio.parametros.TCP);
+    // CORRECCIÓN: activar con el tiempo de despacho real, no con TCP incluido
+    const ultimoDispatchAnterior = procesoSeleccionado.ultimoDispatch;
+    procesoSeleccionado.activar(this.simuladorDominio.tiempoActual);
     
-    // Programar fin de ráfaga CPU
+    // CORRECCIÓN CRÍTICA: Si este es un re-despacho inmediato del mismo proceso tras expropiación,
+    // conservar el ultimoDispatch original para calcular correctamente el tiempo ejecutado
+    if (ultimoDispatchAnterior !== undefined && 
+        ultimoDispatchAnterior <= this.simuladorDominio.tiempoActual &&
+        this.simuladorDominio.tiempoActual - ultimoDispatchAnterior <= (this.simuladorDominio.parametros.quantum || 0)) {
+      procesoSeleccionado.ultimoDispatch = ultimoDispatchAnterior;
+    }
+    
+    // Programar fin de ráfaga CPU usando tiempo restante actual
     const tiempoFinRafaga = this.simuladorDominio.tiempoActual + 
                            this.simuladorDominio.parametros.TCP + 
-                           procesoSeleccionado.duracionCPU;
+                           procesoSeleccionado.restanteCPU;  // CORRECCIÓN: usar restanteCPU
     
     this.simuladorDominio.programarEvento(
       tiempoFinRafaga,
@@ -344,8 +372,6 @@ export class AdaptadorSimuladorDominio {
           procesoSeleccionado.id,
           'Vencimiento de quantum RR'
         );
-        
-        console.log(`⏰ Quantum programado para ${procesoSeleccionado.id} en tiempo ${tiempoVencimientoQuantum} (quantum real: ${this.simuladorDominio.parametros.quantum})`);
       }
     }
     
@@ -364,17 +390,28 @@ export class AdaptadorSimuladorDominio {
     
     // Verificar que el proceso realmente esté ejecutando (no haya sido expropiado)
     if (this.simuladorDominio.procesoActualCPU?.id !== proceso.id) {
-      console.log(`⚠️ Ignorando fin de ráfaga obsoleto de ${proceso.id} - no está ejecutando`);
+      console.log(`⚠️ Ignorando fin de ráfaga obsoleta de ${proceso.id} - no está ejecutando`);
       return;
     }
     
+    // CORRECCIÓN: Eliminar validación incorrecta que bloqueaba eventos válidos
+    // La validación anterior comparaba incorrectamente tiempo transcurrido con restanteCPU
+    
     this.simuladorDominio.procesoActualCPU = undefined;
+    
+    // CORRECCIÓN CRÍTICA: Solo contabilizar el tiempo restante no contabilizado previamente
+    // El tiempo ya ejecutado en expropiaciones se contabilizó en procesarTiempoCPU()
+    // Aquí solo contamos lo que falta completar de la ráfaga actual
+    const tiempoRestanteRafaga = proceso.restanteCPU;
+    if (tiempoRestanteRafaga > 0) {
+      this.simuladorDominio.tiempoTotalUsuario += tiempoRestanteRafaga;
+    }
+    
+    // Completar ráfaga y confiar en el estado que establece
     proceso.completarCPU(this.simuladorDominio.tiempoActual);
     
-    // Actualizar contadores
-    this.simuladorDominio.tiempoTotalUsuario += proceso.duracionCPU;
-    
-    if (proceso.estaCompleto()) {
+    // Usar el estado que completarCPU() estableció
+    if (proceso.estado === EstadoProceso.TERMINADO) {
       // Proceso terminado - programar TFP
       this.simuladorDominio.programarEvento(
         this.simuladorDominio.tiempoActual + this.simuladorDominio.parametros.TFP,
@@ -387,51 +424,90 @@ export class AdaptadorSimuladorDominio {
       
       agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.id, 
         'Proceso completado, iniciando TFP');
-    } else {
-      // Va a I/O (instantáneo)
+    } else if (proceso.estado === EstadoProceso.BLOQUEADO) {
+      // Va a I/O - debe durar tiempo real de I/O
       this.simuladorDominio.procesosBloqueados.push(proceso);
       
+      // I/O debe durar proceso.duracionIO unidades
       this.simuladorDominio.programarEvento(
-        this.simuladorDominio.tiempoActual,
+        this.simuladorDominio.tiempoActual + proceso.duracionIO,
         TipoEventoDominio.IO_COMPLETA,
         proceso.id,
-        'I/O instantáneo completado'
+        `I/O completado tras ${proceso.duracionIO} unidades`
       );
       
       agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.id, 
-        `Yendo a I/O por ${proceso.duracionIO} unidades`);
+        `Inicia I/O por ${proceso.duracionIO} unidades`);
     }
     
     // Despachar siguiente proceso si hay alguno listo
-    if (this.simuladorDominio.readyQueue.length > 0) {
-      this.simuladorDominio.programarEvento(
-        this.simuladorDominio.tiempoActual,
-        TipoEventoDominio.DISPATCH,
-        '',
-        'Despachar siguiente proceso'
-      );
-    }
+    this.programarDespachoSiNecesario();
   }
 
   /**
    * Maneja el fin de I/O de un proceso
+   * CRÍTICO: La transición Bloqueado→Listo es INSTANTÁNEA (Δt=0)
+   * El TCP se cobra únicamente en Listo→Corriendo, NO aquí
    */
   private manejarFinIO(proceso: Proceso): void {
     console.log(`💿 Fin I/O del proceso ${proceso.id} en tiempo ${this.simuladorDominio.tiempoActual}`);
+    
+    // CORRECCIÓN CRÍTICA: B→L es instantáneo, NO consumir TCP aquí
+    // El TCP se aplica exclusivamente en L→C (manejarDespacho)
     
     this.simuladorDominio.removerDeListaBloqueados(proceso.id);
     proceso.completarIO(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.readyQueue.push(proceso);
     
-    // Despachar si CPU está libre
-    if (!this.simuladorDominio.procesoActualCPU) {
-      this.simuladorDominio.programarEvento(
-        this.simuladorDominio.tiempoActual,
-        TipoEventoDominio.DISPATCH,
-        '',
-        'CPU libre tras I/O'
-      );
+    // Para algoritmos expropitativos (como SRTN), verificar si debe expropiar tras regreso de I/O
+    if (this.estrategia.soportaExpropiacion && this.simuladorDominio.procesoActualCPU) {
+      const procesoActual = this.simuladorDominio.procesoActualCPU;
+      
+      // Verificar si el proceso que regresa de I/O debe expropiar al actual
+      if (this.estrategia.debeExpropiar && this.estrategia.debeExpropiar(procesoActual, proceso, this.simuladorDominio.tiempoActual)) {
+        console.log(`🔄 EXPROPIACIÓN tras I/O: ${proceso.id} expropia a ${procesoActual.id}`);
+        
+        // Calcular cuánto tiempo ya ejecutó el proceso actual
+        // CORRECCIÓN: El tiempo de ejecución debe descontar el TCP
+        const tiempoInicioEjecucionReal = (procesoActual.ultimoDispatch || this.simuladorDominio.tiempoActual) + this.simuladorDominio.parametros.TCP;
+        const tiempoEjecutado = Math.max(0, this.simuladorDominio.tiempoActual - tiempoInicioEjecucionReal);
+        
+        // Actualizar tiempo restante del proceso expropiado
+        if (tiempoEjecutado > 0) {
+          this.procesarTiempoCPU(procesoActual, tiempoEjecutado);
+        }
+        
+        // Expropiar el proceso actual
+        procesoActual.expropiar(this.simuladorDominio.tiempoActual);
+        
+        // GENERAR EVENTO CORRIENDO_A_LISTO para el proceso expropiado
+        agregarEventoInterno(this.state, 'AgotamientoQuantum', procesoActual.id, 
+          `Proceso expropiado por ${proceso.id} tras I/O (SRTN)`);
+        
+        // Remover proceso actual de CPU y agregarlo a la cola ordenadamente
+        this.simuladorDominio.procesoActualCPU = undefined;
+        this.simuladorDominio.readyQueue.push(procesoActual); // Agregar al final
+        
+        // CRITICAL: Para SRTN, reordenar la cola según tiempo restante
+        if (this.estrategia.nombre.includes('SRTF') || this.estrategia.nombre.includes('SRTN')) {
+          this.estrategia.ordenarColaListos?.(this.simuladorDominio.readyQueue);
+        }
+        
+        // Programar despacho inmediato del proceso que regresa de I/O (forzar por expropiación)
+        this.simuladorDominio.programarEvento(
+          this.simuladorDominio.tiempoActual,
+          TipoEventoDominio.DISPATCH,
+          '',
+          'Despacho por expropiación tras I/O'
+        );
+        
+        agregarEventoInterno(this.state, 'FinES', proceso.id, 'I/O completado, expropió proceso actual');
+        return;
+      }
     }
+    
+    // Si no hay expropiación, despachar si CPU está libre
+    this.programarDespachoSiNecesario();
     
     agregarEventoInterno(this.state, 'FinES', proceso.id, 'I/O completado, proceso listo');
   }
@@ -445,8 +521,11 @@ export class AdaptadorSimuladorDominio {
     proceso.terminar(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.marcarComoTerminado(proceso);
     
+    // Despachar siguiente proceso si hay alguno listo
+    this.programarDespachoSiNecesario();
+    
     agregarEventoInterno(this.state, 'FinTFP', proceso.id, 'Proceso completamente terminado');
-    agregarEventoExportacion(this.state, 'PROCESO_TERMINA', proceso.id);
+    agregarEventoExportacion(this.state, 'FinTFP', proceso.id);
   }
 
   /**
@@ -462,21 +541,74 @@ export class AdaptadorSimuladorDominio {
     }
     
     // Verificar que el proceso no esté terminado
-    if (proceso.estaCompleto() || proceso.estado === 'TERMINADO') {
+    if (proceso.estaCompleto() || proceso.estado === EstadoProceso.TERMINADO) {
       console.log(`⚠️ Ignorando expropiación obsoleta de ${proceso.id} - proceso terminado`);
       return;
     }
     
+    // VERIFICACIÓN ADICIONAL: Si el proceso no tiene más CPU restante, no expropiar
+    if (proceso.restanteCPU <= 0) {
+      console.log(`⚠️ Ignorando expropiación obsoleta de ${proceso.id} - CPU agotado`);
+      return;
+    }
+    
+    // CORRECCIÓN CRÍTICA: Actualizar tiempo CPU ejecutado antes de expropiar
+    // El tiempo de ejecución debe descontar el TCP
+    const ultimoDispatch = proceso.ultimoDispatch || this.simuladorDominio.tiempoActual;
+    const tiempoInicioEjecucionReal = ultimoDispatch + this.simuladorDominio.parametros.TCP;
+    const tiempoEjecutado = Math.max(0, this.simuladorDominio.tiempoActual - tiempoInicioEjecucionReal);
+    
+    if (tiempoEjecutado > 0) {
+      this.procesarTiempoCPU(proceso, tiempoEjecutado);
+    }
+    
+    // Verificar nuevamente si el proceso terminó tras procesar CPU
+    if (proceso.estaCompleto() || proceso.restanteCPU <= 0) {
+      console.log(`⚠️ Proceso ${proceso.id} terminó durante expropiación - cancelando`);
+      return;
+    }
+    
+    // CORRECCIÓN RR: Verificar si es el único proceso en el sistema
+    const totalProcesosActivos = this.simuladorDominio.readyQueue.length + 
+                                 this.simuladorDominio.procesosBloqueados.length + 
+                                 (this.simuladorDominio.procesoActualCPU ? 1 : 0);
+    
+    if (totalProcesosActivos === 1 && this.estrategia.nombre === 'Round Robin') {
+      // Caso especial: RR con un solo proceso
+      // Según consigna: "pasamos a listo y luego le volvemos a asignar la cpu (usamos un TCP)"
+      console.log(`🔄 RR proceso único: ${proceso.id} va a LISTO y regresa (consume TCP)`);
+      
+      this.simuladorDominio.procesoActualCPU = undefined;
+      proceso.expropiar(this.simuladorDominio.tiempoActual);
+      this.simuladorDominio.readyQueue.push(proceso);
+      
+      // Aplicar TCP por el cambio de contexto (según consigna TP)
+      this.simuladorDominio.tiempoTotalSO += this.simuladorDominio.parametros.TCP;
+      
+      // Programar despacho inmediato con micro-offset
+      this.simuladorDominio.programarEvento(
+        this.simuladorDominio.tiempoActual + 0.0001,
+        TipoEventoDominio.DISPATCH,
+        '',
+        'Despacho tras expropiación RR (proceso único)'
+      );
+      
+      agregarEventoInterno(this.state, 'AgotamientoQuantum', proceso.id, 'Proceso único expropiado (consume TCP)');
+      return;
+    }
+    
+    // Caso normal: múltiples procesos
     this.simuladorDominio.procesoActualCPU = undefined;
     proceso.expropiar(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.readyQueue.push(proceso);
     
-    // Despachar siguiente proceso
+    // CORRECCIÓN: En RR, el despacho debe ser inmediato pero CON un pequeño offset
+    // para asegurar que se procese después de la expropiación
     this.simuladorDominio.programarEvento(
-      this.simuladorDominio.tiempoActual,
+      this.simuladorDominio.tiempoActual + 0.0001, // Micro-offset para ordenamiento correcto
       TipoEventoDominio.DISPATCH,
       '',
-      'Despachar tras expropiación'
+      'Despacho tras expropiación RR'
     );
     
     agregarEventoInterno(this.state, 'AgotamientoQuantum', proceso.id, 'Proceso expropiado');
@@ -489,22 +621,9 @@ export class AdaptadorSimuladorDominio {
     // Actualizar tiempo final
     this.state.tiempoActual = this.simuladorDominio.tiempoActual;
     
-    // Sincronizar estados de procesos
-    for (const [nombre, procesoRT] of this.state.procesos) {
-      const procesoDominio = this.procesosDominio.get(nombre);
-      if (procesoDominio) {
-        const procesoActualizado = AdaptadorEntidadesDominio.procesoAProcesoRT(procesoDominio);
-        // Mantener propiedades que no se convierten
-        procesoRT.estado = procesoActualizado.estado;
-        procesoRT.rafagasRestantes = procesoActualizado.rafagasRestantes;
-        procesoRT.restanteEnRafaga = procesoActualizado.restanteEnRafaga;
-        procesoRT.tiempoListoAcumulado = procesoActualizado.tiempoListoAcumulado;
-        procesoRT.tipCumplido = procesoActualizado.tipCumplido;
-        procesoRT.inicioTIP = procesoActualizado.inicioTIP;
-        procesoRT.finTIP = procesoActualizado.finTIP;
-        procesoRT.primerDespacho = procesoActualizado.primerDespacho;
-        procesoRT.finTFP = procesoActualizado.finTFP;
-      }
+    // CORRECCIÓN: Sincronizar las entidades actualizadas del simulador al estado
+    for (const [nombre, procesoActualizado] of this.procesosDominio) {
+      this.state.procesos.set(nombre, procesoActualizado);
     }
     
     // Actualizar contadores CPU
@@ -525,5 +644,16 @@ export class AdaptadorSimuladorDominio {
       'RR': 'RR'
     };
     return mapeo[policy] || policy;
+  }
+
+  /**
+   * Procesa tiempo de CPU de un proceso y actualiza contadores del simulador
+   */
+  private procesarTiempoCPU(proceso: Proceso, tiempoEjecutado: number): void {
+    if (tiempoEjecutado > 0) {
+      proceso.procesarCPU(tiempoEjecutado);
+      // Actualizar directamente el contador de tiempo de usuario
+      this.simuladorDominio.tiempoTotalUsuario += tiempoEjecutado;
+    }
   }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DatosSimulacionCompleta } from '$lib/application/simuladorLogic';
-  import type { SimEvent, TipoEvento } from '$lib/domain/types';
+  import type { SimEvent } from '$lib/domain/types';
+  import { TipoEvento } from '$lib/domain/types';
   
   export let datosSimulacion: DatosSimulacionCompleta;
   
@@ -12,32 +13,32 @@
   
   // Tipos de eventos según la consigna
   const EVENTOS_PRINCIPALES = [
-    'JOB_LLEGA',                    // Arribo de trabajo
-    'NUEVO_A_LISTO',               // Incorporación al sistema (tras TIP)
-    'FIN_RAFAGA_CPU',              // Fin de ráfaga
-    'QUANTUM_EXPIRES',             // Agotamiento quantum
-    'IO_COMPLETA',                 // Fin de E/S
-    'IO_INTERRUPCION_ATENDIDA',    // Atención interrupción
-    'PROCESO_TERMINA'              // Terminación proceso
+    TipoEvento.JOB_LLEGA,                    // Arribo de trabajo
+    TipoEvento.NUEVO_A_LISTO,               // Incorporación al sistema (tras TIP)
+    TipoEvento.FIN_RAFAGA_CPU,              // Fin de ráfaga
+    TipoEvento.QUANTUM_EXPIRES,             // Agotamiento quantum
+    TipoEvento.IO_COMPLETA,                 // Fin de E/S
+    TipoEvento.IO_INTERRUPCION_ATENDIDA,    // Atención interrupción
+    TipoEvento.PROCESO_TERMINA              // Terminación proceso
   ];
   
   const TRANSICIONES_ESTADO = [
-    'CORRIENDO_A_TERMINADO',
-    'CORRIENDO_A_BLOQUEADO',
-    'CORRIENDO_A_LISTO',
-    'BLOQUEADO_A_LISTO',
-    'NUEVO_A_LISTO',
-    'LISTO_A_CORRIENDO'
+    TipoEvento.CORRIENDO_A_TERMINADO,
+    TipoEvento.CORRIENDO_A_BLOQUEADO,
+    TipoEvento.CORRIENDO_A_LISTO,
+    TipoEvento.BLOQUEADO_A_LISTO,
+    TipoEvento.NUEVO_A_LISTO,
+    TipoEvento.LISTO_A_CORRIENDO
   ];
   
   // Orden de procesamiento según la consigna
   const ORDEN_PROCESAMIENTO = [
-    'CORRIENDO_A_TERMINADO',     // 1. Corriendo a Terminado
-    'CORRIENDO_A_BLOQUEADO',     // 2. Corriendo a Bloqueado
-    'CORRIENDO_A_LISTO',         // 3. Corriendo a Listo
-    'BLOQUEADO_A_LISTO',         // 4. Bloqueado a Listo
-    'NUEVO_A_LISTO',             // 5. Nuevo a Listo
-    'LISTO_A_CORRIENDO'          // 6. Finalmente el despacho de Listo a Corriendo
+    TipoEvento.CORRIENDO_A_TERMINADO,     // 1. Corriendo a Terminado
+    TipoEvento.CORRIENDO_A_BLOQUEADO,     // 2. Corriendo a Bloqueado
+    TipoEvento.CORRIENDO_A_LISTO,         // 3. Corriendo a Listo
+    TipoEvento.BLOQUEADO_A_LISTO,         // 4. Bloqueado a Listo
+    TipoEvento.NUEVO_A_LISTO,             // 5. Nuevo a Listo
+    TipoEvento.LISTO_A_CORRIENDO          // 6. Finalmente el despacho de Listo a Corriendo
   ];
   
   $: eventos = datosSimulacion?.resultados?.events || [];
@@ -51,35 +52,35 @@
     const extra = evento.extra || '';
     
     switch (tipo) {
-      case 'JOB_LLEGA':
+      case TipoEvento.JOB_LLEGA:
         return `📩 Proceso ${proceso} arriba al sistema`;
-      case 'NUEVO_A_LISTO':
+      case TipoEvento.NUEVO_A_LISTO:
         return `🔄 Proceso ${proceso} se incorpora al sistema (NUEVO → LISTO) ${extra}`;
-      case 'DISPATCH':
+      case TipoEvento.DISPATCH:
         return `🎯 Dispatcher asigna CPU a proceso ${proceso} ${extra}`;
-      case 'FIN_RAFAGA_CPU':
+      case TipoEvento.FIN_RAFAGA_CPU:
         return `⚡ Proceso ${proceso} completa ráfaga de CPU ${extra}`;
-      case 'QUANTUM_EXPIRES':
+      case TipoEvento.QUANTUM_EXPIRES:
         return `⏰ Quantum agotado para proceso ${proceso} (Round Robin) ${extra}`;
-      case 'IO_COMPLETA':
+      case TipoEvento.IO_COMPLETA:
         return `✅ Proceso ${proceso} termina operación de E/S ${extra}`;
-      case 'IO_INTERRUPCION_ATENDIDA':
+      case TipoEvento.IO_INTERRUPCION_ATENDIDA:
         return `📨 Atendida interrupción de E/S para proceso ${proceso} ${extra}`;
-      case 'PROCESO_TERMINA':
+      case TipoEvento.PROCESO_TERMINA:
         return `🏁 Proceso ${proceso} termina completamente ${extra}`;
       
       // Transiciones de estado según teoría de SO
-      case 'CORRIENDO_A_TERMINADO':
+      case TipoEvento.CORRIENDO_A_TERMINADO:
         return `🔴 TRANSICIÓN: ${proceso} CORRIENDO → TERMINADO ${extra}`;
-      case 'CORRIENDO_A_BLOQUEADO':
+      case TipoEvento.CORRIENDO_A_BLOQUEADO:
         return `🟡 TRANSICIÓN: ${proceso} CORRIENDO → BLOQUEADO (por E/S) ${extra}`;
-      case 'CORRIENDO_A_LISTO':
+      case TipoEvento.CORRIENDO_A_LISTO:
         return `🟠 TRANSICIÓN: ${proceso} CORRIENDO → LISTO (expropiación) ${extra}`;
-      case 'BLOQUEADO_A_LISTO':
+      case TipoEvento.BLOQUEADO_A_LISTO:
         return `🟢 TRANSICIÓN: ${proceso} BLOQUEADO → LISTO (fin E/S) ${extra}`;
-      case 'NUEVO_A_LISTO':
+      case TipoEvento.NUEVO_A_LISTO:
         return `🟦 TRANSICIÓN: ${proceso} NUEVO → LISTO (admisión) ${extra}`;
-      case 'LISTO_A_CORRIENDO':
+      case TipoEvento.LISTO_A_CORRIENDO:
         return `🟣 TRANSICIÓN: ${proceso} LISTO → CORRIENDO (dispatch) ${extra}`;
       
       default:
@@ -88,43 +89,43 @@
   }
   
   function obtenerIconoEvento(tipo: string): string {
-    if (TRANSICIONES_ESTADO.includes(tipo)) {
+    if (TRANSICIONES_ESTADO.includes(tipo as TipoEvento)) {
       switch (tipo) {
-        case 'CORRIENDO_A_TERMINADO': return '🔴';
-        case 'CORRIENDO_A_BLOQUEADO': return '🟡';
-        case 'CORRIENDO_A_LISTO': return '🟠';
-        case 'BLOQUEADO_A_LISTO': return '🟢';
-        case 'NUEVO_A_LISTO': return '🟦';
-        case 'LISTO_A_CORRIENDO': return '🟣';
+        case TipoEvento.CORRIENDO_A_TERMINADO: return '🔴';
+        case TipoEvento.CORRIENDO_A_BLOQUEADO: return '🟡';
+        case TipoEvento.CORRIENDO_A_LISTO: return '🟠';
+        case TipoEvento.BLOQUEADO_A_LISTO: return '🟢';
+        case TipoEvento.NUEVO_A_LISTO: return '🟦';
+        case TipoEvento.LISTO_A_CORRIENDO: return '🟣';
         default: return '🔄';
       }
     }
     
     switch (tipo) {
-      case 'JOB_LLEGA': return '📩';
-      case 'NUEVO_A_LISTO': return '🔄';
-      case 'DISPATCH': return '🎯';
-      case 'FIN_RAFAGA_CPU': return '⚡';
-      case 'QUANTUM_EXPIRES': return '⏰';
-      case 'IO_COMPLETA': return '✅';
-      case 'IO_INTERRUPCION_ATENDIDA': return '📨';
-      case 'PROCESO_TERMINA': return '🏁';
+      case TipoEvento.JOB_LLEGA: return '📩';
+      case TipoEvento.NUEVO_A_LISTO: return '🔄';
+      case TipoEvento.DISPATCH: return '🎯';
+      case TipoEvento.FIN_RAFAGA_CPU: return '⚡';
+      case TipoEvento.QUANTUM_EXPIRES: return '⏰';
+      case TipoEvento.IO_COMPLETA: return '✅';
+      case TipoEvento.IO_INTERRUPCION_ATENDIDA: return '📨';
+      case TipoEvento.PROCESO_TERMINA: return '🏁';
       default: return '📝';
     }
   }
   
   function obtenerCategoriaEvento(tipo: string): string {
-    if (TRANSICIONES_ESTADO.includes(tipo)) {
+    if (TRANSICIONES_ESTADO.includes(tipo as TipoEvento)) {
       return 'transicion';
     }
-    if (EVENTOS_PRINCIPALES.includes(tipo)) {
+    if (EVENTOS_PRINCIPALES.includes(tipo as TipoEvento)) {
       return 'principal';
     }
     return 'sistema';
   }
   
   function obtenerPrioridadOrden(tipo: string): number {
-    const index = ORDEN_PROCESAMIENTO.indexOf(tipo);
+    const index = ORDEN_PROCESAMIENTO.indexOf(tipo as TipoEvento);
     return index !== -1 ? index : 999;
   }
   
@@ -133,10 +134,10 @@
     .filter(evento => {
       // Filtro por tipo
       if (filtroTipo !== 'todos') {
-        if (filtroTipo === 'transiciones' && !TRANSICIONES_ESTADO.includes(evento.tipo)) {
+        if (filtroTipo === 'transiciones' && !TRANSICIONES_ESTADO.includes(evento.tipo as TipoEvento)) {
           return false;
         }
-        if (filtroTipo === 'principales' && !EVENTOS_PRINCIPALES.includes(evento.tipo)) {
+        if (filtroTipo === 'principales' && !EVENTOS_PRINCIPALES.includes(evento.tipo as TipoEvento)) {
           return false;
         }
         if (filtroTipo !== 'transiciones' && filtroTipo !== 'principales' && evento.tipo !== filtroTipo) {
@@ -155,7 +156,7 @@
       }
       
       // Mostrar solo transiciones
-      if (mostrarSoloTransiciones && !TRANSICIONES_ESTADO.includes(evento.tipo)) {
+      if (mostrarSoloTransiciones && !TRANSICIONES_ESTADO.includes(evento.tipo as TipoEvento)) {
         return false;
       }
       

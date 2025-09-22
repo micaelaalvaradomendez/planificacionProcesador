@@ -31,20 +31,20 @@ export class EstrategiaSchedulerSrtf extends EstrategiaSchedulerBase {
   }
 
   /**
-   * Ordena la cola por tiempo restante de ráfaga de CPU actual (SRTF)
-   * NOTA IMPORTANTE: SRTF debe usar restanteCPU (tiempo restante de ráfaga actual),
-   * NO restanteTotalCPU (tiempo restante total del proceso)
+   * Ordena la cola por tiempo restante TOTAL de CPU (SRTN verdadero)
+   * NOTA IMPORTANTE: SRTN debe usar restanteTotalCPU (tiempo total restante),
+   * NO restanteCPU (tiempo restante de ráfaga actual)
    */
   public ordenarColaListos(colaListos: Proceso[]): void {
-    colaListos.sort((a, b) => a.restanteCPU - b.restanteCPU);
+    colaListos.sort((a, b) => a.restanteTotalCPU - b.restanteTotalCPU);
   }
 
   /**
-   * En SRTF, expropia si llega un proceso con menor tiempo restante en su ráfaga actual
+   * En SRTN, expropia si llega un proceso con menor tiempo TOTAL restante
    */
   public debeExpropiar(procesoActual: Proceso, procesoCandidato: Proceso, tiempoActual: number): boolean {
-    // Preempt si el proceso candidato tiene menor tiempo restante en su ráfaga actual
-    return procesoCandidato.restanteCPU < procesoActual.restanteCPU;
+    // Preempt si el proceso candidato tiene menor tiempo TOTAL restante
+    return procesoCandidato.restanteTotalCPU < procesoActual.restanteTotalCPU;
   }
 
   /**
@@ -73,12 +73,12 @@ export class EstrategiaSchedulerSrtf extends EstrategiaSchedulerBase {
       return false;
     }
 
-    // Buscar si hay algún proceso en READY con menor tiempo restante DE RÁFAGA ACTUAL
+    // Buscar si hay algún proceso en READY con menor tiempo TOTAL restante
     const masCortoPorLlegar = colaListos.reduce((masCorto, proceso) => 
-      proceso.restanteCPU < masCorto.restanteCPU ? proceso : masCorto
+      proceso.restanteTotalCPU < masCorto.restanteTotalCPU ? proceso : masCorto
     );
 
-    return masCortoPorLlegar.restanteCPU < procesoActual.restanteCPU;
+    return masCortoPorLlegar.restanteTotalCPU < procesoActual.restanteTotalCPU;
   }
 
   /**

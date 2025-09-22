@@ -157,7 +157,7 @@ export function useSimulationUI() {
       
       // Construir datos del Gantt
       console.log('🎨 Generando diagrama de Gantt...');
-      const ganttData = construirDiagramaGantt(result.events);
+      const ganttData = construirDiagramaGantt(result.events, currentState.workload.config);
       console.log('✅ Diagrama construido:', {
         tiempoTotal: ganttData.tiempoTotal,
         segmentos: ganttData.segmentos.length,

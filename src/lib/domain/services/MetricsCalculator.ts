@@ -9,9 +9,11 @@ import type {
   MetricsPerProcess, 
   BatchMetrics
 } from '../types';
+import { EstadoProceso } from '../types';
+import { Proceso } from '../entities/Proceso';
 
 // Importaciones temporales desde core hasta migrar completamente
-import type { SimState, ProcesoRT } from '../../core/state';
+import type { SimState } from '../../core/state';
 
 /**
  * Estadísticas extendidas de la simulación
@@ -93,7 +95,7 @@ export class MetricsCalculator {
     const metricas: MetricsPerProcess[] = [];
 
     for (const [nombreProceso, proceso] of estadoFinal.procesos) {
-      if (proceso.estado !== 'Terminado' || !proceso.finTFP) {
+      if (proceso.estado !== EstadoProceso.TERMINADO || !proceso.fin) {
         continue;
       }
 
@@ -105,7 +107,7 @@ export class MetricsCalculator {
         name: nombreProceso,
         tiempoRetorno,
         tiempoRetornoNormalizado,
-        tiempoEnListo: proceso.tiempoListoAcumulado
+        tiempoEnListo: proceso.tiempoListoTotal
       });
     }
 
@@ -169,13 +171,13 @@ export class MetricsCalculator {
   // MÉTODOS PRIVADOS
   // ========================================
 
-  private static calcularTiempoRetorno(proceso: ProcesoRT): number {
-    if (!proceso.tiempoArribo || !proceso.finTFP) return 0;
-    return proceso.finTFP - proceso.tiempoArribo;
+  private static calcularTiempoRetorno(proceso: Proceso): number {
+    if (proceso.arribo === undefined || proceso.fin === undefined) return 0;
+    return proceso.fin - proceso.arribo;
   }
 
-  private static calcularTiempoServicio(proceso: ProcesoRT): number {
-    return (proceso.rafagasCPU || 0) * (proceso.duracionRafagaCPU || 0);
+  private static calcularTiempoServicio(proceso: Proceso): number {
+    return (proceso.rafagasCPU || 0) * (proceso.duracionCPU || 0);
   }
 
   private static calcularPromedio(valores: number[]): number {
@@ -187,14 +189,28 @@ export class MetricsCalculator {
     const tiempoTotal = estado.tiempoActual;
     if (tiempoTotal === 0) return { cpuProcesos: 0, cpuSO: 0, cpuOcioso: 0 };
 
-    // Calcular desde los eventos o estado interno
+    // CORRECCIÓN: Usar datos reales del estado del core
+    if (estado.contadoresCPU) {
+      const cpuProcesos = estado.contadoresCPU.procesos || 0;
+      const cpuSO = estado.contadoresCPU.sistemaOperativo || 0;
+      const cpuOcioso = estado.contadoresCPU.ocioso || 0;
+      
+      console.log(`📊 Métricas usando datos reales del core:`, {
+        cpuProcesos, cpuSO, cpuOcioso, tiempoTotal,
+        utilizacion: ((cpuProcesos + cpuSO) / tiempoTotal * 100).toFixed(2) + '%'
+      });
+      
+      return { cpuProcesos, cpuSO, cpuOcioso };
+    }
+
+    // Fallback: Calcular desde los eventos o estado interno (método anterior)
     let cpuProcesos = 0;
     let cpuSO = 0;
     
     // Estimar tiempos basándose en procesos completados
     for (const [, proceso] of estado.procesos) {
-      if (proceso.estado === 'Terminado') {
-        cpuProcesos += (proceso.rafagasCPU || 0) * (proceso.duracionRafagaCPU || 0);
+      if (proceso.estado === EstadoProceso.TERMINADO) {
+        cpuProcesos += (proceso.rafagasCPU || 0) * (proceso.duracionCPU || 0);
         // Estimar overhead del SO (TIP + TFP + TCP estimado)
         cpuSO += 2; // TIP + TFP simplificado
       }

@@ -105,11 +105,11 @@ export interface EstadisticasCompletas {
 export type Policy = 'FCFS' | 'PRIORITY' | 'RR' | 'SPN' | 'SRTN';
 
 export interface ProcessSpec {
-  name: string;
-  tiempoArribo: number;
+  id: string;
+  arribo: number;
   rafagasCPU: number;
-  duracionRafagaCPU: number;
-  duracionRafagaES: number;
+  duracionCPU: number;
+  duracionIO: number;
   prioridad: number; // 1..100 (mayor = más prioridad)
 }
 

@@ -5,7 +5,8 @@
 
 import type { Workload, SimEvent, Metrics, EventType } from '../../domain/types';
 import { TipoEvento } from '../../domain/types';
-import { validarWorkloadParaSimulacion, calcularMetricasCompletas } from '../../core';
+import { validarWorkloadParaSimulacion } from '../../core';
+import { MetricsCalculator } from '../../domain/services/MetricsCalculator';
 import { AdaptadorSimuladorDominio } from '../../core/adaptadorSimuladorDominio';
 import { convertirEventosInternos } from '../../infrastructure/io/eventLogger';
 
@@ -55,7 +56,7 @@ export async function ejecutarSimulacionCompleta(
     }
     
     // Calcular métricas (ya incluye porcentajes)
-    const metricas = calcularMetricasCompletas(resultado.estadoFinal);
+    const metricas = MetricsCalculator.calcularMetricasCompletas(resultado.estadoFinal);
     
     // Calcular tiempo total
     const tiempoTotal = metricas.tanda.cpuOcioso + 
@@ -187,7 +188,7 @@ export function validarConfiguracionSimulacion(workload: Workload): {
   // Sugerencias adicionales
   if (workload.config.policy === 'RR' && workload.config.quantum) {
     const quantumPromedio = workload.processes.reduce(
-      (sum, p) => sum + p.duracionRafagaCPU, 0
+      (sum, p) => sum + p.duracionCPU, 0
     ) / workload.processes.length;
     
     if (workload.config.quantum > quantumPromedio * 2) {
@@ -204,7 +205,7 @@ export function validarConfiguracionSimulacion(workload: Workload): {
   }
 
   // Verificar balance de carga
-  const tiemposArribo = workload.processes.map(p => p.tiempoArribo);
+  const tiemposArribo = workload.processes.map(p => p.arribo);
   const arriboMinimo = Math.min(...tiemposArribo);
   const arriboMaximo = Math.max(...tiemposArribo);
   

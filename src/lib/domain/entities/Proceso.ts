@@ -81,9 +81,12 @@ export class Proceso {
   }
 
   completarCPU(tiempoActual: number): void {
+    // Descontar solo lo que queda de la ráfaga actual
+    // (si fue expropiado, ya se descontó parte en procesarCPU)
+    this.restanteTotalCPU -= this.restanteCPU;
+    
     this.rafagasRestantes--;
-    this.restanteCPU = this.duracionCPU;
-    this.restanteTotalCPU -= this.duracionCPU;
+    this.restanteCPU = this.duracionCPU; // Reset para próxima ráfaga
 
     if (this.rafagasRestantes > 0) {
       this.bloquearIO(tiempoActual);
@@ -109,7 +112,11 @@ export class Proceso {
     this.pendienteTFP = false;
   }
 
-  procesarCPU(tiempo: number): void {this.restanteCPU = Math.max(0, this.restanteCPU - tiempo);}
+  procesarCPU(tiempo: number): void {
+    const tiempoReal = Math.min(tiempo, this.restanteCPU);
+    this.restanteCPU = Math.max(0, this.restanteCPU - tiempo);
+    this.restanteTotalCPU = Math.max(0, this.restanteTotalCPU - tiempoReal);
+  }
   procesarIO(tiempo: number): void {this.restanteIO = Math.max(0, this.restanteIO - tiempo);}
 
   // consultas 

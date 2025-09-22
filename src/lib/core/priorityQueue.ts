@@ -4,10 +4,10 @@
  */
 
 import type { Policy } from '../domain/types';
-import type { ProcesoRT } from './state';
+import type { Proceso } from '../domain/entities/Proceso';
 
 export interface ColaComparator {
-  (a: ProcesoRT, b: ProcesoRT): number;
+  (a: Proceso, b: Proceso): number;
 }
 
 /**
@@ -16,10 +16,10 @@ export interface ColaComparator {
 export const comparadores: Record<Policy, ColaComparator> = {
   FCFS: (a, b) => {
     // Primero por tiempo de arribo, luego por nombre para estabilidad
-    if (a.tiempoArribo !== b.tiempoArribo) {
-      return a.tiempoArribo - b.tiempoArribo;
+    if (a.arribo !== b.arribo) {
+      return a.arribo - b.arribo;
     }
-    return a.name.localeCompare(b.name);
+    return a.id.localeCompare(b.id);
   },
 
   PRIORITY: (a, b) => {
@@ -27,57 +27,57 @@ export const comparadores: Record<Policy, ColaComparator> = {
     if (a.prioridad !== b.prioridad) {
       return a.prioridad - b.prioridad; // orden ascendente por prioridad (1 antes que 4)
     }
-    if (a.tiempoArribo !== b.tiempoArribo) {
-      return a.tiempoArribo - b.tiempoArribo;
+    if (a.arribo !== b.arribo) {
+      return a.arribo - b.arribo;
     }
-    return a.name.localeCompare(b.name);
+    return a.id.localeCompare(b.id);
   },
 
   RR: (a, b) => {
     // En Round Robin, simplemente FIFO (primero llegado, primero servido)
-    if (a.tiempoArribo !== b.tiempoArribo) {
-      return a.tiempoArribo - b.tiempoArribo;
+    if (a.arribo !== b.arribo) {
+      return a.arribo - b.arribo;
     }
-    return a.name.localeCompare(b.name);
+    return a.id.localeCompare(b.id);
   },
 
   SPN: (a, b) => {
     // Shortest Process Next: trabajo más corto primero
-    const tiempoTotalA = a.rafagasRestantes * a.duracionRafagaCPU + 
-                        Math.max(0, a.rafagasRestantes - 1) * a.duracionRafagaES;
-    const tiempoTotalB = b.rafagasRestantes * b.duracionRafagaCPU + 
-                        Math.max(0, b.rafagasRestantes - 1) * b.duracionRafagaES;
+    const tiempoTotalA = a.rafagasRestantes * a.duracionCPU + 
+                        Math.max(0, a.rafagasRestantes - 1) * a.duracionIO;
+    const tiempoTotalB = b.rafagasRestantes * b.duracionCPU + 
+                        Math.max(0, b.rafagasRestantes - 1) * b.duracionIO;
     
     if (tiempoTotalA !== tiempoTotalB) {
       return tiempoTotalA - tiempoTotalB;
     }
     // Empate: FCFS
-    if (a.tiempoArribo !== b.tiempoArribo) {
-      return a.tiempoArribo - b.tiempoArribo;
+    if (a.arribo !== b.arribo) {
+      return a.arribo - b.arribo;
     }
-    return a.name.localeCompare(b.name);
+    return a.id.localeCompare(b.id);
   },
 
   SRTN: (a, b) => {
     // Shortest Remaining Time Next: menor tiempo restante primero
     const tiempoRestanteA = a.rafagasRestantes > 1 ? 
-      a.restanteEnRafaga + (a.rafagasRestantes - 1) * a.duracionRafagaCPU + 
-      (a.rafagasRestantes - 1) * a.duracionRafagaES :
+      a.restanteEnRafaga + (a.rafagasRestantes - 1) * a.duracionCPU + 
+      (a.rafagasRestantes - 1) * a.duracionIO :
       a.restanteEnRafaga;
     
     const tiempoRestanteB = b.rafagasRestantes > 1 ? 
-      b.restanteEnRafaga + (b.rafagasRestantes - 1) * b.duracionRafagaCPU + 
-      (b.rafagasRestantes - 1) * b.duracionRafagaES :
+      b.restanteEnRafaga + (b.rafagasRestantes - 1) * b.duracionCPU + 
+      (b.rafagasRestantes - 1) * b.duracionIO :
       b.restanteEnRafaga;
     
     if (tiempoRestanteA !== tiempoRestanteB) {
       return tiempoRestanteA - tiempoRestanteB;
     }
     // Empate: FCFS
-    if (a.tiempoArribo !== b.tiempoArribo) {
-      return a.tiempoArribo - b.tiempoArribo;
+    if (a.arribo !== b.arribo) {
+      return a.arribo - b.arribo;
     }
-    return a.name.localeCompare(b.name);
+    return a.id.localeCompare(b.id);
   }
 };
 
@@ -142,7 +142,7 @@ export class ColaPrioridadSimulador {
   reordenar(): void {
     const procesos = this.elementos.map(name => this.obtenerProceso(name));
     procesos.sort(this.comparador);
-    this.elementos = procesos.map(p => p.name);
+    this.elementos = procesos.map(p => p.id);
   }
 
   /**

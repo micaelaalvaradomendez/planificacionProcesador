@@ -117,7 +117,7 @@ export function parseTxtToProcesses(
   }
 
   // Validar que no hay nombres duplicados
-  const nombres = processes.map(p => p.name);
+  const nombres = processes.map(p => p.id);  // CORRECCIÓN: usar p.id en lugar de p.name
   const duplicados = [...new Set(nombres.filter((nombre, index) => nombres.indexOf(nombre) !== index))];
   if (duplicados.length > 0) {
     throw ErrorMessages.duplicateNames(duplicados, filename);
@@ -173,12 +173,12 @@ function parseProcessLine(line: string, separator: string, lineNumber: number, f
   const prioridad = parseEntero(prioridadRaw, 'prioridad_externa', lineNumber, 1, 100, filename);
 
   return {
-    name: nombre,
-    tiempoArribo,
-    rafagasCPU,
-    duracionRafagaCPU,
-    duracionRafagaES,
-    prioridad
+    id: nombre,                   // CORRECCIÓN: cambiar name → id
+    arribo: tiempoArribo,         // CORRECCIÓN: cambiar tiempoArribo → arribo  
+    rafagasCPU,                   // ✅ Correcto
+    duracionCPU: duracionRafagaCPU,   // CORRECCIÓN: cambiar duracionRafagaCPU → duracionCPU
+    duracionIO: duracionRafagaES,     // CORRECCIÓN: cambiar duracionRafagaES → duracionIO
+    prioridad                     // ✅ Correcto
   };
 }
 
@@ -269,7 +269,7 @@ export function validateWorkload(workload: Workload): string[] {
   }
   
   // Validar tiempos de arribo no negativos
-  const arribos = workload.processes.map(p => p.tiempoArribo).sort((a, b) => a - b);
+  const arribos = workload.processes.map(p => p.arribo).sort((a, b) => a - b);  // CORRECCIÓN: usar p.arribo
   if (arribos[0] < 0) {
     errors.push('Los tiempos de arribo no pueden ser negativos');
   }

@@ -30,12 +30,29 @@ export class EstrategiaSchedulerSjf extends EstrategiaSchedulerBase {
   }
 
   /**
-   * Ordena la cola por duración de ráfaga de CPU (SJF)
-   * NOTA IMPORTANTE: SJF debe usar duracionCPU (duración de cada ráfaga),
-   * NO duracionTotalCPU ni restanteTotalCPU
+   * Ordena la cola por servicio total restante (SPN - Shortest Process Next)
+   * CORRECCIÓN: SPN debe usar servicio total restante = rafagasRestantes * duracionCPU
+   * NO solo la duración de la próxima ráfaga
    */
   public ordenarColaListos(colaListos: Proceso[]): void {
-    colaListos.sort((a, b) => a.duracionCPU - b.duracionCPU);
+    colaListos.sort((a, b) => {
+      // Servicio total restante = número de ráfagas restantes × duración de cada ráfaga
+      const servicioRestanteA = a.rafagasRestantes * a.duracionCPU;
+      const servicioRestanteB = b.rafagasRestantes * b.duracionCPU;
+      
+      if (servicioRestanteA !== servicioRestanteB) {
+        return servicioRestanteA - servicioRestanteB;
+      }
+      
+      // Empate en servicio restante: desempatar por orden de llegada a READY
+      // Como no tenemos timestamp de llegada a READY, usamos arribo como aproximación
+      if (a.arribo !== b.arribo) {
+        return a.arribo - b.arribo;
+      }
+      
+      // Empate final: orden alfabético por nombre (determinístico)
+      return a.id.localeCompare(b.id);
+    });
   }
 
   /**

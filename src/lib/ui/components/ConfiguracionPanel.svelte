@@ -3,6 +3,7 @@
   
   export let configuracion: ConfiguracionSimulacion;
   export let onConfiguracionChange: (config: ConfiguracionSimulacion) => void = () => {};
+  export let deshabilitado = false;  // Nueva propiedad para control de flujo
   
   // Opciones de políticas
   const politicas = [
@@ -68,12 +69,13 @@
     <h4 class="subtitulo">Algoritmo de Planificación</h4>
     <div class="politicas-grid">
       {#each politicas as politica}
-        <label class="politica-card" class:seleccionada={configuracion.policy === politica.value}>
+        <label class="politica-card" class:seleccionada={configuracion.policy === politica.value} class:deshabilitado>
           <input 
             type="radio" 
             bind:group={configuracion.policy} 
             value={politica.value}
             class="radio-oculto"
+            disabled={deshabilitado}
           />
           <div class="card-header">
             <span class="politica-nombre">{politica.label}</span>
@@ -103,6 +105,7 @@
           bind:value={configuracion.tip}
           class="input-numero"
           placeholder="0"
+          disabled={deshabilitado}
         />
         <small class="descripcion">Tiempo de admisión al sistema</small>
       </div>
@@ -119,6 +122,7 @@
           bind:value={configuracion.tfp}
           class="input-numero"
           placeholder="0"
+          disabled={deshabilitado}
         />
         <small class="descripcion">Tiempo de finalización</small>
       </div>
@@ -135,6 +139,7 @@
           bind:value={configuracion.tcp}
           class="input-numero"
           placeholder="0"
+          disabled={deshabilitado}
         />
         <small class="descripcion">Tiempo de cambio de contexto</small>
       </div>
@@ -153,6 +158,7 @@
             class="input-numero quantum-input"
             placeholder="4"
             required
+            disabled={deshabilitado}
           />
           <small class="descripcion">requerido para RR</small>
         </div>
@@ -383,5 +389,19 @@
       align-items: flex-start;
       gap: 8px;
     }
+  }
+  
+  /* Estados deshabilitados */
+  .politica-card.deshabilitado {
+    opacity: 0.6;
+    cursor: not-allowed;
+    user-select: none;
+  }
+  
+  .input-numero:disabled {
+    background-color: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 </style>

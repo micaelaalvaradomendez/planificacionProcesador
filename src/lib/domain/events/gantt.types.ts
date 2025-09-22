@@ -1,4 +1,4 @@
-import { TipoEvento } from '../types';
+import { TipoEvento, EstadoProceso } from '../types';
 
 /**
  * Evento discreto del sistema con prioridad para el ordenamiento
@@ -21,7 +21,8 @@ export class Evento {
       case TipoEvento.NUEVO_A_LISTO: return 5;          // 5. Nuevo a Listo
       case TipoEvento.LISTO_A_CORRIENDO: return 6;      // 6. Listo a Corriendo (despacho)
       // Eventos principales del sistema
-      case TipoEvento.JOB_LLEGA: return 0;              // Llegada de trabajo (antes que todo)
+      case TipoEvento.PROCESO_TERMINA: return 0;        // TFP - mayor prioridad que ARRIBO
+      case TipoEvento.JOB_LLEGA: return 7;              // ARRIBO - menor prioridad que TFP
       case TipoEvento.DISPATCH: return 6;               // Mismo nivel que LISTO_A_CORRIENDO
       case TipoEvento.QUANTUM_EXPIRES: return 3;        // Tratado como expropiación
       case TipoEvento.IO_COMPLETA: return 4;            // Mismo que BLOQUEADO_A_LISTO
@@ -33,7 +34,13 @@ export class Evento {
     if (this.tiempo !== otro.tiempo) {
       return this.tiempo - otro.tiempo;
     }
-    return this.obtenerPrioridad() - otro.obtenerPrioridad();
+    // Mismo tiempo: comparar por prioridad del tipo de evento
+    const priDiff = this.obtenerPrioridad() - otro.obtenerPrioridad();
+    if (priDiff !== 0) {
+      return priDiff;
+    }
+    // Mismo tiempo y prioridad: orden alfabético por nombre de proceso
+    return this.idProceso.localeCompare(otro.idProceso);
   }
 }
 
@@ -92,8 +99,8 @@ export interface ContextoEvento {
   tiempo: number;
   evento: TipoEvento;
   procesoAfectado: string;
-  estadoAnterior?: string;
-  estadoNuevo?: string;
+  estadoAnterior?: EstadoProceso;
+  estadoNuevo?: EstadoProceso;
   detallesAdicionales?: Record<string, any>;
 }
 

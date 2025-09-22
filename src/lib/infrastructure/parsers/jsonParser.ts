@@ -184,12 +184,12 @@ function parseProcessFromJson(p: any, filename?: string): ProcessSpec {
   }
 
   return {
-    name: nombreValid,
-    tiempoArribo: tiempoArriboValid,
-    rafagasCPU: Math.floor(rafagasCPUValid), // Asegurar entero
-    duracionRafagaCPU: duracionCPUValid,
-    duracionRafagaES: duracionESValid,
-    prioridad: Math.floor(prioridadValid) // Asegurar entero
+    id: nombreValid,                    // CORRECCIÓN: cambiar name → id
+    arribo: tiempoArriboValid,          // CORRECCIÓN: cambiar tiempoArribo → arribo
+    rafagasCPU: Math.floor(rafagasCPUValid), // ✅ Correcto
+    duracionCPU: duracionCPUValid,      // CORRECCIÓN: cambiar duracionRafagaCPU → duracionCPU
+    duracionIO: duracionESValid,        // CORRECCIÓN: cambiar duracionRafagaES → duracionIO
+    prioridad: Math.floor(prioridadValid) // ✅ Correcto
   };
 }
 
@@ -230,7 +230,7 @@ function validateProcesses(processes: ProcessSpec[], filename?: string): void {
   }
 
   // Validar nombres únicos
-  const nombres = processes.map(p => p.name);
+  const nombres = processes.map(p => p.id);  // CORRECCIÓN: usar p.id en lugar de p.name
   const duplicados = [...new Set(nombres.filter((nombre, index) => nombres.indexOf(nombre) !== index))];
   if (duplicados.length > 0) {
     throw ErrorMessages.duplicateNames(duplicados, filename);

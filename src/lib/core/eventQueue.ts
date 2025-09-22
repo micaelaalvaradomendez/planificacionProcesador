@@ -12,7 +12,8 @@ import type { EventoInterno, TipoEventoInterno } from './state';
  * 3. Corriendo a Listo (AgotamientoQuantum)
  * 4. Bloqueado a Listo (FinES)
  * 5. Nuevo a Listo (Arribo, FinTIP)
- * 6. Finalmente el despacho de Listo a Corriendo (Despacho)
+ * 6. Despacho de Listo a Corriendo (Despacho)
+ * 7. Cierre contable posterior (FinTFP)
  */
 const PRIORIDADES_EVENTO: Record<TipoEventoInterno, number> = {
   'FinRafagaCPU': 1, // Se determinará dinámicamente si es terminado (1) o bloqueado (2)
@@ -20,8 +21,8 @@ const PRIORIDADES_EVENTO: Record<TipoEventoInterno, number> = {
   'FinES': 4,
   'Arribo': 5,
   'FinTIP': 5, // Nuevo a Listo (fin del tiempo de incorporación)
-  'FinTFP': 5, // Mismo nivel que Arribo
-  'Despacho': 6
+  'Despacho': 6,
+  'FinTFP': 7  // Cierre contable - No compite con admisión/arribos
 };
 
 export interface EventoConPrioridad extends EventoInterno {

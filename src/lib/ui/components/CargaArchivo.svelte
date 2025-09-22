@@ -6,6 +6,7 @@
   export let archivoSeleccionado: File | null = null;
   export let cargando = false;
   export let error: string | null = null;
+  export let deshabilitado = false;  // Nueva propiedad para control de flujo
   
   let inputFile: HTMLInputElement;
   let dragOver = false;
@@ -27,6 +28,8 @@
   }
   
   function handleDrop(event: DragEvent) {
+    if (deshabilitado) return;  // Prevenir drop si está deshabilitado
+    
     event.preventDefault();
     dragOver = false;
     
@@ -37,15 +40,21 @@
   }
   
   function handleDragOver(event: DragEvent) {
+    if (deshabilitado) return;  // Prevenir drag over si está deshabilitado
+    
     event.preventDefault();
     dragOver = true;
   }
   
   function handleDragLeave() {
+    if (deshabilitado) return;  // Prevenir drag leave si está deshabilitado
+    
     dragOver = false;
   }
   
   function procesarArchivo(file: File) {
+    if (deshabilitado) return;  // Prevenir procesamiento si está deshabilitado
+    
     // Validar tipo de archivo
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!tiposAceptados.includes(extension)) {
@@ -67,6 +76,8 @@
   }
   
   function removerArchivo() {
+    if (deshabilitado) return;  // Prevenir remoción si está deshabilitado
+    
     archivoSeleccionado = null;
     error = null;
     if (inputFile) {
@@ -76,6 +87,8 @@
   }
   
   function abrirSelector() {
+    if (deshabilitado) return;  // Prevenir apertura si está deshabilitado
+    
     inputFile?.click();
   }
   
@@ -110,8 +123,9 @@
     <!-- Zona de drop -->
     <div 
       class="zona-drop"
-      class:drag-over={dragOver}
+      class:drag-over={dragOver && !deshabilitado}
       class:cargando
+      class:deshabilitado
       on:drop={handleDrop}
       on:dragover={handleDragOver}
       on:dragleave={handleDragLeave}
@@ -154,6 +168,7 @@
         on:click={removerArchivo}
         title="Remover archivo"
         type="button"
+        disabled={deshabilitado}
       >
         ✕
       </button>
@@ -414,5 +429,23 @@
     .archivo-meta {
       flex-wrap: wrap;
     }
+  }
+  
+  /* Estados deshabilitados */
+  .zona-drop.deshabilitado {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+  }
+  
+  .zona-drop.deshabilitado:hover {
+    border-color: #dee2e6;
+    background-color: #f8f9fa;
+  }
+  
+  .boton-remover:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>
