@@ -43,7 +43,7 @@ async function testPrioridadBasico() {
 
   console.log('📋 Orden de despacho de procesos:');
   despachos.forEach((evento, i) => {
-    const procesoInfo = workload.processes.find(p => p.name === evento.proceso);
+    const procesoInfo = workload.processes.find(p => p.id === evento.proceso);
     console.log(`  ${i+1}. ${evento.proceso} (prioridad: ${procesoInfo?.prioridad}) en tiempo ${evento.tiempo}`);
   });
 
@@ -139,7 +139,7 @@ async function testPrioridadEmpates() {
 
   console.log('📋 Orden de despacho:');
   despachos.forEach((evento, i) => {
-    const procesoInfo = workload.processes.find(p => p.name === evento.proceso);
+    const procesoInfo = workload.processes.find(p => p.id === evento.proceso);
     console.log(`  ${i+1}. ${evento.proceso} (prioridad: ${procesoInfo?.prioridad}) en tiempo ${evento.tiempo}`);
   });
 

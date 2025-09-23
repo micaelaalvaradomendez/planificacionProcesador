@@ -11,12 +11,14 @@ export * from './adaptadorEntidadesDominio';
 // Re-exportar tipos importantes
 export type { 
   SimState, 
-  ProcesoEstado,
   TipoEventoInterno,
   EventoInterno,
   ContadoresCPU,
   ModoEjecucion 
 } from './state';
+
+// Re-exportar tipos del dominio para conveniencia
+export { EstadoProceso } from '../domain/types';
 
 export type { 
   ColaComparator 

@@ -23,9 +23,10 @@ export const comparadores: Record<Policy, ColaComparator> = {
   },
 
   PRIORITY: (a, b) => {
-    // Menor número = mayor prioridad (1 > 4), luego FCFS para empates
+    // Mayor número = mayor prioridad (4 > 1), luego FCFS para empates
+    // Seguimos la convención del dominio: mayor valor numérico = mayor prioridad
     if (a.prioridad !== b.prioridad) {
-      return a.prioridad - b.prioridad; // orden ascendente por prioridad (1 antes que 4)
+      return b.prioridad - a.prioridad; // orden descendente por prioridad (4 antes que 1)
     }
     if (a.arribo !== b.arribo) {
       return a.arribo - b.arribo;
@@ -34,11 +35,13 @@ export const comparadores: Record<Policy, ColaComparator> = {
   },
 
   RR: (a, b) => {
-    // En Round Robin, simplemente FIFO (primero llegado, primero servido)
-    if (a.arribo !== b.arribo) {
-      return a.arribo - b.arribo;
-    }
-    return a.id.localeCompare(b.id);
+    // Para Round Robin NO se debe usar comparador por arribo
+    // RR requiere cola FIFO real donde el orden se determina por llegada a READY
+    // Este comparador es un fallback, pero RR debería usar ColaProcesos del dominio
+    // Si se usa este comparador, al menos no ordenar por arribo (rompe fairness)
+    
+    // Retornar 0 = equivalentes, mantiene orden de inserción (más FIFO)
+    return 0;
   },
 
   SPN: (a, b) => {
@@ -61,14 +64,14 @@ export const comparadores: Record<Policy, ColaComparator> = {
   SRTN: (a, b) => {
     // Shortest Remaining Time Next: menor tiempo restante primero
     const tiempoRestanteA = a.rafagasRestantes > 1 ? 
-      a.restanteEnRafaga + (a.rafagasRestantes - 1) * a.duracionCPU + 
+      a.restanteCPU + (a.rafagasRestantes - 1) * a.duracionCPU + 
       (a.rafagasRestantes - 1) * a.duracionIO :
-      a.restanteEnRafaga;
+      a.restanteCPU;
     
     const tiempoRestanteB = b.rafagasRestantes > 1 ? 
-      b.restanteEnRafaga + (b.rafagasRestantes - 1) * b.duracionCPU + 
+      b.restanteCPU + (b.rafagasRestantes - 1) * b.duracionCPU + 
       (b.rafagasRestantes - 1) * b.duracionIO :
-      b.restanteEnRafaga;
+      b.restanteCPU;
     
     if (tiempoRestanteA !== tiempoRestanteB) {
       return tiempoRestanteA - tiempoRestanteB;
@@ -88,11 +91,11 @@ export const comparadores: Record<Policy, ColaComparator> = {
 export class ColaPrioridadSimulador {
   private elementos: string[] = [];
   private comparador: ColaComparator;
-  private obtenerProceso: (name: string) => ProcesoRT;
+  private obtenerProceso: (name: string) => Proceso;
 
   constructor(
     policy: Policy, 
-    obtenerProceso: (name: string) => ProcesoRT
+    obtenerProceso: (name: string) => Proceso
   ) {
     this.comparador = comparadores[policy];
     this.obtenerProceso = obtenerProceso;

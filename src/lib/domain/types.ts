@@ -119,6 +119,7 @@ export interface RunConfig {
   tfp: number;   // tiempo de finalización de proceso
   tcp: number;   // tiempo de cambio de contexto
   quantum?: number; // requerido si policy=RR
+  maxIterations?: number; // límite de iteraciones (default: 10000), 0 = sin límite
 }
 
 export interface Workload {

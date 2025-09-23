@@ -53,21 +53,21 @@
     
     switch (tipo) {
       case TipoEvento.JOB_LLEGA:
-        return `📩 Proceso ${proceso} arriba al sistema`;
+        return `Proceso ${proceso} arriba al sistema`;
       case TipoEvento.NUEVO_A_LISTO:
-        return `🔄 Proceso ${proceso} se incorpora al sistema (NUEVO → LISTO) ${extra}`;
+        return `Proceso ${proceso} se incorpora al sistema (NUEVO → LISTO) ${extra}`;
       case TipoEvento.DISPATCH:
-        return `🎯 Dispatcher asigna CPU a proceso ${proceso} ${extra}`;
+        return `Dispatcher asigna CPU a proceso ${proceso} ${extra}`;
       case TipoEvento.FIN_RAFAGA_CPU:
-        return `⚡ Proceso ${proceso} completa ráfaga de CPU ${extra}`;
+        return `Proceso ${proceso} completa ráfaga de CPU ${extra}`;
       case TipoEvento.QUANTUM_EXPIRES:
-        return `⏰ Quantum agotado para proceso ${proceso} (Round Robin) ${extra}`;
+        return `Quantum agotado para proceso ${proceso} (Round Robin) ${extra}`;
       case TipoEvento.IO_COMPLETA:
-        return `✅ Proceso ${proceso} termina operación de E/S ${extra}`;
+        return `Proceso ${proceso} termina operación de E/S ${extra}`;
       case TipoEvento.IO_INTERRUPCION_ATENDIDA:
-        return `📨 Atendida interrupción de E/S para proceso ${proceso} ${extra}`;
+        return `Atendida interrupción de E/S para proceso ${proceso} ${extra}`;
       case TipoEvento.PROCESO_TERMINA:
-        return `🏁 Proceso ${proceso} termina completamente ${extra}`;
+        return `Proceso ${proceso} termina completamente ${extra}`;
       
       // Transiciones de estado según teoría de SO
       case TipoEvento.CORRIENDO_A_TERMINADO:
@@ -84,7 +84,7 @@
         return `🟣 TRANSICIÓN: ${proceso} LISTO → CORRIENDO (dispatch) ${extra}`;
       
       default:
-        return `📝 ${tipo}: Proceso ${proceso} ${extra}`;
+        return `${tipo}: Proceso ${proceso} ${extra}`;
     }
   }
   
@@ -97,7 +97,7 @@
         case TipoEvento.BLOQUEADO_A_LISTO: return '🟢';
         case TipoEvento.NUEVO_A_LISTO: return '🟦';
         case TipoEvento.LISTO_A_CORRIENDO: return '🟣';
-        default: return '🔄';
+        default: return 'NULL';
       }
     }
     
@@ -187,7 +187,7 @@
 <div class="panel-eventos">
   <div class="header-eventos">
     <div class="header-content">
-      <h3>📋 Eventos de la Simulación</h3>
+      <h3>Eventos de la Simulación</h3>
       <p>Cronología de eventos según la teoría de Sistemas Operativos</p>
     </div>
     <div class="header-stats">
@@ -206,9 +206,9 @@
       <div class="filtro-grupo">
         <label for="filtro-tipo">Tipo de evento:</label>
         <select id="filtro-tipo" bind:value={filtroTipo}>
-          <option value="todos">📋 Todos los eventos</option>
-          <option value="transiciones">🔄 Solo transiciones de estado</option>
-          <option value="principales">⭐ Eventos principales</option>
+          <option value="todos">Todos los eventos</option>
+          <option value="transiciones">Solo transiciones de estado</option>
+          <option value="principales">Eventos principales</option>
           <optgroup label="Eventos específicos">
             {#each tiposEventosUnicos as tipo}
               <option value={tipo}>{obtenerIconoEvento(tipo)} {tipo}</option>
@@ -220,9 +220,9 @@
       <div class="filtro-grupo">
         <label for="filtro-proceso">Proceso:</label>
         <select id="filtro-proceso" bind:value={filtroProceso}>
-          <option value="todos">👥 Todos los procesos</option>
+          <option value="todos">Todos los procesos</option>
           {#each procesosUnicos as proceso}
-            <option value={proceso}>📦 {proceso}</option>
+            <option value={proceso}>{proceso}</option>
           {/each}
         </select>
       </div>
@@ -268,7 +268,6 @@
   <div class="contenedor-eventos">
     {#if eventosFiltrados.length === 0}
       <div class="sin-eventos">
-        <div class="sin-eventos-icono">📭</div>
         <h3>No hay eventos que mostrar</h3>
         <p>Ajusta los filtros para ver más eventos</p>
       </div>
@@ -276,7 +275,7 @@
       {#each tiempos as tiempo}
         <div class="grupo-tiempo">
           <div class="tiempo-header">
-            <div class="tiempo-valor">⏱️ Tiempo {tiempo}</div>
+            <div class="tiempo-valor">Tiempo {tiempo}</div>
             <div class="tiempo-eventos">{eventosAgrupados[tiempo].length} evento(s)</div>
           </div>
           

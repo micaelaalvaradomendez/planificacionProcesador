@@ -22,9 +22,9 @@
   let procesos: ProcesoSimple[] = [];
   let configuracion: ConfiguracionSimulacion = {
     policy: 'FCFS',
-    tip: 0,
-    tfp: 0,
-    tcp: 0,
+    tip: 1,
+    tfp: 1,
+    tcp: 1,
     quantum: undefined
   };
   
@@ -45,7 +45,7 @@
     
     try {
       const file = event.detail.file;
-      console.log('📁 Archivo seleccionado:', file.name);
+      console.log('Archivo seleccionado:', file.name);
       
       const resultado = await cargarArchivoProcesos(file);
       
@@ -54,10 +54,10 @@
         procesos = [];
       } else {
         procesos = resultado.procesos;
-        console.log('✅ Procesos cargados:', procesos.length);
+        console.log('Procesos cargados:', procesos.length);
       }
     } catch (error) {
-      console.error('❌ Error al cargar archivo:', error);
+      console.error('Error al cargar archivo:', error);
       errorArchivo = `Error inesperado: ${error}`;
       procesos = [];
     } finally {
@@ -84,9 +84,9 @@
     errorSimulacion = null;
     
     try {
-      console.log('🚀 Iniciando simulación...');
-      console.log('📊 Procesos:', procesos);
-      console.log('⚙️ Configuración:', configuracion);
+      console.log('Iniciando simulación...');
+      console.log('Procesos:', procesos);
+      console.log('Configuración:', configuracion);
       
       const resultado = await ejecutarSimulacion(procesos, configuracion);
       
@@ -101,13 +101,13 @@
       // Guardar en localStorage
       guardarDatosSimulacion(datosCompletos);
       
-      console.log('✅ Simulación completada, navegando a resultados...');
+      console.log('Simulación completada, navegando a resultados...');
       
       // Navegar a página de resultados
       await goto('/resultados');
       
     } catch (error) {
-      console.error('❌ Error en simulación:', error);
+      console.error('Error en simulación:', error);
       errorSimulacion = `Error al ejecutar simulación: ${error}`;
     } finally {
       ejecutandoSimulacion = false;
@@ -189,7 +189,7 @@
           <!-- Errores de validación -->
           {#if !validacionConfig.valida}
             <div class="errores-validacion">
-              <h4 class="errores-titulo">⚠️ Corrige estos errores antes de continuar:</h4>
+              <h4 class="errores-titulo">Corrige estos errores antes de continuar:</h4>
               <ul class="errores-lista">
                 {#each validacionConfig.errores as error}
                   <li>{error}</li>
@@ -201,7 +201,6 @@
           <!-- Error de simulación -->
           {#if errorSimulacion}
             <div class="error-simulacion">
-              <span class="error-icono">❌</span>
               <span class="error-mensaje">{errorSimulacion}</span>
             </div>
           {/if}
@@ -218,7 +217,6 @@
               <span class="spinner-boton"></span>
               Ejecutando Simulación...
             {:else}
-              <span class="icono-boton">🚀</span>
               Iniciar Simulación
             {/if}
           </button>
@@ -352,11 +350,6 @@
     gap: 8px;
   }
 
-  .error-icono {
-    color: var(--rojo-elegante);
-    font-size: 1.2rem;
-  }
-
   .error-mensaje {
     color: var(--rojo-elegante);
     font-size: 0.9rem;
@@ -402,10 +395,6 @@
     cursor: wait;
   }
 
-  .icono-boton {
-    font-size: 1.3rem;
-  }
-
   .spinner-boton {
     width: 20px;
     height: 20px;
@@ -443,7 +432,6 @@
   }
 
   @media (max-width: 480px) {
-
     .contenido {
       padding: 20px 12px;
     }

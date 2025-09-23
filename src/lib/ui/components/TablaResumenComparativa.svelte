@@ -63,7 +63,7 @@
 
 <div class="tabla-resumen">
   <div class="header-tabla">
-    <h3 class="titulo-seccion">📋 Tabla Resumen Comparativa</h3>
+    <h3 class="titulo-seccion">Tabla Resumen Comparativa</h3>
     <p class="descripcion-seccion">
       Resumen ejecutivo de la configuración utilizada y principales resultados obtenidos
     </p>
@@ -72,7 +72,7 @@
   <div class="contenido-tabla">
     <!-- Sección: Configuración utilizada -->
     <div class="seccion-tabla">
-      <h4 class="subtitulo-seccion">⚙️ Configuración Utilizada</h4>
+      <h4 class="subtitulo-seccion">Configuración Utilizada</h4>
       <div class="tabla-datos">
         <div class="fila-dato">
           <span class="etiqueta">Algoritmo de planificación:</span>
@@ -101,7 +101,7 @@
     
     <!-- Sección: Resumen de resultados -->
     <div class="seccion-tabla">
-      <h4 class="subtitulo-seccion">📊 Resumen de Resultados</h4>
+      <h4 class="subtitulo-seccion">Resumen de Resultados</h4>
       <div class="tabla-datos">
         <div class="fila-dato destacada">
           <span class="etiqueta">Tiempo total de simulación:</span>
@@ -118,11 +118,11 @@
           <span class="valor eficiencia">{formatearPorcentaje(eficienciaCPU)}</span>
           <span class="indicador-eficiencia" class:buena={eficienciaCPU >= 70} class:media={eficienciaCPU >= 50 && eficienciaCPU < 70} class:baja={eficienciaCPU < 50}>
             {#if eficienciaCPU >= 70}
-              ✅ Buena
+              Buena
             {:else if eficienciaCPU >= 50}
-              ⚠️ Media
+              Media
             {:else}
-              ❌ Baja
+              Baja
             {/if}
           </span>
         </div>
@@ -146,10 +146,9 @@
     
     <!-- Sección: Análisis rápido -->
     <div class="seccion-tabla">
-      <h4 class="subtitulo-seccion">🔍 Análisis Rápido</h4>
+      <h4 class="subtitulo-seccion">Análisis Rápido</h4>
       <div class="analisis-rapido">
         <div class="metrica-analisis">
-          <span class="icono-metrica">⏱️</span>
           <div class="texto-metrica">
             <strong>Rendimiento temporal:</strong>
             {#if tiempoTotalSimulacion / numeroProcesos < 10}
@@ -183,7 +182,6 @@
         </div>
         
         <div class="metrica-analisis">
-          <span class="icono-metrica">📈</span>
           <div class="texto-metrica">
             <strong>Overhead del sistema:</strong>
             {#if (metrics?.tanda?.porcentajeCpuSO || 0) < 20}

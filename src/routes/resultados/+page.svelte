@@ -43,7 +43,7 @@
       datosSimulacion = datos;
       
     } catch (err) {
-      console.error('❌ Error al cargar datos:', err);
+      console.error('Error al cargar datos:', err);
       error = 'Error al cargar los datos de simulación.';
     } finally {
       cargando = false;
@@ -70,7 +70,7 @@
   <header class="header-resultados">
     <div class="header-content">
       <div class="header-info">
-        <h1 class="titulo-pagina">📊 Resultados de Simulación</h1>
+        <h1 class="titulo-pagina">Resultados de Simulación</h1>
         {#if datosSimulacion}
           <div class="info-simulacion">
             <span class="info-item">
@@ -88,7 +88,7 @@
       <div class="header-actions">
 
         <button class="btn-primario" on:click={nuevaSimulacion}>
-          ➕ Nueva Simulación
+          Nueva Simulación
         </button>
       </div>
     </div>
@@ -103,12 +103,11 @@
       </div>
     {:else if error}
       <div class="estado-error">
-        <div class="error-icono">❌</div>
         <h3>Error al cargar resultados</h3>
         <p>{error}</p>
         <div class="error-actions">
           <button class="btn-primario" on:click={nuevaSimulacion}>
-            🏠 Ir al inicio
+            Ir al inicio
           </button>
         </div>
       </div>
@@ -157,7 +156,7 @@
           />
         {:else}
           <div class="componente-placeholder">
-            <h3>📈 Diagrama de Gantt</h3>
+            <h3>Diagrama de Gantt</h3>
             <p>No se generaron datos de cronograma en esta simulación</p>
           </div>
         {/if}
@@ -297,11 +296,6 @@
     margin: 0;
     color: var(--gris-medio);
     font-size: 1.1rem;
-  }
-
-  .error-icono {
-    font-size: 3rem;
-    margin-bottom: 16px;
   }
 
   .estado-error h3 {

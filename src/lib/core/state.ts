@@ -1,49 +1,13 @@
 import type { Workload, SimEvent, Policy } from '../domain/types';
 import { EstadoProceso, TipoEvento } from '../domain/types';
 import { Proceso } from '../domain/entities/Proceso';
+import { RegistroEventos, type TipoEventoInterno, type EventoInterno } from './registroEventos';
 
-// Usamos la entidad canónica del dominio - NO duplicaciones
-export type ProcesoEstado = EstadoProceso;
+// Ya no es necesario el alias ProcesoEstado - usamos directamente EstadoProceso del dominio
 
 // ELIMINADO: ProcesoRT interface - usar directamente Proceso del dominio
 
-// Mapeo de eventos internos a tipos canónicos del dominio
-export type TipoEventoInterno =
-  | 'Arribo'                    // Nuevo→Listo (con TIP si corresponde)
-  | 'FinTIP'                    // Nuevo→Listo (fin del tiempo de incorporación)
-  | 'Despacho'                  // Listo→Corriendo (consume TCP)
-  | 'FinRafagaCPU'              // Corriendo→(Bloqueado|Terminado)
-  | 'AgotamientoQuantum'        // Corriendo→Listo (RR)
-  | 'FinES'                     // Bloqueado→Listo (INSTANTÁNEO: Δt=0, NO consume TCP)
-  | 'FinTFP';                   // cierre contable del proceso
-
-/**
- * DOCUMENTACIÓN CRÍTICA DE TIEMPOS:
- * - Bloqueado→Listo (FinES): INSTANTÁNEO (Δt=0), sin overhead del SO
- * - Listo→Corriendo (Despacho): Consume TCP (tiempo de cambio de contexto)
- * - TCP se cobra ÚNICAMENTE en L→C, NUNCA en B→L
- * 
- * Mapea TipoEventoInterno a TipoEvento canónico del dominio
- */
-export function mapearEventoADominio(tipoInterno: TipoEventoInterno): TipoEvento {
-  const mapeo: Record<TipoEventoInterno, TipoEvento> = {
-    'Arribo': TipoEvento.JOB_LLEGA,
-    'FinTIP': TipoEvento.NUEVO_A_LISTO,
-    'Despacho': TipoEvento.LISTO_A_CORRIENDO,
-    'FinRafagaCPU': TipoEvento.FIN_RAFAGA_CPU,
-    'AgotamientoQuantum': TipoEvento.QUANTUM_EXPIRES,
-    'FinES': TipoEvento.BLOQUEADO_A_LISTO,
-    'FinTFP': TipoEvento.PROCESO_TERMINA
-  };
-  return mapeo[tipoInterno];
-}
-
-export interface EventoInterno {
-  tiempo: number;
-  tipo: TipoEventoInterno;
-  proceso?: string;             // name del proceso
-  extra?: string;               // detalles adicionales
-}
+// ELIMINADO: Duplicación de tipos de eventos - están centralizados en registroEventos.ts
 
 export interface ContadoresCPU {
   ocioso: number;               // tiempo CPU idle
@@ -65,6 +29,7 @@ export interface SimState {
   tfp: number; 
   tcp: number; 
   quantum?: number;
+  maxIterations?: number;  // límite de iteraciones
   
   // Procesos y colas - USA ENTIDADES DEL DOMINIO
   procesos: Map<string, Proceso>;
@@ -77,8 +42,9 @@ export interface SimState {
   
   // Contabilidad y logs
   contadoresCPU: ContadoresCPU;
-  eventosInternos: EventoInterno[];     // log interno detallado
-  eventosExportacion: SimEvent[];       // para exportar al usuario
+  
+  // SISTEMA CENTRALIZADO DE EVENTOS
+  registroEventos: RegistroEventos;     // registro único centralizado
 }
 
 export function crearEstadoInicial(wl: Workload): SimState {
@@ -107,6 +73,7 @@ export function crearEstadoInicial(wl: Workload): SimState {
     tfp: wl.config.tfp,
     tcp: wl.config.tcp,
     quantum: wl.config.quantum,
+    maxIterations: wl.config.maxIterations,
     procesos,
     colaListos: [],
     colaBloqueados: [],
@@ -116,26 +83,38 @@ export function crearEstadoInicial(wl: Workload): SimState {
       sistemaOperativo: 0,
       procesos: 0
     },
-    eventosInternos: [],
-    eventosExportacion: []
+    registroEventos: new RegistroEventos()
   };
 }
 
+/**
+ * Registra un evento en el sistema centralizado
+ */
+export function registrarEvento(state: SimState, tipo: TipoEventoInterno, proceso?: string, extra?: string) {
+  state.registroEventos.registrar(state.tiempoActual, tipo, proceso, extra);
+}
+
+/**
+ * Obtiene eventos internos del registro centralizado
+ */
+export function obtenerEventosInternos(state: SimState): EventoInterno[] {
+  return state.registroEventos.obtenerEventosInternos();
+}
+
+/**
+ * Obtiene eventos de exportación proyectados desde los internos
+ */
+export function obtenerEventosExportacion(state: SimState): SimEvent[] {
+  return state.registroEventos.proyectarEventosExportacion();
+}
+
+// FUNCIONES DEPRECADAS - Mantener compatibilidad temporal
 export function agregarEventoInterno(state: SimState, tipo: TipoEventoInterno, proceso?: string, extra?: string) {
-  state.eventosInternos.push({
-    tiempo: state.tiempoActual,
-    tipo,
-    proceso,
-    extra
-  });
+  console.warn('⚠️ agregarEventoInterno está deprecada, usar registrarEvento()');
+  registrarEvento(state, tipo, proceso, extra);
 }
 
 export function agregarEventoExportacion(state: SimState, tipoInterno: TipoEventoInterno, proceso: string, extra?: string) {
-  const tipoCanonica = mapearEventoADominio(tipoInterno);
-  state.eventosExportacion.push({
-    tiempo: state.tiempoActual,
-    tipo: tipoCanonica,
-    proceso,
-    extra
-  });
+  console.warn('⚠️ agregarEventoExportacion está deprecada, el registro es automático via proyección');
+  // No hacer nada - la proyección se maneja automáticamente
 }

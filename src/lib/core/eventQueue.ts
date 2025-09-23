@@ -121,22 +121,9 @@ export class ColaEventos {
         // Determinar si es corriendo a terminado (1) o corriendo a bloqueado (2)
         return evento.esUltimaRafaga ? 1 : 2;
       
-      case 'AgotamientoQuantum':
-        return 3; // Corriendo a Listo
-      
-      case 'FinES':
-        return 4; // Bloqueado a Listo
-      
-      case 'Arribo':
-      case 'FinTIP':
-      case 'FinTFP':
-        return 5; // Nuevo a Listo
-      
-      case 'Despacho':
-        return 6; // Listo a Corriendo
-      
       default:
-        return 99; // Fallback para eventos no reconocidos
+        // Usar la constante PRIORIDADES_EVENTO para mantener consistencia
+        return PRIORIDADES_EVENTO[evento.tipo] || 99;
     }
   }
 

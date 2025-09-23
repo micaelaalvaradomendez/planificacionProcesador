@@ -1,10 +1,10 @@
 /**
- * Exportador de logs de eventos del simulador
- * Genera logs en formato JSON y CSV con todos los eventos del sistema
+ * Exportador de logs de eventos del simulador - REFACTORIZADO
+ * Ahora usa el sistema centralizado de eventos en lugar de doble registro
  */
 
 import type { SimEvent } from '../../domain/types';
-import type { EventoInterno } from '../../core/state';
+import type { EventoInterno, TipoEventoInterno } from '../../core/registroEventos';
 
 export interface EventoLog {
   timestamp: number;
@@ -17,7 +17,7 @@ export interface EventoLog {
 /**
  * Mapea los tipos de eventos internos a nombres más descriptivos para el log
  */
-const MAPEO_TIPOS_EVENTOS = {
+const MAPEO_TIPOS_EVENTOS_INTERNOS: Record<TipoEventoInterno, string> = {
   'Arribo': 'Arribo',
   'FinTIP': 'Incorporación Sistema',
   'Despacho': 'Despacho',
@@ -28,31 +28,13 @@ const MAPEO_TIPOS_EVENTOS = {
 } as const;
 
 /**
- * Mapea los tipos de eventos de exportación a nombres descriptivos
- */
-const MAPEO_TIPOS_EXPORTACION = {
-  'ARRIBO_TRABAJO': 'Arribo',
-  'INCORPORACION_SISTEMA': 'Incorporación Sistema',
-  'DESPACHO': 'Despacho',
-  'CAMBIO_CONTEXTO': 'Cambio Contexto',
-  'INICIO_RAFAGA_CPU': 'Inicio Ráfaga CPU',
-  'FIN_RAFAGA_CPU': 'Fin Ráfaga CPU',
-  'AGOTAMIENTO_QUANTUM': 'Agotamiento Quantum',
-  'INICIO_ES': 'Inicio E/S',
-  'FIN_ES': 'Fin E/S',
-  'ATENCION_INTERRUPCION_ES': 'Atención Interrupción E/S',
-  'EXPROPIACION': 'Expropiación',
-  'INICIO_TERMINACION': 'Inicio Terminación',
-  'TERMINACION_PROCESO': 'Terminación Proceso'
-} as const;
-
-/**
  * Convierte eventos internos del simulador a formato de log estructurado
+ * ACTUALIZADO: Usa directamente los eventos del registro centralizado
  */
 export function convertirEventosInternos(eventos: EventoInterno[]): EventoLog[] {
   return eventos.map(evento => ({
     timestamp: evento.tiempo,
-    tipo: MAPEO_TIPOS_EVENTOS[evento.tipo] || evento.tipo,
+    tipo: MAPEO_TIPOS_EVENTOS_INTERNOS[evento.tipo] || evento.tipo,
     proceso: evento.proceso || 'SISTEMA',
     descripcion: generarDescripcionEvento(evento),
     detalles: evento.extra
@@ -61,11 +43,12 @@ export function convertirEventosInternos(eventos: EventoInterno[]): EventoLog[] 
 
 /**
  * Convierte eventos de exportación del simulador a formato de log estructurado
+ * NOTA: Estos ahora se generan automáticamente por proyección
  */
 export function convertirEventosExportacion(eventos: SimEvent[]): EventoLog[] {
   return eventos.map(evento => ({
     timestamp: evento.tiempo,
-    tipo: MAPEO_TIPOS_EXPORTACION[evento.tipo] || evento.tipo,
+    tipo: evento.tipo,  // Usar directamente el tipo del enum TipoEvento
     proceso: evento.proceso || 'SISTEMA',
     descripcion: generarDescripcionEventoExportacion(evento),
     detalles: evento.extra
@@ -74,6 +57,7 @@ export function convertirEventosExportacion(eventos: SimEvent[]): EventoLog[] {
 
 /**
  * Genera una descripción legible para un evento interno
+ * ACTUALIZADO: Usa TipoEventoInterno centralizado
  */
 function generarDescripcionEvento(evento: EventoInterno): string {
   const proceso = evento.proceso || 'SISTEMA';
@@ -100,30 +84,25 @@ function generarDescripcionEvento(evento: EventoInterno): string {
 
 /**
  * Genera una descripción legible para un evento de exportación
+ * ACTUALIZADO: Maneja todos los tipos del enum TipoEvento
  */
 function generarDescripcionEventoExportacion(evento: SimEvent): string {
   const proceso = evento.proceso || 'SISTEMA';
   
   switch (evento.tipo) {
-    case 'ARRIBO_TRABAJO':
+    case 'JOB_LLEGA':
       return `Proceso ${proceso} arriba al sistema`;
-    case 'INCORPORACION_SISTEMA':
+    case 'NUEVO_A_LISTO':
       return `Proceso ${proceso} incorporado al sistema`;
-    case 'DESPACHO':
+    case 'LISTO_A_CORRIENDO':
       return `Proceso ${proceso} despachado`;
-    case 'CAMBIO_CONTEXTO':
-      return `Cambio de contexto para proceso ${proceso}`;
     case 'FIN_RAFAGA_CPU':
       return `Proceso ${proceso} termina ráfaga CPU`;
-    case 'AGOTAMIENTO_QUANTUM':
+    case 'QUANTUM_EXPIRES':
       return `Proceso ${proceso} agota quantum`;
-    case 'FIN_ES':
+    case 'BLOQUEADO_A_LISTO':
       return `Proceso ${proceso} termina E/S`;
-    case 'EXPROPIACION':
-      return `Proceso ${proceso} expropia la CPU`;
-    case 'INICIO_TERMINACION':
-      return `Proceso ${proceso} inicia terminación`;
-    case 'TERMINACION_PROCESO':
+    case 'PROCESO_TERMINA':
       return `Proceso ${proceso} terminado`;
     default:
       return `Evento ${evento.tipo} del proceso ${proceso}`;
@@ -131,22 +110,29 @@ function generarDescripcionEventoExportacion(evento: SimEvent): string {
 }
 
 /**
+ * NUEVA FUNCIÓN SIMPLIFICADA: Procesa eventos del registro centralizado
+ * Usa una sola fuente de verdad y proyecta automáticamente
+ */
+export function procesarEventosCentralizados(
+  eventosInternos: EventoInterno[], 
+  eventosExportacion: SimEvent[]
+): EventoLog[] {
+  // Convertir ambos tipos a formato unificado
+  const eventosInternosLog = convertirEventosInternos(eventosInternos);
+  const eventosExportacionLog = convertirEventosExportacion(eventosExportacion);
+  
+  // Combinar sin duplicar - los eventos de exportación son proyección de los internos
+  // En el nuevo sistema, solo usaríamos uno u otro según el propósito
+  return [...eventosInternosLog];  // Usar eventos internos como fuente única
+}
+
+/**
  * Combina y ordena eventos internos y de exportación
+ * DEPRECADO: En el nuevo sistema centralizado esta función es innecesaria
  */
 export function combinarEventos(internos: EventoInterno[], exportacion: SimEvent[]): EventoLog[] {
-  const eventosInternos = convertirEventosInternos(internos);
-  const eventosExportacion = convertirEventosExportacion(exportacion);
-  
-  // Combinar y ordenar por timestamp, luego por tipo para estabilidad
-  const todosCombinados = [...eventosInternos, ...eventosExportacion];
-  
-  return todosCombinados.sort((a, b) => {
-    if (a.timestamp !== b.timestamp) {
-      return a.timestamp - b.timestamp;
-    }
-    // Orden secundario por tipo de evento para eventos simultáneos
-    return a.tipo.localeCompare(b.tipo);
-  });
+  console.warn('⚠️ combinarEventos está deprecada, usar procesarEventosCentralizados()');
+  return procesarEventosCentralizados(internos, exportacion);
 }
 
 /**

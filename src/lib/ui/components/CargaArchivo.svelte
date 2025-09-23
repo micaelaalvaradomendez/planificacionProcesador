@@ -141,7 +141,6 @@
         </div>
       {:else}
         <div class="contenido-drop">
-          <div class="icono-upload">📁</div>
           <h4>Arrastra tu archivo aquí</h4>
           <p>o <span class="link">haz clic para seleccionar</span></p>
           <div class="tipos-soportados">
@@ -178,7 +177,6 @@
   <!-- Errores -->
   {#if error}
     <div class="error">
-      <span class="error-icono">⚠️</span>
       <span class="error-mensaje">{error}</span>
     </div>
   {/if}
@@ -241,12 +239,6 @@
 
   .contenido-drop {
     width: 100%;
-  }
-
-  .icono-upload {
-    font-size: 4rem;
-    margin-bottom: 16px;
-    opacity: 0.7;
   }
 
   .zona-drop h4 {
@@ -391,11 +383,6 @@
     gap: 8px;
   }
 
-  .error-icono {
-    color: var(--rojo-elegante);
-    font-size: 1.2rem;
-  }
-
   .error-mensaje {
     color: var(--rojo-elegante);
     font-size: 0.9rem;
@@ -411,10 +398,6 @@
     .zona-drop {
       padding: 30px 15px;
       min-height: 150px;
-    }
-
-    .icono-upload {
-      font-size: 3rem;
     }
 
     .archivo-seleccionado {

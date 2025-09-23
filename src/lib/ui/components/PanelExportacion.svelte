@@ -110,10 +110,10 @@
       await exportarMetricas();
       await new Promise(resolve => setTimeout(resolve, 500));
       await exportarGantt();
-      alert('✅ Exportación completa realizada con éxito');
+      alert('Exportación completa realizada con éxito');
     } catch (error) {
       console.error('Error en exportación completa:', error);
-      alert('❌ Error durante la exportación completa');
+      alert('Error durante la exportación completa');
     } finally {
       exportando = false;
     }
@@ -131,7 +131,7 @@
 <div class="panel-exportacion">
   <div class="header-exportacion">
     <div class="header-content">
-      <h3>💾 Exportación de Datos</h3>
+      <h3>Exportación de Datos</h3>
       <p>Descarga los resultados de la simulación en diferentes formatos</p>
     </div>
     <button 
@@ -139,7 +139,7 @@
       on:click={exportarTodo}
       disabled={exportando}
     >
-      📦 Exportar Todo
+      Exportar Todo
     </button>
   </div>
 
@@ -147,7 +147,7 @@
     <!-- Eventos -->
     <div class="grupo-exportacion">
       <div class="grupo-header">
-        <h4>📋 Archivo de Eventos</h4>
+        <h4>Archivo de Eventos</h4>
         <p>Cronología completa de eventos durante la simulación</p>
       </div>
       
@@ -185,7 +185,7 @@
           on:click={exportarEventos}
           disabled={exportando}
         >
-          📄 Exportar Eventos
+          Exportar Eventos
         </button>
       </div>
     </div>
@@ -193,7 +193,7 @@
     <!-- Métricas -->
     <div class="grupo-exportacion">
       <div class="grupo-header">
-        <h4>📊 Tabla de Métricas</h4>
+        <h4>Tabla de Métricas</h4>
         <p>Estadísticas y métricas calculadas de la simulación</p>
       </div>
       
@@ -213,7 +213,7 @@
           on:click={exportarMetricas}
           disabled={exportando}
         >
-          📈 Exportar Métricas
+          Exportar Métricas
         </button>
       </div>
     </div>
@@ -221,7 +221,7 @@
     <!-- Diagrama de Gantt -->
     <div class="grupo-exportacion">
       <div class="grupo-header">
-        <h4>📅 Diagrama de Gantt</h4>
+        <h4>Diagrama de Gantt</h4>
         <p>Cronograma visual de la ejecución de procesos</p>
       </div>
       
@@ -242,7 +242,7 @@
           on:click={exportarGantt}
           disabled={exportando || !datosSimulacion.resultados.gantt}
         >
-          📅 Exportar Gantt
+          Exportar Gantt
         </button>
       </div>
     </div>

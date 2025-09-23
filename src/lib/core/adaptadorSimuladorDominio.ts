@@ -8,8 +8,9 @@ import { AdaptadorEntidadesDominio } from './adaptadorEntidadesDominio';
 import type { SimState, EventoInterno } from './state';
 import { 
   crearEstadoInicial, 
-  agregarEventoInterno, 
-  agregarEventoExportacion 
+  registrarEvento,
+  obtenerEventosInternos,
+  obtenerEventosExportacion
 } from './state';
 import type { ParametrosSimulacion, TipoEvento, Algoritmo } from '../domain/types';
 import { TipoEvento as TipoEventoDominio, EstadoProceso } from '../domain/types';
@@ -104,16 +105,16 @@ export class AdaptadorSimuladorDominio {
       this.sincronizarResultados();
       
       return {
-        eventosInternos: this.state.eventosInternos,
-        eventosExportacion: this.state.eventosExportacion,
+        eventosInternos: obtenerEventosInternos(this.state),
+        eventosExportacion: obtenerEventosExportacion(this.state),
         estadoFinal: this.state,
         exitoso: true
       };
     } catch (error) {
       console.error('❌ Error durante la simulación del dominio:', error);
       return {
-        eventosInternos: this.state.eventosInternos,
-        eventosExportacion: this.state.eventosExportacion,
+        eventosInternos: obtenerEventosInternos(this.state),
+        eventosExportacion: obtenerEventosExportacion(this.state),
         estadoFinal: this.state,
         exitoso: false,
         error: error instanceof Error ? error.message : 'Error desconocido'
@@ -125,12 +126,34 @@ export class AdaptadorSimuladorDominio {
    * Lógica principal de simulación por eventos discretos del dominio
    */
   private ejecutarSimulacionDominio(): void {
-    const maxIteraciones = 1000;
+    // Límite configurable de iteraciones (default: 10000, 0 = sin límite)
+    const maxIteraciones = this.state.maxIterations ?? 10000;
+    const warningThreshold = Math.floor(maxIteraciones * 0.9); // Warning al 90%
     let iteraciones = 0;
 
     while (!this.simuladorDominio.colaEventos.isEmpty() && 
-           !this.simuladorDominio.todosProcesosTerninados() && 
-           iteraciones < maxIteraciones) {
+           !this.simuladorDominio.todosProcesosTerninados()) {
+      
+      // Verificar límite de iteraciones
+      if (maxIteraciones > 0 && iteraciones >= maxIteraciones) {
+        console.warn(`⚠️ Se alcanzó el límite de ${maxIteraciones} iteraciones`);
+        console.warn('🚨 La simulación puede estar en bucle infinito o ser demasiado compleja');
+        console.warn('💡 Considera aumentar maxIterations en la configuración o revisar los parámetros');
+        
+        // NO cortamos la simulación abruptamente, solo emitimos warning
+        // El usuario puede configurar maxIterations: 0 para simulaciones sin límite
+        if (maxIteraciones < 50000) { // Solo cortamos si es un límite razonablemente bajo
+          console.warn('🛑 Deteniendo simulación para evitar bucle infinito');
+          break;
+        }
+      }
+      
+      // Warning cuando se acerca al límite
+      if (maxIteraciones > 0 && iteraciones === warningThreshold) {
+        console.warn(`⚠️ Simulación se acerca al límite: ${iteraciones}/${maxIteraciones} iteraciones`);
+        console.warn('💡 Considera aumentar maxIterations si es una simulación legítima');
+      }
+      
       iteraciones++;
 
       const evento = this.simuladorDominio.colaEventos.dequeue();
@@ -148,6 +171,7 @@ export class AdaptadorSimuladorDominio {
     }
 
     console.log(`🏁 Simulación del dominio completada en tiempo ${this.simuladorDominio.tiempoActual}`);
+    console.log(`📊 Total de iteraciones: ${iteraciones}${maxIteraciones > 0 ? `/${maxIteraciones}` : ''}`);
   }
 
   /**
@@ -216,7 +240,7 @@ export class AdaptadorSimuladorDominio {
     );
     
     // Registrar en estado del core
-    agregarEventoInterno(this.state, 'Arribo', proceso.id, 
+    registrarEvento(this.state, 'Arribo', proceso.id, 
       `Iniciando TIP: ${this.simuladorDominio.parametros.TIP}`);
     
     // Actualizar contadores
@@ -233,7 +257,7 @@ export class AdaptadorSimuladorDominio {
     this.simuladorDominio.readyQueue.push(proceso);
     
     // CORRECCIÓN: Agregar evento para mostrar TIP en Gantt
-    agregarEventoInterno(this.state, 'FinTIP', proceso.id, 
+    registrarEvento(this.state, 'FinTIP', proceso.id, 
       `TIP completado en ${this.simuladorDominio.parametros.TIP} unidades`);
     
     // Para algoritmos expropitativos, verificar si debe expropiar
@@ -259,7 +283,7 @@ export class AdaptadorSimuladorDominio {
         procesoActual.expropiar(this.simuladorDominio.tiempoActual);
         
         // GENERAR EVENTO CORRIENDO_A_LISTO para el proceso expropiado
-        agregarEventoInterno(this.state, 'AgotamientoQuantum', procesoActual.id, 
+        registrarEvento(this.state, 'AgotamientoQuantum', procesoActual.id, 
           `Proceso expropiado por ${proceso.id} (SRTN)`);
         
         // Remover proceso actual de CPU y agregarlo a la cola ordenadamente
@@ -286,14 +310,18 @@ export class AdaptadorSimuladorDominio {
     // Si no hay expropiación, programar despacho solo si CPU está libre
     this.programarDespachoSiNecesario();
     
-    agregarEventoInterno(this.state, 'FinTIP', proceso.id, 'Proceso listo para despacho');
+    registrarEvento(this.state, 'FinTIP', proceso.id, 'Proceso listo para despacho');
   }
 
   /**
    * Maneja el despacho de un proceso
+   * CRÍTICO: El TCP se cobra únicamente aquí (L→C), NUNCA en B→L
    */
   private manejarDespacho(): void {
     if (this.simuladorDominio.readyQueue.length === 0) return;
+    
+    // ASERCIÓN: Registrar tiempo SO antes del despacho para verificar TCP
+    const tiempoSOAntes = this.simuladorDominio.tiempoTotalSO;
     
     // Seleccionar proceso usando la estrategia configurada
     const procesoSeleccionado = this.estrategia.elegirSiguiente(
@@ -375,11 +403,30 @@ export class AdaptadorSimuladorDominio {
       }
     }
     
-    agregarEventoInterno(this.state, 'Despacho', procesoSeleccionado.id, 
+    registrarEvento(this.state, 'Despacho', procesoSeleccionado.id, 
       `TCP: ${this.simuladorDominio.parametros.TCP}, Algoritmo: ${this.estrategia.nombre}`);
     
-    // Actualizar contadores
-    this.simuladorDominio.tiempoTotalSO += this.simuladorDominio.parametros.TCP;
+    // CORRECCIÓN CRÍTICA: Manejo inteligente de TCP
+    // 1. Siempre cobrar TCP por despacho normal
+    // 2. Si hay TCP pendiente, usarlo en lugar de agregar otro
+    let tcpCobrado = 0;
+    
+    if (this.simuladorDominio.tieneTCPPendiente()) {
+      // Hay TCP pendiente por expropiación anterior, cobrarlo
+      tcpCobrado = this.simuladorDominio.cobrarTCPPendiente();
+      console.log(`💰 Cobrando TCP pendiente por expropiación: ${tcpCobrado}`);
+    } else {
+      // Despacho normal, cobrar TCP estándar
+      tcpCobrado = this.simuladorDominio.parametros.TCP;
+      this.simuladorDominio.tiempoTotalSO += tcpCobrado;
+    }
+    
+    // ASERCIÓN: Verificar que efectivamente se cobró el TCP esperado
+    const tiempoSODespues = this.simuladorDominio.tiempoTotalSO;
+    const tcpEfectivamenteCobrado = tiempoSODespues - tiempoSOAntes;
+    if (tcpEfectivamenteCobrado !== tcpCobrado) {
+      throw new Error(`🚨 VIOLACIÓN CRÍTICA: TCP mal cobrado! Esperado: ${tcpCobrado}, cobrado: ${tcpEfectivamenteCobrado}`);
+    }
   }
 
   /**
@@ -422,7 +469,7 @@ export class AdaptadorSimuladorDominio {
       
       this.simuladorDominio.tiempoTotalSO += this.simuladorDominio.parametros.TFP;
       
-      agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.id, 
+      registrarEvento(this.state, 'FinRafagaCPU', proceso.id, 
         'Proceso completado, iniciando TFP');
     } else if (proceso.estado === EstadoProceso.BLOQUEADO) {
       // Va a I/O - debe durar tiempo real de I/O
@@ -436,7 +483,7 @@ export class AdaptadorSimuladorDominio {
         `I/O completado tras ${proceso.duracionIO} unidades`
       );
       
-      agregarEventoInterno(this.state, 'FinRafagaCPU', proceso.id, 
+      registrarEvento(this.state, 'FinRafagaCPU', proceso.id, 
         `Inicia I/O por ${proceso.duracionIO} unidades`);
     }
     
@@ -452,12 +499,24 @@ export class AdaptadorSimuladorDominio {
   private manejarFinIO(proceso: Proceso): void {
     console.log(`💿 Fin I/O del proceso ${proceso.id} en tiempo ${this.simuladorDominio.tiempoActual}`);
     
+    // ASERCIÓN CRÍTICA: Verificar que B→L es realmente instantáneo
+    const tiempoAntes = this.simuladorDominio.tiempoActual;
+    
     // CORRECCIÓN CRÍTICA: B→L es instantáneo, NO consumir TCP aquí
     // El TCP se aplica exclusivamente en L→C (manejarDespacho)
     
     this.simuladorDominio.removerDeListaBloqueados(proceso.id);
     proceso.completarIO(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.readyQueue.push(proceso);
+    
+    // ASERCIÓN: Verificar que el tiempo no cambió durante B→L
+    const tiempoDespues = this.simuladorDominio.tiempoActual;
+    if (tiempoDespues !== tiempoAntes) {
+      throw new Error(`🚨 VIOLACIÓN CRÍTICA: B→L no es instantáneo! Tiempo antes: ${tiempoAntes}, después: ${tiempoDespues}, Δt=${tiempoDespues - tiempoAntes}`);
+    }
+    
+    // ASERCIÓN: Verificar que no se haya cobrado TCP en esta transición
+    // (El TCP debe cobrarse solo en manejarDespacho)
     
     // Para algoritmos expropitativos (como SRTN), verificar si debe expropiar tras regreso de I/O
     if (this.estrategia.soportaExpropiacion && this.simuladorDominio.procesoActualCPU) {
@@ -481,7 +540,7 @@ export class AdaptadorSimuladorDominio {
         procesoActual.expropiar(this.simuladorDominio.tiempoActual);
         
         // GENERAR EVENTO CORRIENDO_A_LISTO para el proceso expropiado
-        agregarEventoInterno(this.state, 'AgotamientoQuantum', procesoActual.id, 
+        registrarEvento(this.state, 'AgotamientoQuantum', procesoActual.id, 
           `Proceso expropiado por ${proceso.id} tras I/O (SRTN)`);
         
         // Remover proceso actual de CPU y agregarlo a la cola ordenadamente
@@ -501,7 +560,7 @@ export class AdaptadorSimuladorDominio {
           'Despacho por expropiación tras I/O'
         );
         
-        agregarEventoInterno(this.state, 'FinES', proceso.id, 'I/O completado, expropió proceso actual');
+        registrarEvento(this.state, 'FinES', proceso.id, 'I/O completado, expropió proceso actual');
         return;
       }
     }
@@ -509,7 +568,7 @@ export class AdaptadorSimuladorDominio {
     // Si no hay expropiación, despachar si CPU está libre
     this.programarDespachoSiNecesario();
     
-    agregarEventoInterno(this.state, 'FinES', proceso.id, 'I/O completado, proceso listo');
+    registrarEvento(this.state, 'FinES', proceso.id, 'I/O completado, proceso listo');
   }
 
   /**
@@ -524,8 +583,8 @@ export class AdaptadorSimuladorDominio {
     // Despachar siguiente proceso si hay alguno listo
     this.programarDespachoSiNecesario();
     
-    agregarEventoInterno(this.state, 'FinTFP', proceso.id, 'Proceso completamente terminado');
-    agregarEventoExportacion(this.state, 'FinTFP', proceso.id);
+    registrarEvento(this.state, 'FinTFP', proceso.id, 'Proceso completamente terminado');
+    // ELIMINADO: agregarEventoExportacion - la proyección es automática
   }
 
   /**
@@ -576,14 +635,15 @@ export class AdaptadorSimuladorDominio {
     if (totalProcesosActivos === 1 && this.estrategia.nombre === 'Round Robin') {
       // Caso especial: RR con un solo proceso
       // Según consigna: "pasamos a listo y luego le volvemos a asignar la cpu (usamos un TCP)"
-      console.log(`🔄 RR proceso único: ${proceso.id} va a LISTO y regresa (consume TCP)`);
+      console.log(`🔄 RR proceso único: ${proceso.id} va a LISTO y regresa (marcando TCP pendiente)`);
       
       this.simuladorDominio.procesoActualCPU = undefined;
       proceso.expropiar(this.simuladorDominio.tiempoActual);
       this.simuladorDominio.readyQueue.push(proceso);
       
-      // Aplicar TCP por el cambio de contexto (según consigna TP)
-      this.simuladorDominio.tiempoTotalSO += this.simuladorDominio.parametros.TCP;
+      // CORRECCIÓN: Marcar TCP como pendiente en lugar de cobrarlo aquí
+      // Se cobrará en el próximo despacho para evitar doble cobro
+      this.simuladorDominio.marcarTCPPendiente();
       
       // Programar despacho inmediato con micro-offset
       this.simuladorDominio.programarEvento(
@@ -593,7 +653,7 @@ export class AdaptadorSimuladorDominio {
         'Despacho tras expropiación RR (proceso único)'
       );
       
-      agregarEventoInterno(this.state, 'AgotamientoQuantum', proceso.id, 'Proceso único expropiado (consume TCP)');
+      registrarEvento(this.state, 'AgotamientoQuantum', proceso.id, 'Proceso único expropiado (TCP pendiente)');
       return;
     }
     
@@ -601,6 +661,12 @@ export class AdaptadorSimuladorDominio {
     this.simuladorDominio.procesoActualCPU = undefined;
     proceso.expropiar(this.simuladorDominio.tiempoActual);
     this.simuladorDominio.readyQueue.push(proceso);
+    
+    // CORRECCIÓN: Para múltiples procesos en RR, también marcar TCP pendiente
+    // para ser consistente con el modelo de "TCP pendiente" 
+    if (this.estrategia.nombre === 'Round Robin') {
+      this.simuladorDominio.marcarTCPPendiente();
+    }
     
     // CORRECCIÓN: En RR, el despacho debe ser inmediato pero CON un pequeño offset
     // para asegurar que se procese después de la expropiación
@@ -611,7 +677,8 @@ export class AdaptadorSimuladorDominio {
       'Despacho tras expropiación RR'
     );
     
-    agregarEventoInterno(this.state, 'AgotamientoQuantum', proceso.id, 'Proceso expropiado');
+    registrarEvento(this.state, 'AgotamientoQuantum', proceso.id, 
+      this.estrategia.nombre === 'Round Robin' ? 'Proceso expropiado (TCP pendiente)' : 'Proceso expropiado');
   }
 
   /**

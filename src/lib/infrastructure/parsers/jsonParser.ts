@@ -56,9 +56,9 @@ export async function parseJsonToWorkload(file: File): Promise<Workload> {
       processes,
       config: {
         policy: null as any, // La UI debe asignar después
-        tip: 0,
-        tfp: 0,
-        tcp: 0,
+        tip: 1,
+        tfp: 1,
+        tcp: 1,
         quantum: undefined
       }
     };
@@ -86,9 +86,9 @@ export async function parseJsonToWorkload(file: File): Promise<Workload> {
       processes,
       config: jsonData.config ? parseConfigFromJson(jsonData.config) : {
         policy: null as any,
-        tip: 0,
-        tfp: 0,
-        tcp: 0,
+        tip: 1,
+        tfp: 1,
+        tcp: 1,
         quantum: undefined
       }
     };

@@ -21,6 +21,9 @@ export class Simulador {
   public tiempoTotalInactivo: number = 0;
   public tiempoTotalSO: number = 0; // TIP + TFP + TCP
   public tiempoTotalUsuario: number = 0;
+  
+  // CORRECCIÓN RR: Flag para marcar TCP pendiente por expropiación
+  public tcpPendientePorExpropiacion: boolean = false;
 
   // Log de eventos para bitácora
   public registroEventos: Evento[] = [];
@@ -142,6 +145,33 @@ export class Simulador {
     this.tiempoTotalInactivo = 0;
     this.tiempoTotalSO = 0;
     this.tiempoTotalUsuario = 0;
+    this.tcpPendientePorExpropiacion = false;
+  }
+
+  /**
+   * Marca que hay un TCP pendiente por cobrar debido a expropiación
+   */
+  public marcarTCPPendiente(): void {
+    this.tcpPendientePorExpropiacion = true;
+  }
+
+  /**
+   * Cobra el TCP pendiente y limpia el flag
+   */
+  public cobrarTCPPendiente(): number {
+    if (this.tcpPendientePorExpropiacion) {
+      this.tcpPendientePorExpropiacion = false;
+      this.tiempoTotalSO += this.parametros.TCP;
+      return this.parametros.TCP;
+    }
+    return 0;
+  }
+
+  /**
+   * Verifica si hay TCP pendiente por cobrar
+   */
+  public tieneTCPPendiente(): boolean {
+    return this.tcpPendientePorExpropiacion;
   }
 
   obtenerEstadisticas(): {

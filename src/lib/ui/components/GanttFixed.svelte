@@ -49,7 +49,7 @@
 </script>
 
 <div class="gantt-simple">
-  <h3>📈 Diagrama de Gantt - {algoritmo}</h3>
+  <h3>Diagrama de Gantt - {algoritmo}</h3>
   
   {#if segmentos.length > 0 && tiempoTotal > 0}
     <!-- Leyenda de colores -->
@@ -167,7 +167,7 @@
     </div>
   {:else}
     <div class="no-datos">
-      <h4>❌ No hay datos para mostrar</h4>
+      <h4>No hay datos para mostrar</h4>
       <p>No se encontraron segmentos de simulación para generar el diagrama.</p>
     </div>
   {/if}
