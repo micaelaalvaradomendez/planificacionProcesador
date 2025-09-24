@@ -132,7 +132,7 @@ export class AdaptadorSimuladorDominio {
     let iteraciones = 0;
 
     while (!this.simuladorDominio.colaEventos.isEmpty() && 
-           !this.simuladorDominio.todosProcesosTerninados()) {
+               !this.simuladorDominio.todosProcesosTerminados()) {
       
       // Verificar límite de iteraciones
       if (maxIteraciones > 0 && iteraciones >= maxIteraciones) {

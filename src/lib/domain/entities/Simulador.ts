@@ -117,7 +117,7 @@ export class Simulador {
     }
   }
 
-  todosProcesosTerninados(): boolean {
+  todosProcesosTerminados(): boolean {
     return this.procesosTerminados.length === this.todosLosProcesos.size;
   }
 

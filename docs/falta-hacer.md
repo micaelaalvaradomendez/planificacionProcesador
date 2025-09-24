@@ -5,3 +5,6 @@
 - revisar documentacion
 - revisar logica interna del proyecto
 - hacer giagramas faltantes
+    * diagrama de flujo
+    * de clases
+    

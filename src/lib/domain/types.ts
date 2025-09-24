@@ -41,7 +41,7 @@ export interface ParametrosProces {
   TFP: number; // Tiempo que utiliza el SO para terminar procesos
   TCP: number; // Tiempo de conmutación entre procesos (context switching)
   quantum?: number; // Rodaja de tiempo para Round Robin
-  policy: Algoritmo;
+  policy: Policy;
 }
 
 export interface ParametrosSimulacion {
