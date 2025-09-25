@@ -1,5 +1,5 @@
-@startuml Actividades_Simulador_Unificado
-title Diagramas de Actividad - Simulador de Planificación de Procesos
+@startuml Actividades_Simulador_Mejorado
+title Diagramas de Actividad - Simulador Mejorado con Estados Suspendidos
 
 |Sistema Principal - Bucle Central|
 start
@@ -24,10 +24,32 @@ while (¿Cola de eventos no vacía?) is (SÍ)
     |Ingreso de Procesos|
     :Proceso P arriba al sistema;
     :P.estado = NUEVO;
+    
+    if (¿Hay suficiente memoria para P.tamaño?) then (NO)
+      :Suspender procesos existentes por memoria;
+      note right
+      **NUEVA CARACTERÍSTICA**
+      • Mover procesos LISTO → LISTO_SUSPENDIDO
+      • Mover procesos BLOQUEADO → BLOQUEADO_SUSPENDIDO
+      • Liberar memoria = Σ procesos suspendidos
+      end note
+    endif
+    
     :Aplicar TIP (Tiempo Ingreso Proceso);
     note right: Sobrecarga administrativa del SO
-    :P.estado = NUEVO → LISTO (instantáneo, Δt=0);
-    :Insertar P en Ready Queue según algoritmo;
+    :Programar evento FIN_TIP;
+    
+  case (FIN_TIP)
+    |Finalización TIP|
+    if (¿Hay suficiente memoria?) then (SÍ)
+      :P.estado = NUEVO → LISTO (instantáneo, Δt=0);
+      :Reservar memoria (P.tamaño);
+      :Insertar P en Ready Queue según algoritmo;
+      :Activar procesos suspendidos si hay memoria;
+    else (NO)
+      :P.estado = NUEVO → LISTO_SUSPENDIDO;
+      :P permanece en cola suspendida;
+    endif
     
     if (¿Algoritmo expropiativo?) then (SÍ)
       :Evaluar expropiación inmediata;
@@ -81,6 +103,34 @@ while (¿Cola de eventos no vacía?) is (SÍ)
     :Aplicar TCP (sobrecarga por cambio contexto);
     :Insertar P al final de Ready Queue (circular);
     :CPU queda libre;
+    
+  case (LISTO_A_LISTO_SUSPENDIDO)
+    |Suspensión por Memoria|
+    :P.estado = LISTO → LISTO_SUSPENDIDO;
+    :Liberar memoria ocupada por P;
+    :Remover P de Ready Queue;
+    note right: **NUEVA TRANSICIÓN**
+    
+  case (BLOQUEADO_A_BLOQUEADO_SUSPENDIDO)
+    |Suspensión I/O por Memoria|
+    :P.estado = BLOQUEADO → BLOQUEADO_SUSPENDIDO;
+    :Liberar memoria ocupada por P;
+    :Remover P de cola bloqueados;
+    note right: **NUEVA TRANSICIÓN**
+    
+  case (LISTO_SUSPENDIDO_A_LISTO)
+    |Activación de Suspendido|
+    :P.estado = LISTO_SUSPENDIDO → LISTO;
+    :Reservar memoria para P;
+    :Insertar P en Ready Queue según algoritmo;
+    note right: **NUEVA TRANSICIÓN**
+    
+  case (BLOQUEADO_SUSPENDIDO_A_BLOQUEADO)
+    |Activación I/O Suspendido|
+    :P.estado = BLOQUEADO_SUSPENDIDO → BLOQUEADO;
+    :Reservar memoria para P;
+    :Continuar operación I/O pendiente;
+    note right: **NUEVA TRANSICIÓN**
     
   endswitch
   

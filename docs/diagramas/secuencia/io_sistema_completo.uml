@@ -1,71 +1,215 @@
 @startuml
-title Sistema I/O - Gestión de Estados y Transiciones
-participant "Simulador" as Sim  
-participant "Proceso" as P
-participant "CPU" as CPU
-participant "ReadyQueue" as RQ
-participant "IODevice" as IO
+title Sistema I/O Mejorado - Con Estados Suspendidos
+participant "AdaptadorSimuladorDominio" as Adaptador
+participant "MotorSimulacion" as Motor  
+participant "EstadoSistema" as Estado
 participant "EventQueue" as EQ
-participant "Scheduler" as Sch
+participant "ReadyQ" as RQ
+participant "BlockedQ" as BQ
+participant "Logger" as Logger
+participant "CPU" as CPU
+participant "IODevice" as IO
+participant "EstrategiaScheduler" as Strategy
+participant "Proceso" as P
 
-== Flujo Completo I/O ==
+== Bucle Principal I/O ==
 
-group Inicio de Operación I/O
-    P -> CPU: ejecutando ráfaga CPU
-    CPU -> P: fin ráfaga CPU
-    P -> P: estado = CORRIENDO → BLOQUEADO
-    
-    note right: **Transición Crítica B→L:** 
-    note right: DEBE ser instantánea (0u)
-    note right: NO se cobra TCP aquí
-    
-    Sim -> EQ: registrar evento FIN_IO
-    EQ -> EQ: tiempo = actual + duracion_io
-    P -> IO: iniciar operación I/O
-    IO -> IO: dispositivo ocupado por duración
-end
+note top of Motor: **Orden eventos simultáneos:**\n1.FIN_PROCESO 2.FIN_RAFAGA_CPU 3.EXPROPIACION\n4.FIN_IO 5.FIN_TIP 6.DISPATCH
 
-group CPU queda libre - Despacho
-    Sim -> RQ: solicitar próximo proceso  
-    RQ -> Sch: aplicar política scheduling
-    Sch -> RQ: seleccionar proceso P_next
+loop while EventQueue not empty
+    Motor -> EQ: popNext() [orden prioridad académica]
+    EQ --> Motor: evento
+    Motor -> Logger: registrar(t, tipo, pid, descripcion)
+
+group Inicio de Operación I/O (FIN_RAFAGA_CPU prioridad 2)
+    Motor -> P: completarRafaga()
     
-    alt Si hay proceso disponible
-        RQ -> CPU: despachar P_next
-        CPU -> P: estado = LISTO → CORRIENDO  
-        Sim -> Sim: **TCP = valor configurado**
-        note right: TCP SOLO en L→C (despacho)
-    else Ready Queue vacía
-        CPU -> CPU: idle hasta próximo evento
-        note right: CPU idle, no hay TCP
+    alt [necesita I/O] proceso requiere operación de entrada/salida
+        Motor -> P: estado = CORRIENDO → BLOQUEADO
+        Motor -> CPU: liberar()
+        Motor -> Logger: registrar(t, "C->B", pid, "inicia I/O")
+        
+        note right: **Transición C→B:**\nINSTANTÁNEA (Δt=0)\nNO se cobra TCP
+        
+        Motor -> Estado: verificarMemoriaDisponible()
+        alt [memoria suficiente]
+            Motor -> BQ: push(P, ioSpec)
+            Motor -> EQ: schedule(FIN_IO, t+duracionIO, pid) [prioridad 4]
+            P -> IO: iniciarOperacion(duracion)
+            Motor -> Logger: registrar(t, "IO_START", pid, "I/O normal")
+        else [presión de memoria]
+            Motor -> P: estado = BLOQUEADO → BLOQUEADO_SUSPENDIDO
+            Motor -> Estado: liberarMemoria(P.tamaño)
+            Motor -> Estado: suspenderProceso(P)
+            Motor -> EQ: schedule(FIN_IO, t+duracionIO, pid) [prioridad 4]
+            P -> IO: iniciarOperacion(duracion) [en segundo plano]
+            Motor -> Logger: registrar(t, "IO_SUSPEND", pid, "I/O suspendido")
+            Motor -> Motor: activarProcesosSuspendidos()
+        end
+        
+        Motor -> Estado: procesoEnCPU = null
+        Motor -> CPU: idle()
+    else [terminó] todas las ráfagas completadas
+        Motor -> EQ: schedule(FIN_PROCESO, t, pid) [prioridad 1]
     end
 end
 
-group Finalización I/O
-    IO -> IO: operación I/O completa
-    IO -> EQ: evento FIN_IO disparado
-    EQ -> Sim: procesar evento FIN_IO
+group Finalización I/O (FIN_IO prioridad 4)
+    Motor -> IO: completarOperacion(pid)
+    IO --> Motor: operación completada
     
-    Sim -> P: estado = BLOQUEADO → LISTO
-    note right: **L instantáneo:** NO hay TCP en B→L
-    
-    Sim -> RQ: insertar proceso en cola
-    RQ -> Sch: evaluar si requiere expropiación
-    
-    alt Scheduling Preemptive (Priority, SRTF)
-        Sch -> CPU: comparar prioridades/tiempos
-        alt P_nuevo tiene mayor prioridad
-            CPU -> CPU: expropiación del proceso actual
-            CPU -> P: estado = CORRIENDO → LISTO  
-            Sim -> Sim: **TCP por expropiación**
-            RQ -> CPU: despachar P_nuevo
-            CPU -> P: estado = LISTO → CORRIENDO
-        else Proceso actual mantiene CPU
-            RQ -> RQ: P_nuevo espera en cola
+    alt [proceso normal] en memoria
+        Motor -> BQ: remove(pid)
+        Motor -> P: estado = BLOQUEADO → LISTO
+        Motor -> RQ: push(P, criterio_politica)
+        Motor -> Logger: registrar(t, "B->L", pid, "I/O completado")
+        note right: **B→L costo 0** - transición instantánea
+    else [proceso suspendido] fuera de memoria
+        Motor -> P: estado = BLOQUEADO_SUSPENDIDO → LISTO_SUSPENDIDO
+        Motor -> Estado: mantenerSuspendido(P) [sin memoria aún]
+        Motor -> Logger: registrar(t, "BS->LS", pid, "I/O completado suspendido")
+        
+        Motor -> Estado: verificarMemoriaDisponible()
+        alt [hay memoria suficiente]
+            Motor -> P: estado = LISTO_SUSPENDIDO → LISTO
+            Motor -> Estado: reservarMemoria(P.tamaño)
+            Motor -> RQ: push(P, criterio_politica)
+            Motor -> Logger: registrar(t, "LS->L", pid, "reactivado tras I/O")
         end
-    else Scheduling Non-Preemptive (FCFS, SJF, RR)
-        RQ -> RQ: P_nuevo espera su turno
-        note right: No expropiación por retorno I/O
+    end
+end
+
+group Despacho tras I/O
+    Motor -> Motor: evaluarPlanificacion()
+    
+    alt [CPU idle y RQ no vacía]
+        Motor -> EQ: schedule(DISPATCH, t, "") [prioridad 6]
+    else [CPU ocupada] evaluar expropiación por política
+        Motor -> Strategy: evaluarExpropiacion(proceso_io, proceso_cpu)
+        Strategy --> Motor: decision_expropiacion
+        
+        alt [expropiación requerida] por política específica
+            Motor -> EQ: schedule(EXPROPIACION, t, proceso_cpu) [prioridad 3]
+            Motor -> Logger: registrar(t, "PREEMPT_IO", proceso_cpu, "expropiado por FIN_IO")
+        end
+    end
+end
+
+group Procesamiento DISPATCH (prioridad 6)
+    alt [CPU libre y RQ no vacía]
+        Motor -> RQ: verificarProcesosLISTOS() [no suspendidos]
+        RQ --> Motor: lista_disponibles
+        
+        alt [hay procesos LISTO disponibles]
+            Motor -> Strategy: elegirSiguiente(lista_disponibles, t)
+            Strategy --> Motor: P_next
+            Motor -> RQ: remove(P_next)
+            ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO (t += TCP)
+            Motor -> P_next: estado = LISTO → CORRIENDO
+            Motor -> CPU: asignar(P_next)
+            Motor -> Estado: procesoEnCPU = P_next
+            Motor -> EQ: schedule(FIN_RAFAGA_CPU, t+TCP+duracion, P_next) [prioridad 2]
+            Motor -> Logger: registrar(t, "L->C", P_next, "dispatch + TCP")
+        else [solo procesos suspendidos]
+            Motor -> CPU: mantenerIdle()
+            Motor -> Estado: intentarReactivarSuspendidos()
+            Motor -> Logger: registrar(t, "CPU_IDLE", "", "solo procesos suspendidos")
+        end
+    else [RQ vacía]
+        Motor -> CPU: mantenerIdle()
+        Motor -> Logger: registrar(t, "CPU_IDLE", "", "no hay procesos listos")
+    end
+end
+
+group Gestión de Memoria y Estados Suspendidos
+    Motor -> Estado: gestionarMemoria()
+    
+    alt [presión de memoria] memoria < umbralSuspension
+        Motor -> Estado: suspenderProcesosPorMemoria()
+        
+        loop para cada proceso candidato a suspensión
+            Motor -> Estado: seleccionarParaSuspension() [mayor tamaño, menor prioridad]
+            
+            alt [proceso en estado LISTO]
+                Motor -> P: estado = LISTO → LISTO_SUSPENDIDO
+                Motor -> RQ: remove(P)
+                Motor -> Estado: liberarMemoria(P.tamaño)
+                Motor -> Logger: registrar(t, "L->LS", P, "suspendido por memoria")
+            else [proceso en estado BLOQUEADO]
+                Motor -> P: estado = BLOQUEADO → BLOQUEADO_SUSPENDIDO
+                Motor -> BQ: mantener(P) [I/O continúa]
+                Motor -> Estado: liberarMemoria(P.tamaño)
+                Motor -> Logger: registrar(t, "B->BS", P, "suspendido por memoria")
+            end
+        end
+    else [memoria disponible] memoria >= umbralActivacion
+        Motor -> Estado: reactivarProcesosSuspendidos()
+        
+        loop para cada proceso suspendido que quepa
+            Motor -> Estado: seleccionarParaReactivacion() [FIFO, tamaño disponible]
+            
+            alt [proceso LISTO_SUSPENDIDO]
+                Motor -> P: estado = LISTO_SUSPENDIDO → LISTO
+                Motor -> Estado: reservarMemoria(P.tamaño)
+                Motor -> RQ: push(P, criterio_politica)
+                Motor -> Logger: registrar(t, "LS->L", P, "reactivado")
+            else [proceso BLOQUEADO_SUSPENDIDO]
+                Motor -> P: estado = BLOQUEADO_SUSPENDIDO → BLOQUEADO
+                Motor -> Estado: reservarMemoria(P.tamaño)
+                Motor -> BQ: restore(P) [I/O ya en progreso]
+                Motor -> Logger: registrar(t, "BS->B", P, "reactivado")
+            end
+        end
+    end
+end
+
+== Métricas y Logger ==
+note over Logger: **Logger registra todos los eventos I/O:**\n• Inicio/fin de operaciones I/O\n• Transiciones de suspensión\n• Tiempos de bloqueo\n• Overlapping I/O y CPU\n**Para reconstruir:**\n• Utilización de dispositivos I/O\n• Tiempos de espera por I/O\n• Eficiencia de gestión de memoria
+
+end
+        note right: **CPU idle** + intentar activar suspendidos
+    end
+end
+
+group Finalización I/O (EventoMejorado prioridad 4)
+    Motor -> Evento: procesar FIN_IO (BLOQUEADO_A_LISTO)
+    IO -> Motor: operación I/O completa
+    
+    alt Proceso en estado BLOQUEADO
+        Motor -> P: estado = BLOQUEADO → LISTO
+        Motor -> Estado: verificar memoria suficiente
+        alt Hay memoria
+            Motor -> ReadyQ: insertar proceso en cola LISTO
+            Motor -> Strategy: alVolverseListoProceso(P, tiempoActual)
+        else Sin memoria
+            Motor -> P: estado = LISTO → LISTO_SUSPENDIDO
+            note right: **Suspensión inmediata** por falta de memoria
+        end
+    else Proceso en BLOQUEADO_SUSPENDIDO
+        Motor -> Estado: verificar memoria suficiente
+        alt Hay memoria
+            Motor -> P: estado = BLOQUEADO_SUSPENDIDO → BLOQUEADO
+            Motor -> Estado: reservar memoria para P
+            Motor -> Evento: continuar operación I/O si necesario
+        else Sin memoria
+            note right: Permanece BLOQUEADO_SUSPENDIDO
+        end
+    end
+    
+    note right: **Transición B→L:** INSTANTÁNEA (Δt=0), NO TCP
+    
+    alt Scheduling Expropiativo (Priority, SRTF)
+        Motor -> Strategy: debeExpropiar(procesoActual, P, tiempo)
+        alt Debe expropiar
+            Motor -> Evento: programar EXPROPIACION(tiempo, prioridad 3)
+            note right: **TCP pendiente** para próximo DISPATCH
+        else Mantener proceso actual
+            note right: P espera en Ready Queue
+        end
+    else Scheduling No Expropiativo (FCFS, SJF)
+        note right: P espera su turno, no evalúa expropiación
+    else Round Robin
+        note right: **Consigna TP:** RR no interrumpe por retorno I/O
     end
 end
 

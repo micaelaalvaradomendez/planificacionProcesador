@@ -1,26 +1,26 @@
 [
   {
-    "name": "ProcesoCortísimo",
-    "tiempoArribo": 0,
-    "rafagasCPU": 1,
-    "duracionRafagaCPU": 1,
-    "duracionRafagaES": 0,
-    "prioridad": 50
+    "nombre": "ProcesoCortisimo",
+    "tiempo_arribo": 0,
+    "cantidad_rafagas_cpu": 1,
+    "duracion_rafaga_cpu": 1,
+    "duracion_rafaga_es": 0,
+    "prioridad_externa": 50
   },
   {
-    "name": "ProcesoLargo",
-    "tiempoArribo": 0,
-    "rafagasCPU": 1,
-    "duracionRafagaCPU": 10,
-    "duracionRafagaES": 0,
-    "prioridad": 50
+    "nombre": "ProcesoLargo",
+    "tiempo_arribo": 0,
+    "cantidad_rafagas_cpu": 1,
+    "duracion_rafaga_cpu": 10,
+    "duracion_rafaga_es": 0,
+    "prioridad_externa": 50
   },
   {
-    "name": "ProcesoMedio", 
-    "tiempoArribo": 2,
-    "rafagasCPU": 1,
-    "duracionRafagaCPU": 5,
-    "duracionRafagaES": 0,
-    "prioridad": 50
+    "nombre": "ProcesoMedio", 
+    "tiempo_arribo": 2,
+    "cantidad_rafagas_cpu": 1,
+    "duracion_rafaga_cpu": 5,
+    "duracion_rafaga_es": 0,
+    "prioridad_externa": 50
   }
 ]

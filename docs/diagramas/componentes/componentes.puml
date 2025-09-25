@@ -1,5 +1,5 @@
-@startuml Componentes_Simulador
-title Diagrama de Componentes - Arquitectura del Simulador
+@startuml Componentes_Simulador_Mejorado
+title Diagrama de Componentes - Simulador Mejorado con Estados Suspendidos
 
 package "SvelteKit Routes" {
   component [+page.svelte (Home)] as HomePage
@@ -32,8 +32,10 @@ package "Application Layer" {
 }
 
 package "Domain Entities" {
-  component [Simulador.ts] as SimuladorEntity
+  component [MotorSimulacionMejorado.ts] as MotorEntity
   component [Proceso.ts] as ProcesoEntity
+  component [EventoMejorado.ts] as EventoMejorado
+  component [EstadoSistema.ts] as EstadoSistema
 }
 
 package "Domain Algorithms" {
@@ -120,9 +122,11 @@ RunSim --> EventLogger : event conversion
 BuildGantt --> GanttBuilder : gantt service
 ComputeStats --> MetricsCalc : metrics service
 
-' === DOMAIN LAYER CONNECTIONS ===
-SimuladorEntity --> ProcesoEntity : manages processes
-SimuladorEntity --> DomainTypes : uses parameters
+' === DOMAIN LAYER CONNECTIONS (MOTOR MEJORADO) ===
+MotorEntity --> ProcesoEntity : manages processes
+MotorEntity --> EventoMejorado : schedules priority events
+MotorEntity --> EstadoSistema : maintains system state
+MotorEntity --> DomainTypes : uses parameters
 
 FCFS --> SchedulerBase : extends base scheduler
 RR --> SchedulerBase : extends base scheduler
@@ -135,8 +139,8 @@ GanttBuilder --> DomainTypes : uses SimEvent types
 MetricsCalc --> ProcesoEntity : calculates metrics
 MetricsCalc --> DomainTypes : uses metric types
 
-' === CORE LAYER CONNECTIONS ===
-AdaptadorSim --> SimuladorEntity : uses domain simulator
+' === CORE LAYER CONNECTIONS (MOTOR MEJORADO) ===
+AdaptadorSim --> MotorEntity : uses improved motor
 AdaptadorSim --> FCFS : FCFS strategy
 AdaptadorSim --> RR : Round Robin strategy
 AdaptadorSim --> Priority : Priority strategy  
@@ -185,19 +189,31 @@ PanelExport --> ExportEvents : event export
 PanelExport --> ExportMetrics : metrics export
 PanelExport --> GanttExporter : gantt export
 
-' Relaciones Infrastructure
-Simulador --> Adapters : uses adapters
-Simulador --> SysConfig : reads configuration
-Stats --> Utils : mathematical operations
+' === CARACTERÍSTICAS NUEVAS ===
+EventoMejorado --> PriorityQueue : priority-based ordering
+EstadoSistema --> MotorEntity : memory management
+ProcesoEntity --> EstadoSistema : size-based suspension
 
+note bottom of MotorEntity
+Motor Mejorado - Implementa estadomejorado.puml:
+✅ Estados suspendidos (LISTO_SUSPENDIDO, BLOQUEADO_SUSPENDIDO)
+✅ Gestión automática de memoria con suspensión
+✅ Orden de eventos simultáneos (prioridad 1-6):
+   1. FIN_PROCESO (C→T)
+   2. FIN_RAFAGA_CPU (C→B) 
+   3. EXPROPIACION (C→L)
+   4. FIN_IO (B→L)
+   5. FIN_TIP (N→L)
+   6. DISPATCH (L→C)
+✅ TCP solo en DISPATCH y EXPROPIACIÓN
+✅ Transiciones académicamente correctas
+✅ 767 líneas de implementación completa
+end note
 
-
-note bottom of Simulador
-Motor principal que:
-- Gestiona el reloj del sistema
-- Procesa eventos cronológicamente
-- Maneja transiciones de estado
-- Aplica overheads (TIP, TCP, TFP)
+note right of EventoMejorado
+EventoMejorado hereda de Evento base pero
+agrega prioridad académica para eventos
+simultáneos según estadomejorado.puml
 end note
 
 @enduml

@@ -1,40 +1,55 @@
-@startuml PRIORITY_Algoritmo_Unificado
-title PRIORITY - Algoritmo de Planificación - Versión Unificada
-
-title Priority Scheduling - Algoritmo de Decisión
+@startuml PRIORITY_Algoritmo_Mejorado
+title Priority Scheduling - Implementación Mejorada con Estados Suspendidos
 
 start
 
-:Evento requiere selección/evaluación;
+:MotorSimulacionMejorado requiere selección/evaluación;
 
 note right
-  **Eventos disparadores:**
-  • CPU libre + Ready Queue no vacía
-  • Nuevo proceso arriba (si expropiativo)
-  • Proceso retorna de I/O (si expropiativo)
+**Eventos disparadores en Motor Mejorado:**
+• CPU libre + Ready Queue no vacía
+• FIN_TIP (prioridad 5)
+• FIN_IO (prioridad 4)
+• Solo si hay memoria suficiente
 end note
 
 if (¿Ready Queue vacía?) then (SÍ)
   :CPU permanece idle;
+  :Activar procesos LISTO_SUSPENDIDO si hay memoria;
   stop
 endif
 
-:Ordenar Ready Queue por prioridad;
-note right: Mayor valor numérico = mayor prioridad
+:Aplicar aging si habilitado (solo procesos LISTO);
+note right
+**Aging Mejorado:**
+• Solo para procesos en estado LISTO
+• LISTO_SUSPENDIDO NO participan
+• Previene starvation académicamente
+end note
 
-:proceso = primer elemento (mayor prioridad);
+:proceso = elegirSiguiente(colaListos, tiempoActual);
+note right
+**Convención Académica:**
+• Menor número = Mayor prioridad
+• prioridad 1 > prioridad 2 > ... > prioridad N
+• EstrategiaSchedulerPrioridad.ts
+end note
 
 if (¿CPU ocupada y modo expropiativo?) then (SÍ)
-  :procesoActual = procesoEnCPU;
-  if (¿proceso.prioridad > procesoActual.prioridad?) then (SÍ)
-    :Expropiar procesoActual;
+  :procesoActual = estadoSistema.procesoEnCPU;
+  :debeExpropiar = strategy.debeExpropiar(actual, candidato, tiempo);
+  if (¿proceso.prioridad < procesoActual.prioridad?) then (SÍ - Mayor prioridad)
+    :Programar EventoMejorado EXPROPIACION (prioridad 3);
     :procesoActual.estado = CORRIENDO → LISTO;
-    :Aplicar TCP por expropiación;
-    :Insertar procesoActual en Ready Queue;
-    note right: **Expropiación inmediata por prioridad**
+    note right
+    **Expropiación Mejorada:**
+    • TCP se aplicará en próximo DISPATCH
+    • Orden de eventos garantizado
+    • Insertar en Ready Queue correctamente
+    end note
   elseif (¿proceso.prioridad == procesoActual.prioridad?) then (EMPATE)
     :Mantener procesoActual en CPU;
-    note right: **Política empate:** conservar proceso actual
+    note right: **REGLA ACADÉMICA CRÍTICA**\nEn empates: NO expropiar
     stop
   else (procesoActual tiene mayor prioridad)
     :Proceso espera en Ready Queue;
@@ -46,38 +61,43 @@ endif
 
 :proceso.estado = LISTO → CORRIENDO;
 
-:Aplicar TCP;
-note right: TCP en despacho L→C
+:Aplicar TCP (ÚNICO lugar en Priority);
+note right: **TCP MEJORADO**\nSolo en LISTO → CORRIENDO
 
-:procesoActualCPU = proceso;
+:estadoSistema.procesoEnCPU = proceso;
 
-:Programar FIN_RAFAGA_CPU;
+:Programar EventoMejorado FIN_RAFAGA_CPU (prioridad 2);
 
-if (¿Prevención inanición habilitada?) then (SÍ)
-  :Inicializar aging timestamp;
-  :Programar incremento prioridad periódico;
-  note right: Prevenir starvation procesos baja prioridad
+if (¿Presión de memoria?) then (SÍ)
+  :Evaluar suspensión de procesos de menor prioridad;
+  note right
+  **Gestión Memoria Inteligente:**
+  • Suspender procesos baja prioridad primero
+  • Mantener procesos críticos en memoria
+  end note
 endif
-
-:Actualizar estadísticas;
 
 stop
 
 note left of start
-**Política Priority:**
-• Expropiativo/No expropiativo configurable
-• Valor numérico mayor = mayor prioridad
-• Expropiación inmediata si nueva prioridad > actual
-• En empate de prioridad: mantener proceso actual
+**Priority Mejorado - Implementación Actual:**
+• ✅ EstrategiaSchedulerPrioridad.ts (219 líneas)
+• ✅ Estados suspendidos integrados
+• ✅ Aging solo para procesos LISTO
+• ✅ Convención: menor número = mayor prioridad
+• ✅ Empates: mantener proceso actual
 
-**Gestión Starvation:**
-• Aging: incremento gradual prioridad por espera
-• Intervalo configurable de boost
-• Previene inanición procesos baja prioridad
+**Características Académicas:**
+• ✅ Expropiación estricta por prioridad
+• ✅ Aging configurable contra starvation
+• ✅ Tie-breaker por orden de llegada
+• ✅ Gestión de memoria por prioridad
 
-**Casos TCP:**
-✓ Despacho L→C
-✓ Expropiación por mayor prioridad
+**Eventos TCP:**
+• ✅ LISTO → CORRIENDO (siempre)
+• ❌ CORRIENDO → BLOQUEADO (instantáneo)
+• ❌ CORRIENDO → LISTO (TCP pendiente)
+• ✅ Estados suspendidos (instantáneo)
 ✗ Empate de prioridades
 ✗ Proceso menor prioridad arriba
 end note

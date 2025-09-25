@@ -1,5 +1,5 @@
-@startuml FCFS_Algoritmo_Unificado
-title FCFS - First Come First Served - Flujo de Decisión Completo
+@startuml FCFS_Algoritmo_Mejorado
+title FCFS - Implementación Mejorada con Estados Suspendidos
 
 start
 
@@ -17,12 +17,14 @@ if (¿Ready Queue vacía?) then (SÍ)
   stop
 endif
 
-:Examinar Ready Queue;
+:Examinar Ready Queue (solo procesos LISTO);
 note right
-**Estructura de Ready Queue:**
+**Ready Queue Mejorada:**
 • Cola FIFO estricta
-• Sin reordenamiento
+• Solo procesos en estado LISTO (con memoria)
+• Procesos LISTO_SUSPENDIDO NO incluidos
 • Preserva orden temporal de llegada
+• Activación automática desde suspendidos
 end note
 
 :proceso = primer elemento de Ready Queue (FIFO);

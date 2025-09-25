@@ -1,99 +1,144 @@
 @startuml
-title Diagrama de Secuencia General - Simulador de Procesos
+title Diagrama de Secuencia - Motor Simulación ACTUAL (Real Implementation)
 actor Usuario
 participant "AdaptadorSimuladorDominio" as Adaptador
-participant "Simulador" as Sim
+participant "MotorSimulacionCompleto" as Motor
 participant "EstrategiaScheduler" as Scheduler
-participant "Proceso" as Proc
-participant "RegistroEventos" as Eventos
-participant "ColaEventos" as Cola
+participant "EstadoSistema" as Estado
+participant "EventQueue" as EQ
+participant "ReadyQueue" as RQ
+participant "BlockedQueue" as BQ
+participant "Logger" as Logger
+participant "CPU" as CPU
 
-== Inicialización ==
-Usuario -> Adaptador: ejecutar(workload)
+== Inicialización Real ==
+Usuario -> Adaptador: ejecutarSimulacion(config)
 activate Adaptador
-Adaptador -> Sim: new Simulador(parametros)
-activate Sim
-Adaptador -> Scheduler: crearEstrategia(algoritmo)
+Adaptador -> Scheduler: FactoriaEstrategias.crear(algoritmo)
 activate Scheduler
+Adaptador -> Motor: new MotorSimulacionCompleto(parametros, estrategia)
+activate Motor
+Motor -> Estado: inicializar estado sistema
+activate Estado
+note over Estado: memoriaDisponible=1000MB\numbralSuspension=100MB\ncpuActiva=false
+Motor -> EQ: new PriorityQueue<EventoMejorado>()
+activate EQ
+Motor -> RQ: readyQueue = []
+activate RQ
+Motor -> BQ: blockedQueue = []
+activate BQ
+Motor -> Logger: logger = []
+activate Logger
+Motor -> CPU: estadoSistema.cpuActiva = false
+activate CPU
 
-loop Para cada proceso en workload
-    Adaptador -> Proc: new Proceso(data)
-    activate Proc
-    Adaptador -> Sim: agregarProceso(proceso)
-    Sim -> Cola: programarEvento(arribo, JOB_LLEGA, proceso.id)
-    deactivate Proc
+loop Para cada proceso en config.procesos
+    Adaptador -> Motor: agregarProceso(proceso)
+    Motor -> EQ: enqueue(JOB_LLEGA, arribo, pid) [EventoMejorado con prioridad 0]
+    Motor -> Logger: log('SCHEDULE', pid, 'Evento JOB_LLEGA programado')
 end
 
-== Simulación Principal ==
-loop Mientras haya eventos pendientes
-    Sim -> Cola: obtenerSiguienteEvento()
-    Cola --> Sim: evento
+== Simulación Principal REAL ==
+note top of Motor: **COMPORTAMIENTO ACTUAL DEL CÓDIGO:**\n**Orden prioridad EventoMejorado:** 0-JOB_LLEGA, 1-FIN_PROCESO, 2-FIN_RAFAGA_CPU,\n3-EXPROPIACION, 4-FIN_IO, 5-FIN_TIP, 6-DISPATCH\n**PROBLEMA:** TIP=0 en tests → transiciones instantáneas
+
+Adaptador -> Motor: ejecutarSimulacion()
+Motor -> Logger: log('START', 'SISTEMA', 'Iniciando simulación principal')
+
+loop while !colaEventos.isEmpty()
+    Motor -> EQ: dequeue() [EventoMejorado ordenado por prioridad]
+    EQ --> Motor: evento
+    Motor -> Motor: avanzarTiempo(evento.tiempo)
+    Motor -> Motor: procesarEvento(evento)
     
-    alt Evento: JOB_LLEGA (Arribo de Proceso)
-        Sim -> Eventos: registrar('Arribo', proceso.id)
-        Sim -> Proc: estado = NUEVO
-        
-        alt TIP > 0
-            Sim -> Cola: programarEvento(tiempo+TIP, NUEVO_A_LISTO)
-        else TIP = 0
-            Sim -> Proc: estado = LISTO
-            Sim -> Sim: agregarAReadyQueue(proceso)
-            Sim -> Eventos: registrar('FinTIP', proceso.id)
+    alt Evento: JOB_LLEGA (Prioridad 0)
+        Motor -> Logger: log('EVENT', pid, 'JOB_LLEGA procesado')
+        Motor -> Estado: verificar memoria disponible
+        alt TIP > 0 (parámetros normales)
+            Motor -> EQ: enqueue(FIN_TIP, t+TIP, pid) [prioridad 5]
+            Motor -> Logger: log('COST', pid, 'TIP aplicado')
+        else TIP = 0 (caso actual tests)
+            note right: **COMPORTAMIENTO ACTUAL:**\nTIP=0 hace transición instantánea N→L
+            Motor -> Estado: proceso.estado = LISTO
+            Motor -> RQ: push(proceso)
+            Motor -> Logger: log('TRANSITION', pid, 'N->L instantáneo')
+            Motor -> Motor: evaluarPlanificacion() → auto-dispatch
         end
         
-    else Evento: NUEVO_A_LISTO (Fin TIP)
-        Sim -> Proc: estado = LISTO
-        Sim -> Sim: agregarAReadyQueue(proceso)
-        Sim -> Eventos: registrar('FinTIP', proceso.id)
+    else Evento: FIN_TIP (Prioridad 5)
+        note right: **Solo ocurre si TIP > 0**
+        Motor -> Estado: verificar memoria disponible
+        alt Hay memoria suficiente
+            Motor -> Estado: proceso.estado = LISTO
+            Motor -> Estado: memoriaDisponible -= proceso.tamaño
+            Motor -> RQ: push(proceso)
+            Motor -> Logger: log('TRANSITION', pid, 'N->L')
+        else Sin memoria (estados suspendidos)
+            Motor -> Estado: proceso.estado = LISTO_SUSPENDIDO
+            Motor -> RQ: readySuspendedQueue.push(proceso)
+            Motor -> Logger: log('TRANSITION', pid, 'N->LS')
+        end
         
-    else Evento: LISTO_A_CORRIENDO (Despacho)
-        alt CPU disponible
-            Sim -> Scheduler: elegirSiguiente(readyQueue)
-            Scheduler --> Sim: procesoSeleccionado
-            Sim -> Sim: removerDeReadyQueue(proceso.id)
-            Sim -> Proc: activar(tiempoActual)
-            Proc -> Proc: estado = CORRIENDO
-            Sim -> Sim: asignarProcesoACpu(proceso)
-            Sim -> Eventos: registrar('Despacho', proceso.id)
+    else Evento: FIN_PROCESO (Prioridad 1)
+        Motor -> Estado: transicion CORRIENDO → TERMINADO
+        Motor -> CPU: liberar()
+        ref over Motor, Estado : aplicarTFP(proceso)\nCORRIENDO -> TERMINADO
+        Motor -> Logger: registrar(t, "C->T", pid, "proceso terminado")
+        
+    else Evento: FIN_RAFAGA_CPU (Prioridad 2)
+        alt [terminó ráfaga] proceso completo
+            Motor -> EQ: schedule(FIN_PROCESO, t, pid) [prioridad 1]
+        else [necesita I/O] más ráfagas pendientes
+            Motor -> Estado: transicion CORRIENDO → BLOQUEADO
+            Motor -> BQ: push(pid, ioSpec)
+            Motor -> CPU: liberar()
+            Motor -> EQ: schedule(FIN_IO, t+duracionIO, pid) [prioridad 4]
+            Motor -> Logger: registrar(t, "C->B", pid, "inicia I/O")
+        end
+        
+    else Evento: EXPROPIACION/QUANTUM_EXPIRES (Prioridad 3)
+        Motor -> Estado: transicion CORRIENDO → LISTO
+        Motor -> CPU: liberar()
+        Motor -> RQ: pushTail(pid) [final de cola para RR]
+        Motor -> Logger: registrar(t, "C->L", pid, "expropiado")
+        
+    else Evento: FIN_IO (Prioridad 4)
+        Motor -> BQ: remove(pid)
+        Motor -> Estado: transicion BLOQUEADO → LISTO
+        Motor -> RQ: push(pid, criterio_politica)
+        Motor -> Logger: registrar(t, "B->L", pid, "I/O completado")
+        note right: **B→L costo 0** (transición instantánea)
+        
+    else Evento: DISPATCH (Prioridad 6)
+        alt [CPU libre y RQ no vacía]
+            Motor -> RQ: isEmpty()
+            RQ --> Motor: false
+            Motor -> Scheduler: elegirSiguiente(readyQueue, t)
+            Scheduler --> Motor: procesoSeleccionado
+            Motor -> RQ: remove(procesoSeleccionado)
+            ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO
+            Motor -> Estado: transicion LISTO → CORRIENDO
+            Motor -> CPU: asignar(procesoSeleccionado)
+            Motor -> EQ: schedule(FIN_RAFAGA_CPU, t+TCP+duracion, pid) [prioridad 2]
+            Motor -> Logger: registrar(t, "L->C", pid, "dispatch+TCP")
             
-            alt Hay TCP
-                Sim -> Cola: programarEvento(tiempo+TCP, FIN_TCP)
-            else Sin TCP
-                Sim -> Cola: programarEvento(tiempo+duracionRafaga, FIN_RAFAGA_CPU)
+            opt [algoritmo RR]
+                Motor -> EQ: schedule(QUANTUM_EXPIRES, t+TCP+quantum, pid) [prioridad 3]
+                note right: Crear timer quantum
             end
+        else [CPU libre pero RQ vacía]
+            Motor -> CPU: idle()
+            Motor -> Logger: registrar(t, "CPU_IDLE", "", "sin procesos listos")
         end
-        
-    else Evento: FIN_RAFAGA_CPU
-        Sim -> Proc: completarRafaga()
-        
-        alt Proceso terminado (todas las ráfagas completadas)
-            Sim -> Proc: estado = TERMINADO
-            Sim -> Sim: removerProcesoDeCpu()
-            Sim -> Sim: marcarComoTerminado(proceso)
-            Sim -> Eventos: registrar('FinRafagaCPU', proceso.id)
-            
-            alt TFP > 0
-                Sim -> Cola: programarEvento(tiempo+TFP, PROCESO_TERMINA)
-            end
-            
-        else Proceso necesita E/S
-            Sim -> Proc: estado = BLOQUEADO
-            Sim -> Sim: removerProcesoDeCpu()
-            Sim -> Sim: agregarAListaBloqueados(proceso)
-            Sim -> Eventos: registrar('FinRafagaCPU', proceso.id)
-            Sim -> Cola: programarEvento(tiempo+duracionIO, IO_COMPLETA)
-        end
-        
-    else Evento: IO_COMPLETA (Fin E/S)
-        Sim -> Sim: removerDeListaBloqueados(proceso.id)
-        Sim -> Proc: estado = LISTO
-        Sim -> Sim: agregarAReadyQueue(proceso)
-        Sim -> Eventos: registrar('FinES', proceso.id)
-        
-    else Evento: QUANTUM_EXPIRES (Solo RR)
-        alt Proceso aún en CPU
-            Sim -> Proc: expropiar()
-            Sim -> Proc: estado = LISTO
+    end
+    
+    Motor -> Motor: evaluarPlanificacion()
+    note right: Después de cada evento,\nevaluar si hay dispatch pendiente
+    
+    opt [CPU idle y RQ tiene procesos]
+        Motor -> EQ: schedule(DISPATCH, t, "") [prioridad 6]
+        note right: Auto-programar dispatch inmediato
+    end
+end
             Sim -> Sim: removerProcesoDeCpu()
             Sim -> Sim: agregarAReadyQueue(proceso)  
             Sim -> Eventos: registrar('AgotamientoQuantum', proceso.id)
@@ -110,12 +155,48 @@ loop Mientras haya eventos pendientes
     end
 end
 
-== Finalización ==
-Sim -> Eventos: obtenerEventosInternos()
-Sim -> Eventos: proyectarEventosExportacion()
-Adaptador -> Usuario: ResultadoSimulacion
+== Gestión de Estados Suspendidos ==
+group Gestión de Memoria
+    Motor -> Estado: verificarMemoriaDisponible()
+    alt [memoria < umbralSuspension]
+        Motor -> Estado: suspenderProcesosPorMemoria()
+        loop para cada proceso en RQ/BQ con mayor tamaño
+            Motor -> Estado: transicion LISTO → LISTO_SUSPENDIDO
+            Motor -> Estado: transicion BLOQUEADO → BLOQUEADO_SUSPENDIDO  
+            Motor -> Estado: liberarMemoria(proceso.tamaño)
+            Motor -> Logger: registrar(t, "SUSPEND", pid, "presión memoria")
+        end
+    else [memoria disponible suficiente]
+        Motor -> Estado: reactivarProcesosSuspendidos()
+        loop para cada proceso suspendido que quepa
+            Motor -> Estado: transicion LISTO_SUSPENDIDO → LISTO
+            Motor -> Estado: transicion BLOQUEADO_SUSPENDIDO → BLOQUEADO
+            Motor -> Estado: reservarMemoria(proceso.tamaño)
+            Motor -> Logger: registrar(t, "REACTIVATE", pid, "memoria disponible")
+        end
+    end
+end
+
+== Finalización y Métricas ==
+Motor -> EQ: isEmpty()
+EQ --> Motor: true [simulación completa]
+
+Motor -> Logger: generarGantt()
+Logger --> Motor: diagramaGantt
+note over Logger: **Logger reconstruye métricas:**\n• Tiempos de respuesta\n• Throughput\n• Tiempos de espera\n• Utilización CPU\n**desde eventos registrados**
+
+Motor -> Estado: estadisticasFinales()
+Estado --> Motor: metricas
+Adaptador -> Usuario: ResultadoSimulacion(gantt, metricas)
+
+deactivate CPU
+deactivate Logger
+deactivate BQ
+deactivate RQ
+deactivate EQ
+deactivate Estado
 deactivate Scheduler
-deactivate Sim
+deactivate Motor
 deactivate Adaptador
 
 @enduml

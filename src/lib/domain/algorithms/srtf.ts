@@ -2,49 +2,50 @@ import { EstrategiaSchedulerBase } from './Scheduler';
 import type { Proceso } from '../entities/Proceso';
 
 /**
- * Shortest Remaining Time First (SRTF) / Shortest Remaining Time Next (SRTN) Scheduler Strategy
+ * Shortest Remaining Time First (SRTF) Scheduler Strategy
+ * Implementa reglas académicamente correctas según estadomejorado.puml
  * 
  * Características:
  * - Expropiativo (versión preemptiva de SJF)
- * - Selecciona proceso con menor tiempo restante de CPU
- * - Minimiza tiempo de respuesta para procesos cortos
- * - Puede causar inanición de procesos largos
- * - Mayor sobrecarga por cambios de contexto
+ * - Criterio: Resto de ráfaga ACTUAL (NO tiempo total)
+ * - Evaluación: En cada N→L y B→L
+ * - Tie-breaker: Mantener proceso actual (NO expropiar en empates)
+ * - Minimiza tiempo promedio de respuesta (óptimo teórico)
  */
 export class EstrategiaSchedulerSrtf extends EstrategiaSchedulerBase {
-  public readonly nombre = 'SRTF (SRTN)';
+  public readonly nombre = 'SRTF';
   public readonly soportaExpropiacion = true;
   public readonly requiereQuantum = false;
 
   /**
-   * Selecciona el proceso con menor tiempo restante de CPU
+   * Selecciona proceso con menor tiempo restante de ráfaga ACTUAL
+   * CRÍTICO: restanteCPU (ráfaga actual), NO restanteTotalCPU
    */
   public elegirSiguiente(colaListos: Proceso[], tiempoActual: number): Proceso | undefined {
     if (colaListos.length === 0) {
       return undefined;
     }
 
-    // Ordenar por tiempo restante de CPU (menor primero)
-    this.ordenarColaListos(colaListos);
-    
-    return colaListos[0];
+    // Encontrar proceso con menor tiempo restante de ráfaga actual
+    return colaListos.reduce((mejor, actual) => {
+      if (actual.restanteCPU < mejor.restanteCPU) {
+        return actual;
+      } else if (actual.restanteCPU === mejor.restanteCPU) {
+        // Tie-breaker: orden de llegada a READY
+        return this.compararPorTiempoLlegadaReady(actual, mejor) < 0 ? actual : mejor;
+      }
+      return mejor;
+    });
   }
 
   /**
-   * Ordena la cola por tiempo restante TOTAL de CPU (SRTN verdadero)
-   * NOTA IMPORTANTE: SRTN debe usar restanteTotalCPU (tiempo total restante),
-   * NO restanteCPU (tiempo restante de ráfaga actual)
-   */
-  public ordenarColaListos(colaListos: Proceso[]): void {
-    colaListos.sort((a, b) => a.restanteTotalCPU - b.restanteTotalCPU);
-  }
-
-  /**
-   * En SRTN, expropia si llega un proceso con menor tiempo TOTAL restante
+   * REGLA CRÍTICA SRTF: Solo expropia si tiempo_restante_nuevo < tiempo_restante_actual
+   * En empates: mantener proceso actual (NO expropiar)
    */
   public debeExpropiar(procesoActual: Proceso, procesoCandidato: Proceso, tiempoActual: number): boolean {
-    // Preempt si el proceso candidato tiene menor tiempo TOTAL restante
-    return procesoCandidato.restanteTotalCPU < procesoActual.restanteTotalCPU;
+    // IMPORTANTE: Solo expropiar si el candidato tiene ESTRICTAMENTE menor tiempo restante
+    // En empates, mantener el proceso actual
+    return procesoCandidato.restanteCPU < procesoActual.restanteCPU;
   }
 
   /**

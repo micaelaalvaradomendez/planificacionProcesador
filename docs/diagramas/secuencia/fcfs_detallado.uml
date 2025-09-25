@@ -1,46 +1,138 @@
 @startuml
-title Ejecución FCFS - Tanda de 5 Procesos Ejemplo
-participant "Sistema" as Sys
+title Ejecución FCFS Mejorada - Con Estados Suspendidos
+participant "AdaptadorSimuladorDominio" as Adaptador
+participant "MotorSimulacion" as Motor
+participant "EstrategiaSchedulerFcfs" as FCFS
+participant "EstadoSistema" as Estado
+participant "EventQueue" as EQ
+participant "ReadyQ" as RQ
+participant "BlockedQ" as BQ
+participant "Logger" as Logger
+participant "CPU" as CPU
 participant "P1" as P1
 participant "P2" as P2  
 participant "P3" as P3
 participant "P4" as P4
 participant "P5" as P5
-participant "CPU" as CPU
-participant "ReadyQueue" as RQ
 
-== Configuración Inicial ==
-note over Sys: TIP=1, TFP=1, TCP=1
-note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, prio=2
-note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, prio=1  
-note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, prio=3
-note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, prio=2
-note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, prio=1
+== Configuración Inicial Mejorada ==
+note over Motor: TIP=1, TFP=1, TCP=1
+note over FCFS: **FCFS: No expropiativo**\nInserción: FIFO (al final)\nSelección: Primer proceso en cola
+note over Estado: memoriaDisponible=1000, umbralSuspension=100
+note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, prio=2, tamaño=150
+note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, prio=1, tamaño=200
+note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, prio=3, tamaño=100
+note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, prio=2, tamaño=250
+note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, prio=1, tamaño=180
 
-== Cronología de Ejecución FCFS ==
+note top of Motor: **Orden eventos simultáneos:**\n1.FIN_PROCESO 2.FIN_RAFAGA_CPU 3.EXPROPIACION\n4.FIN_IO 5.FIN_TIP 6.DISPATCH
 
-group t=0: Arribo P1
-    Sys -> P1: JOB_LLEGA
-    P1 -> P1: estado = NUEVO
-    Sys -> Sys: TIP = 1u
+== Bucle Principal FCFS ==
+
+loop while EventQueue not empty
+    Motor -> EQ: popNext() [orden prioridad académica]
+    EQ --> Motor: evento
+    Motor -> Logger: registrar(t, tipo, pid, descripcion)
+    
+group t=0: Arribo P1 (JOB_LLEGA prioridad 0)
+    Motor -> Estado: haySuficienteMemoria(150)
+    Estado -> Motor: true
+    ref over Motor, Estado : aplicarTIP(P1)\nNUEVO -> intermedio (t += TIP)
+    Motor -> EQ: schedule(FIN_TIP, 1, "P1") [prioridad 5]
+    Motor -> Logger: registrar(0, "JOB_LLEGA", "P1", "arribo al sistema")
 end
 
-group t=1: P1 entra al sistema, Arribo P2
-    Sys -> P1: estado = LISTO
-    Sys -> RQ: agregar P1
-    Sys -> P2: JOB_LLEGA
-    P2 -> P2: estado = NUEVO
-    RQ -> CPU: despachar P1 (FCFS: primero en llegar)
-    CPU -> P1: estado = CORRIENDO
-    P1 -> P1: ejecutar ráfaga 1 (5u)
+group t=1: FIN_TIP P1 (prioridad 5) + JOB_LLEGA P2 (prioridad 0)
+    note right: **Orden eventos simultáneos:** JOB_LLEGA(0) antes que FIN_TIP(5)
+    
+    == Procesamiento JOB_LLEGA P2 primero ==
+    Motor -> Estado: haySuficienteMemoria(200)
+    Estado -> Motor: true
+    ref over Motor, Estado : aplicarTIP(P2)\nNUEVO -> intermedio (t += TIP)
+    Motor -> EQ: schedule(FIN_TIP, 2, "P2") [prioridad 5]
+    Motor -> Logger: registrar(1, "JOB_LLEGA", "P2", "arribo al sistema")
+    
+    == Procesamiento FIN_TIP P1 después ==
+    Motor -> P1: estado = NUEVO → LISTO
+    Motor -> Estado: reservarMemoria(150) → 850 disponible
+    Motor -> RQ: push(P1) [FIFO: al final]
+    Motor -> Logger: registrar(1, "N->L", "P1", "TIP completado")
+    
+    == Auto-dispatch (CPU idle + RQ no vacía) ==
+    Motor -> EQ: schedule(DISPATCH, 1, "") [prioridad 6]
+    
+    == Procesamiento DISPATCH ==
+    Motor -> FCFS: elegirSiguiente([P1], 1)
+    FCFS -> Motor: P1 [no expropiativo - FIFO estricto]
+    Motor -> RQ: remove(P1)
+    ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO (t += TCP)
+    Motor -> P1: estado = LISTO → CORRIENDO
+    Motor -> CPU: asignar(P1)
+    Motor -> EQ: schedule(FIN_RAFAGA_CPU, 7, "P1") [prioridad 2]
+    Motor -> Logger: registrar(1, "L->C", "P1", "dispatch + TCP")
+    note right: **FCFS Guard:** [no expropiación hasta completar ráfaga]
 end
 
-group t=2: P2 entra al sistema
-    Sys -> P2: estado = LISTO  
-    Sys -> RQ: agregar P2 [P2] (P1 en CPU)
+group t=2: FIN_TIP P2 (prioridad 5)
+    Motor -> P2: estado = NUEVO → LISTO
+    Motor -> Estado: reservarMemoria(200) → 650 disponible
+    Motor -> RQ: push(P2) [FIFO: al final, después de cualquier otro]
+    Motor -> Logger: registrar(2, "N->L", "P2", "TIP completado")
+    note right: **P1 sigue en CPU** - FCFS no expropiativo
 end
 
-group t=3: Arribo P3
+group t=3: JOB_LLEGA P3 (prioridad 0)
+    Motor -> Estado: haySuficienteMemoria(100)
+    Estado -> Motor: true
+    ref over Motor, Estado : aplicarTIP(P3)\nNUEVO -> intermedio (t += TIP)
+    Motor -> EQ: schedule(FIN_TIP, 4, "P3") [prioridad 5]
+    Motor -> Logger: registrar(3, "JOB_LLEGA", "P3", "arribo al sistema")
+end
+
+group t=4: FIN_TIP P3 (prioridad 5)
+    Motor -> P3: estado = NUEVO → LISTO  
+    Motor -> Estado: reservarMemoria(100) → 550 disponible
+    Motor -> RQ: push(P3) [FIFO: cola = [P2, P3]]
+    Motor -> Logger: registrar(4, "N->L", "P3", "TIP completado")
+end
+
+group t=7: FIN_RAFAGA_CPU P1 (prioridad 2)
+    Motor -> P1: completarRafaga()
+    alt [necesita I/O] P1 tiene más ráfagas
+        Motor -> P1: estado = CORRIENDO → BLOQUEADO
+        Motor -> CPU: liberar()
+        Motor -> BQ: push(P1, ioSpec)
+        Motor -> EQ: schedule(FIN_IO, 11, "P1") [t+4=11, prioridad 4]
+        Motor -> Logger: registrar(7, "C->B", "P1", "inicia I/O")
+    else [terminó] todas las ráfagas completadas
+        Motor -> EQ: schedule(FIN_PROCESO, 7, "P1") [prioridad 1]
+    end
+    
+    == Auto-dispatch siguiente proceso ==
+    Motor -> EQ: schedule(DISPATCH, 7, "") [prioridad 6]
+    
+    == Procesamiento DISPATCH ==
+    Motor -> FCFS: elegirSiguiente([P2, P3], 7)
+    FCFS -> Motor: P2 [FIFO: primero en cola]
+    Motor -> RQ: remove(P2) [cola queda = [P3]]
+    ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO (t += TCP)
+    Motor -> P2: estado = LISTO → CORRIENDO
+    Motor -> CPU: asignar(P2)
+    Motor -> EQ: schedule(FIN_RAFAGA_CPU, 14, "P2") [t+TCP+6=14, prioridad 2]
+    Motor -> Logger: registrar(7, "L->C", "P2", "dispatch + TCP")
+end
+
+group t=11: FIN_IO P1 (prioridad 4)
+    Motor -> BQ: remove(P1)
+    Motor -> P1: estado = BLOQUEADO → LISTO
+    Motor -> RQ: push(P1) [FIFO: cola = [P3, P1]]
+    Motor -> Logger: registrar(11, "B->L", "P1", "I/O completado")
+    note right: **B→L costo 0** - transición instantánea
+end
+
+note over Motor, Logger: **FCFS continúa hasta completar todos los procesos**\n**Sin expropiación** - cada proceso ejecuta hasta:\n• Completar ráfaga (→I/O o →Terminado)\n• Orden FIFO estricto en Ready Queue
+
+end
     Sys -> P3: JOB_LLEGA
     P3 -> P3: estado = NUEVO
 end

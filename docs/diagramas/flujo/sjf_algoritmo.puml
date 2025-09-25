@@ -1,53 +1,63 @@
-@startuml SJF_Algoritmo_Unificado
-title SJF - Algoritmo de Planificación - Versión Unificada
-
-title Shortest Job First (SJF) - Algoritmo de Decisión
+@startuml SJF_Algoritmo_Mejorado
+title Shortest Job First (SJF) - Implementación Mejorada con Estados Suspendidos
 
 start
 
-:Evento requiere selección de proceso;
+:MotorSimulacionMejorado requiere selección de proceso;
 
 if (¿Ready Queue vacía?) then (SÍ)
   :CPU permanece idle;
+  :Activar procesos LISTO_SUSPENDIDO si hay memoria;
   stop
 endif
 
-:Calcular servicio restante para cada proceso;
+:proceso = elegirSiguiente(colaListos, tiempoActual);
 note right
-  **Servicio Total Restante:**
-  servicioRestante = rafagasRestantes × duracionCPU
+**EstrategiaSchedulerSjf.elegirSiguiente():**
+• Calcula servicio restante = rafagasRestantes × duracionCPU
+• Ordena por menor servicio total restante
+• Tie-breaker: orden de llegada → alfabético
+• Solo procesos LISTO (con memoria)
 end note
-end note
-
-:Ordenar Ready Queue por servicio restante;
-note right: Menor servicio restante primero
-
-:proceso = primer elemento (shortest job);
-
-if (¿Empates en servicio restante?) then (SÍ)
-  :Aplicar criterios de desempate;
-  note right: 
-  1. Menor tiempo arribo
-  2. Orden alfabético ID (determinístico)
-  end note
-endif
-
-:Remover proceso de Ready Queue;
 
 :proceso.estado = LISTO → CORRIENDO;
 
-:Aplicar TCP;
-note right: TCP solo en despacho L→C
+:Aplicar TCP (ÚNICO lugar en SJF);
+note right: **TCP MEJORADO**\nSolo en LISTO → CORRIENDO
 
-:procesoActualCPU = proceso;
+:estadoSistema.procesoEnCPU = proceso;
 
-:Programar FIN_RAFAGA_CPU;
+:Programar EventoMejorado FIN_RAFAGA_CPU (prioridad 2);
 
-:Actualizar estadísticas;
-note right: **SJF No Expropiativo:**
-Proceso ejecuta hasta completar ráfaga
-Sin interrupciones por llegadas
+note right
+**SJF Mejorado - No Expropiativo:**
+• Proceso ejecuta hasta completar ráfaga
+• NO interrupciones por llegada de procesos
+• Estados suspendidos manejados automáticamente
+• Gestión de memoria transparente
 end note
+
+stop
+
+note left of start  
+**SJF Mejorado - Implementación Actual:**
+• ✅ EstrategiaSchedulerSjf.ts (70 líneas)
+• ✅ Estados suspendidos integrados  
+• ✅ No expropiativo (soportaExpropiacion = false)
+• ✅ Servicio total restante = rafagasRestantes × duracionCPU
+• ✅ Tie-breaker: arribo → orden alfabético
+
+**Características Académicas:**
+• ✅ Minimiza tiempo promedio de retorno
+• ✅ Puede causar starvation de procesos largos
+• ✅ Óptimo para workloads conocidos
+• ✅ Gestión transparente de memoria
+
+**Eventos TCP:**
+• ✅ LISTO → CORRIENDO (siempre)
+• ❌ CORRIENDO → BLOQUEADO (instantáneo)  
+• ❌ No hay expropiación
+• ✅ Estados suspendidos (instantáneo)
 
 stop
 

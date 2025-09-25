@@ -7,6 +7,7 @@ export class Proceso {
   public readonly duracionCPU: number;   // duración de ráfaga de CPU
   public readonly duracionIO: number;    // duración de I/O
   public readonly prioridad: number;   // prioridad externa
+  public readonly tamaño: number;      // tamaño en memoria (MB)
   // estado dinámico durante simulación
   public estado: EstadoProceso = EstadoProceso.NUEVO;
   public rafagasRestantes: number;
@@ -23,6 +24,11 @@ export class Proceso {
   // acumuladores de tiempo
   public tiempoListoTotal: number = 0;
   public ultimoTiempoListo?: number;
+  
+  // campos adicionales para estrategias de scheduling
+  public rafagasCompletadas: number = 0;
+  public tiempoCPUConsumido: number = 0;
+  public tiempoUltimoReady?: number;
 
   constructor(data: ProcesData) {
     this.id = data.nombre;
@@ -31,11 +37,16 @@ export class Proceso {
     this.duracionCPU = data.duracionCPU;
     this.duracionIO = data.duracionIO;
     this.prioridad = data.prioridad;
+    this.tamaño = data.tamaño || 50; // 50MB por defecto
     // estado dinámico
     this.rafagasRestantes = this.rafagasCPU;
     this.restanteCPU = this.duracionCPU;
     this.restanteIO = 0;
     this.restanteTotalCPU = this.rafagasCPU * this.duracionCPU;
+    
+    // inicializar campos adicionales
+    this.rafagasCompletadas = 0;
+    this.tiempoCPUConsumido = 0;
   }
 
  iniciarTIP(tiempoActual: number): void {this.inicioTIP = tiempoActual;}
@@ -86,6 +97,7 @@ export class Proceso {
     this.restanteTotalCPU -= this.restanteCPU;
     
     this.rafagasRestantes--;
+    this.rafagasCompletadas++; // incrementar ráfagas completadas
     this.restanteCPU = this.duracionCPU; // Reset para próxima ráfaga
 
     if (this.rafagasRestantes > 0) {
@@ -116,6 +128,7 @@ export class Proceso {
     const tiempoReal = Math.min(tiempo, this.restanteCPU);
     this.restanteCPU = Math.max(0, this.restanteCPU - tiempo);
     this.restanteTotalCPU = Math.max(0, this.restanteTotalCPU - tiempoReal);
+    this.tiempoCPUConsumido += tiempoReal; // acumular tiempo consumido
   }
   procesarIO(tiempo: number): void {this.restanteIO = Math.max(0, this.restanteIO - tiempo);}
 
@@ -149,6 +162,12 @@ export class Proceso {
     copia.ultimoDispatch = this.ultimoDispatch;
     copia.tiempoListoTotal = this.tiempoListoTotal;
     copia.ultimoTiempoListo = this.ultimoTiempoListo;
+    
+    // copiar campos adicionales
+    copia.rafagasCompletadas = this.rafagasCompletadas;
+    copia.tiempoCPUConsumido = this.tiempoCPUConsumido;
+    copia.tiempoUltimoReady = this.tiempoUltimoReady;
+    
     return copia;
   }
 }

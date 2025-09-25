@@ -1,28 +1,59 @@
 export enum EstadoProceso {
   NUEVO = 'NUEVO',
   LISTO = 'LISTO',
-  CORRIENDO = 'CORRIENDO',        // Cambio: más fiel a la teoría
+  CORRIENDO = 'CORRIENDO',
   BLOQUEADO = 'BLOQUEADO',
-  TERMINADO = 'TERMINADO'
+  TERMINADO = 'TERMINADO',
+  
+  // Estados suspendidos (punto 4 del análisis)
+  LISTO_SUSPENDIDO = 'LISTO_SUSPENDIDO',        // Ready/Suspend - sin memoria pero puede ejecutar
+  BLOQUEADO_SUSPENDIDO = 'BLOQUEADO_SUSPENDIDO' // Blocked/Suspend - sin memoria y esperando I/O
 }
 
+/**
+ * Enum de tipos de eventos con orden de prioridad para eventos simultáneos
+ * Según diagrama de secuencia: 1-FIN_PROCESO, 2-FIN_RAFAGA_CPU, 3-EXPROPIACION, 4-FIN_IO, 5-FIN_TIP, 6-DISPATCH
+ */
 export enum TipoEvento {
-  // eventos principales del sistema
-  JOB_LLEGA = 'JOB_LLEGA',                    // Llegada de trabajo al sistema
-  ENTRA_SISTEMA = 'ENTRA_SISTEMA',            // Admisión al sistema (Nuevo → Listo)
-  DISPATCH = 'DISPATCH',                      // Activación del dispatcher
-  FIN_RAFAGA_CPU = 'FIN_RAFAGA_CPU',         // Finalización de ráfaga de CPU
-  QUANTUM_EXPIRES = 'QUANTUM_EXPIRES',        // Expiración del quantum (Round Robin)
-  IO_COMPLETA = 'IO_COMPLETA',               // Finalización de operación E/S
-  IO_INTERRUPCION_ATENDIDA = 'IO_INTERRUPCION_ATENDIDA',
-  PROCESO_TERMINA = 'PROCESO_TERMINA',
-  // transiciones de estado (según teoría de SO)
-  CORRIENDO_A_TERMINADO = 'CORRIENDO_A_TERMINADO',   // Corriendo → Terminado
+  // Evento prioridad 0: Llegada al sistema
+  JOB_LLEGA = 'JOB_LLEGA',                    // Llegada de trabajo al sistema (ARRIBO)
+  
+  // Evento prioridad 1: Finalización de proceso (C→T)
+  FIN_PROCESO = 'FIN_PROCESO',                // Proceso termina (CORRIENDO → TERMINADO)
+  CORRIENDO_A_TERMINADO = 'CORRIENDO_A_TERMINADO',   // Alias para compatibilidad
+  
+  // Evento prioridad 2: Finalización de ráfaga CPU (C→B)
+  FIN_RAFAGA_CPU = 'FIN_RAFAGA_CPU',         // Finalización de ráfaga de CPU (inicio I/O)
   CORRIENDO_A_BLOQUEADO = 'CORRIENDO_A_BLOQUEADO',   // Corriendo → Bloqueado (por E/S)
+  
+  // Evento prioridad 3: Expropiación (C→L)
+  EXPROPIACION = 'EXPROPIACION',             // Expropiación genérica
+  QUANTUM_EXPIRES = 'QUANTUM_EXPIRES',        // Expiración del quantum (Round Robin)
   CORRIENDO_A_LISTO = 'CORRIENDO_A_LISTO',           // Corriendo → Listo (expropiación)
+  
+  // Evento prioridad 4: Fin I/O (B→L)
+  FIN_IO = 'FIN_IO',                         // Finalización de operación E/S
   BLOQUEADO_A_LISTO = 'BLOQUEADO_A_LISTO',           // Bloqueado → Listo (fin E/S)
+  IO_COMPLETA = 'IO_COMPLETA',               // Alias para compatibilidad
+  
+  // Evento prioridad 5: Fin TIP (N→L)
+  FIN_TIP = 'FIN_TIP',                       // Finalización TIP (NUEVO → LISTO)
   NUEVO_A_LISTO = 'NUEVO_A_LISTO',                   // Nuevo → Listo (admisión)
-  LISTO_A_CORRIENDO = 'LISTO_A_CORRIENDO'            // Listo → Corriendo (dispatch)
+  ENTRA_SISTEMA = 'ENTRA_SISTEMA',            // Alias para compatibilidad
+  
+  // Evento prioridad 6: Dispatch (L→C)
+  DISPATCH = 'DISPATCH',                      // Activación del dispatcher
+  LISTO_A_CORRIENDO = 'LISTO_A_CORRIENDO',           // Listo → Corriendo (dispatch)
+  
+  // Eventos de suspensión por memoria (prioridad 10)
+  LISTO_A_LISTO_SUSPENDIDO = 'LISTO_A_LISTO_SUSPENDIDO',         // Listo → Listo/Suspendido
+  BLOQUEADO_A_BLOQUEADO_SUSPENDIDO = 'BLOQUEADO_A_BLOQUEADO_SUSPENDIDO', // Bloqueado → Bloqueado/Suspendido
+  LISTO_SUSPENDIDO_A_LISTO = 'LISTO_SUSPENDIDO_A_LISTO',         // Listo/Suspendido → Listo
+  BLOQUEADO_SUSPENDIDO_A_BLOQUEADO = 'BLOQUEADO_SUSPENDIDO_A_BLOQUEADO',  // Bloqueado/Suspendido → Bloqueado
+  
+  // Eventos legacy para compatibilidad
+  IO_INTERRUPCION_ATENDIDA = 'IO_INTERRUPCION_ATENDIDA',
+  PROCESO_TERMINA = 'PROCESO_TERMINA'
 }
 
 export type Algoritmo = 'FCFS' | 'SJF' | 'SRTF' | 'RR' | 'PRIORITY';
@@ -34,6 +65,7 @@ export interface ProcesData {
   duracionCPU: number;
   duracionIO: number;
   prioridad: number; // mayor número = mayor prioridad
+  tamaño?: number;    // tamaño en memoria (MB) - opcional para compatibilidad
 }
 
 export interface ParametrosProces {
@@ -196,6 +228,33 @@ export const ALGORITHM_MAP: Record<Algoritmo, Policy> = {
   'SJF': 'SPN',
   'SRTF': 'SRTN'
 };
+
+// ==========================================
+// INTERFACES PARA ADAPTADOR SIMULADOR DOMINIO
+// ==========================================
+
+export interface MetricasProceso {
+  id: string;
+  arribo: number;
+  inicio: number;
+  fin: number;
+  tiempoTurnaround: number;
+  tiempoEspera: number;
+  tiempoRespuesta: number;
+  tiempoServicio: number;
+  ratioRespuesta: number;
+  estado: EstadoProceso;
+}
+
+export interface ResultadosSimulacion {
+  algoritmo: string;
+  parametros: ParametrosSimulacion;
+  procesos: MetricasProceso[];
+  metricas: any;
+  timeline: any[];
+  estadisticas: any;
+  logger: any[];
+}
 
 // Re-export entidades del dominio
 export * from './entities/Proceso';

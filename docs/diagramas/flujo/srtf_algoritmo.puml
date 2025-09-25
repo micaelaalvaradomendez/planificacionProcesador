@@ -1,49 +1,50 @@
-@startuml SRTF_Algoritmo_Unificado
-title SRTF - Algoritmo de Planificación - Versión Unificada
-
-title Shortest Remaining Time First (SRTF) - Algoritmo de Decisión
+@startuml SRTF_Algoritmo_Mejorado
+title Shortest Remaining Time First (SRTF) - Implementación Mejorada con Estados Suspendidos
 
 start
 
-:Evento requiere evaluación SRTF;
+:MotorSimulacionMejorado requiere evaluación SRTF;
 
 note right
-  **Eventos disparadores:**
-  • CPU libre + Ready Queue no vacía
-  • Nuevo proceso arriba
-  • Proceso retorna de I/O
-  • Actualización tiempo restante
+**Eventos disparadores en Motor Mejorado:**
+• FIN_TIP (prioridad 5)
+• FIN_IO (prioridad 4) 
+• CPU libre + Ready Queue no vacía
+• Solo procesos con memoria disponible
 end note
-
 
 if (¿Ready Queue vacía?) then (SÍ)
   :CPU permanece idle;
+  :Activar procesos LISTO_SUSPENDIDO si hay memoria;
   stop
 endif
 
-:Ordenar Ready Queue por restanteTotalCPU;
-note right: 
-  **Tiempo Total Restante:**
-  • restanteTotalCPU = servicio total pendiente
-  • (incluye ráfaga actual + futuras)
+:proceso = elegirSiguiente(colaListos, tiempoActual);
+note right
+**EstrategiaSchedulerSrtf.elegirSiguiente():**
+• Usa restanteCPU (ráfaga ACTUAL)
+• NO restanteTotalCPU (tiempo total)
+• Tie-breaker: orden de llegada
+• Solo procesos LISTO (con memoria)
 end note
 
-:proceso = primer elemento (shortest remaining);
-
 if (¿CPU ocupada?) then (SÍ)
-  :procesoActual = procesoEnCPU;
-  :Comparar tiempos restantes;
+  :procesoActual = estadoSistema.procesoEnCPU;
+  :debeExpropiar = strategy.debeExpropiar(actual, candidato, tiempo);
   
-  if (¿proceso.restanteTotalCPU < procesoActual.restanteTotalCPU?) then (SÍ)
-    :Expropiar procesoActual inmediatamente;
-    note right: **SRTF Agresivo:** Expropiación inmediata
+  if (¿proceso.restanteCPU < procesoActual.restanteCPU?) then (SÍ)
+    :Programar EventoMejorado EXPROPIACION (prioridad 3);
+    note right
+    **SRTF Expropiación Mejorada:**
+    • Usa restanteCPU (ráfaga actual)
+    • TCP pendiente para próximo DISPATCH
+    • Orden de eventos garantizado
+    end note
     :procesoActual.estado = CORRIENDO → LISTO;
-    :Aplicar TCP por expropiación;
-    :Actualizar tiempo restante procesoActual;
     :Insertar procesoActual en Ready Queue;
-  elseif (¿proceso.restanteTotalCPU == procesoActual.restanteTotalCPU?) then (EMPATE)
+  elseif (¿proceso.restanteCPU == procesoActual.restanteCPU?) then (EMPATE)
     :Mantener procesoActual en CPU;
-    note right: **Política empate:** conservar proceso actual
+    note right: **REGLA ACADÉMICA CRÍTICA**\nEn empates: NO expropiar
     stop
   else (procesoActual tiene menor tiempo restante)
     :Proceso espera en Ready Queue;
@@ -72,21 +73,25 @@ end note
 stop
 
 note left of start
-**Política SRTF:**
-• Expropiativo agresivo
-• Comparación continua remaining time
-• Minimiza response time promedio
-• Mayor overhead que SJF
+**SRTF Mejorado - Implementación Actual:**
+• ✅ EstrategiaSchedulerSrtf.ts (112 líneas)
+• ✅ Estados suspendidos integrados
+• ✅ Expropiativo agresivo por restanteCPU
+• ✅ Empates: mantener proceso actual
+• ✅ Óptimo para tiempo promedio de respuesta
 
-**Tiempo Restante Total:**
-• Incluye ráfaga actual + futuras
-• Se actualiza dinámicamente
-• Considera progreso actual de ráfaga
+**Reglas Académicas:**
+• ✅ Usa restanteCPU (ráfaga actual)
+• ✅ NO restanteTotalCPU (tiempo total)
+• ✅ Expropiación solo si strictly menor
+• ✅ Evaluación en FIN_TIP y FIN_IO
+• ✅ Gestión transparente de memoria
 
-**Expropiación Triggers:**  
-• Arribo proceso con menor remaining time
-• Retorno I/O con menor remaining time
-• Cualquier cambio en ready queue
+**Eventos TCP:**
+• ✅ LISTO → CORRIENDO (siempre)
+• ❌ CORRIENDO → BLOQUEADO (instantáneo)
+• ❌ CORRIENDO → LISTO (TCP pendiente)
+• ✅ Estados suspendidos (instantáneo)
 
 **Casos TCP:**
 ✓ Despacho L→C

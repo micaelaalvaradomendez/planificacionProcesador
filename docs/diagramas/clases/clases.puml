@@ -8,7 +8,7 @@ skinparam stereotypeCBackgroundColor #E3F2FD
 skinparam packageBackgroundColor #F5F5F5
 skinparam packageBorderColor #9E9E9E
 
-title Diagrama de Clases - Simulador de Planificación de Procesos
+title Diagrama de Clases - Simulador de Planificación de Procesos (Estado Actual)
 
 ' ===============================
 ' CAPA DE DOMINIO (Domain Layer)
@@ -24,6 +24,7 @@ package "🏛️ DOMAIN LAYER" as domain {
       +duracionCPU: number {readonly}
       +duracionIO: number {readonly}
       +prioridad: number {readonly}
+      +tamaño: number {readonly}
       
       ' Estado dinámico
       +estado: EstadoProceso
@@ -57,46 +58,52 @@ package "🏛️ DOMAIN LAYER" as domain {
       +clone(): Proceso
     }
 
-    class Simulador {
-      ' Estado del sistema
+    class MotorSimulacionMejorado {
+      ' Estado del sistema principal
       +tiempoActual: number
-      +procesoActualCPU?: Proceso
-      +cpuOcupadaHasta: number
       +readyQueue: Proceso[]
       +procesosBloqueados: Proceso[]
       +procesosTerminados: Proceso[]
       +todosLosProcesos: Map<string, Proceso>
-      +colaEventos: PriorityQueue<Evento>
+      +colaEventos: PriorityQueue<EventoMejorado>
+      +registroEventos: EventoMejorado[]
+      +parametros: ParametrosSimulacion {readonly}
       
-      ' Métricas de tiempo
+      ' Estados suspendidos (punto 4 - estadomejorado.puml)
+      -estadoSistema: EstadoSistema
+      -estrategia: EstrategiaScheduler
+      
+      ' Métricas del sistema
       +tiempoTotalInactivo: number
       +tiempoTotalSO: number
       +tiempoTotalUsuario: number
-      +registroEventos: Evento[]
-      +parametros: ParametrosSimulacion {readonly}
       --
-      +constructor(parametros: ParametrosSimulacion)
+      +constructor(parametros: ParametrosSimulacion, estrategia: EstrategiaScheduler)
       +agregarProceso(proceso: Proceso): void
-      +programarEvento(tiempo: number, tipo: TipoEvento, id: string): void
+      +programarEvento(tiempo: number, tipo: TipoEvento, id: string, desc?: string): void
       +avanzarTiempo(nuevoTiempo: number): void
-      +obtenerSiguienteEvento(): Evento | undefined
-      +procesarSiguienteEvento(): Evento | undefined
-      +esCpuDisponible(): boolean
-      +ocuparCpu(hasta: number, actividad: string): void
-      +asignarProcesoACpu(proceso: Proceso): void
-      +removerProcesoDeCpu(): Proceso | undefined
-      +agregarAReadyQueue(proceso: Proceso): void
-      +removerDeReadyQueue(idProceso: string): Proceso | undefined
-      +agregarAListaBloqueados(proceso: Proceso): void
-      +removerDeListaBloqueados(idProceso: string): Proceso | undefined
-      +marcarComoTerminado(proceso: Proceso): void
-      +todosProcesosTerminados(): boolean
+      +procesarSiguienteEvento(): EventoMejorado | undefined
+      
+      ' Gestión de memoria y suspensión
+      +haySuficienteMemoria(tamaño: number): boolean
+      +suspenderProcesosPorMemoria(): void
+      +activarProcesosSuspendidos(): void
+      
+      ' Transiciones de estado académicas
+      -procesarLlegadaProceso(evento: EventoMejorado): void
+      -procesarFinTIP(evento: EventoMejorado, proceso: Proceso): void  
+      -procesarDispatch(evento: EventoMejorado, proceso: Proceso): void
+      -procesarFinRafagaCPU(evento: EventoMejorado, proceso: Proceso): void
+      -procesarFinIO(evento: EventoMejorado, proceso: Proceso): void
+      -procesarExpropiacion(evento: EventoMejorado, proceso: Proceso): void
+      -procesarFinProceso(evento: EventoMejorado, proceso: Proceso): void
+      
+      ' Utilidades del sistema  
+      +todosProcesosTerminados(): boolean  
       +obtenerProceso(idProceso: string): Proceso | undefined
-      +obtenerProcesosPorEstado(estado: EstadoProceso): Proceso[]
       +reiniciar(): void
-      +marcarTCPPendiente(): void
-      +cobrarTCPPendiente(): number
-      +tieneTCPPendiente(): boolean
+      -verificarEstadoCPU(): void
+      -evaluarDispatchInmediato(): void
     }
   }
 
@@ -194,16 +201,39 @@ package "🏛️ DOMAIN LAYER" as domain {
       CORRIENDO
       BLOQUEADO
       TERMINADO
+      ' Estados suspendidos (estadomejorado.puml)
+      LISTO_SUSPENDIDO
+      BLOQUEADO_SUSPENDIDO
     }
 
     enum TipoEvento {
       JOB_LLEGA
-      ENTRA_SISTEMA
+      NUEVO_A_LISTO
       DISPATCH
+      LISTO_A_CORRIENDO
       FIN_RAFAGA_CPU
       QUANTUM_EXPIRES
-      IO_COMPLETA
-      PROCESO_TERMINA
+      CORRIENDO_A_LISTO
+      CORRIENDO_A_TERMINADO
+      BLOQUEADO_A_LISTO
+      ' Eventos de suspensión
+      LISTO_A_LISTO_SUSPENDIDO
+      BLOQUEADO_A_BLOQUEADO_SUSPENDIDO
+      LISTO_SUSPENDIDO_A_LISTO
+      BLOQUEADO_SUSPENDIDO_A_BLOQUEADO
+    }
+    
+    enum TipoEventoMejorado {
+      ' Orden de procesamiento para eventos simultáneos (CRÍTICO)
+      FIN_PROCESO = 1
+      FIN_RAFAGA_CPU = 2
+      EXPROPIACION = 3
+      FIN_IO = 4
+      FIN_TIP = 5
+      DISPATCH = 6
+      ' Eventos de sistema
+      JOB_LLEGA = 0
+      QUANTUM_EXPIRES = 3
     }
 
     class Evento {
@@ -214,6 +244,28 @@ package "🏛️ DOMAIN LAYER" as domain {
       --
       +constructor(tiempo: number, tipo: TipoEvento, id: string)
       +compare(otro: Evento): number
+    }
+    
+    class EventoMejorado {
+      +tiempo: number
+      +tipo: TipoEvento
+      +idProceso: string
+      +descripcion?: string
+      +prioridad: number {readonly}
+      --
+      +constructor(tiempo: number, tipo: TipoEvento, id: string, desc?: string)
+      -obtenerPrioridad(tipo: TipoEvento): number
+      +compare(otro: Evento): number
+    }
+    
+    class EstadoSistema {
+      +cpuActiva: boolean
+      +cpuIdle: boolean
+      +procesoEnCPU?: Proceso
+      +tiempoInicioIdle?: number
+      ' Estados suspendidos para memoria
+      +memoriaDisponible: number
+      +umbralSuspension: number
     }
 
     class PriorityQueue<T> {
@@ -433,11 +485,15 @@ package "🎨 UI LAYER" as ui {
 ' RELACIONES ENTRE CAPAS
 ' ===============================
 
-' Dominio - Entities y Algorithms
-Simulador *-- "many" Proceso : gestiona
-Simulador *-- PriorityQueue : usa
-Simulador *-- "many" Evento : programa
+' Dominio - Entities y Algorithms (Implementación Mejorada)
+MotorSimulacionMejorado *-- "many" Proceso : gestiona
+MotorSimulacionMejorado *-- PriorityQueue : usa
+MotorSimulacionMejorado *-- "many" EventoMejorado : programa
+MotorSimulacionMejorado *-- EstadoSistema : mantiene
+MotorSimulacionMejorado --> EstrategiaScheduler : utiliza
 Proceso --> EstadoProceso : estado actual
+EventoMejorado --|> Evento : extends
+EventoMejorado --> TipoEventoMejorado : prioridad basada en
 EstrategiaSchedulerBase ..|> EstrategiaScheduler : implements
 EstrategiaSchedulerFcfs --|> EstrategiaSchedulerBase : extends
 EstrategiaSchedulerSjf --|> EstrategiaSchedulerBase : extends
@@ -458,8 +514,8 @@ SimuladorLogic --> BuildGantt : usa
 SimuladorLogic --> ComputeStatistics : usa
 UseSimulationUI --> SimuladorLogic : delega a
 
-' Core - Adaptadores
-AdaptadorSimuladorDominio --> Simulador : encapsula
+' Core - Adaptadores (Actualizado para Motor Mejorado)
+AdaptadorSimuladorDominio --> MotorSimulacionMejorado : encapsula
 AdaptadorSimuladorDominio --> EstrategiaScheduler : configura
 AdaptadorEntidadesDominio ..> Proceso : factory
 AdaptadorEntidadesDominio ..> ProcesoSimple : transforma
@@ -484,11 +540,13 @@ SimuladorLogic --> GanttExporter : exporta con
 UseSimulationUI --> CargaArchivo : integra
 UseSimulationUI --> ConfiguracionPanel : integra
 
-' Notes para clarificación
-note top of domain : "Capa de Dominio\nLógica de negocio pura\nSin dependencias externas"
+' Notes para clarificación de la implementación mejorada
+note top of domain : "Capa de Dominio\nImplementa estadomejorado.puml\nStates suspendidos + Memory management\nEventos con prioridad académica (1-6)"
 note top of application : "Capa de Aplicación\nCasos de uso y orquestación\nCoordina dominio e infraestructura"
 note top of core : "Capa de Núcleo\nAdaptadores entre capas\nPatrón Adapter"
 note top of infrastructure : "Capa de Infraestructura\nPersistencia, parsing, export\nImplementa ports del dominio"
 note top of ui : "Capa de UI\nComponentes Svelte\nManejo de estado reactivo"
+
+note right of MotorSimulacionMejorado : "Motor Mejorado - Implementa estadomejorado.puml\n✅ Estados suspendidos (LISTO_SUSPENDIDO, BLOQUEADO_SUSPENDIDO)\n✅ Gestión de memoria con suspensión automática\n✅ Orden de eventos simultáneos (prioridad 1-6)\n✅ TCP solo en DISPATCH y EXPROPIACIÓN\n✅ Transiciones académicamente correctas"
 
 @enduml

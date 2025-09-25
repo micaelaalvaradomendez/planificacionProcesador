@@ -1,83 +1,100 @@
-@startuml RR_Algoritmo_Unificado
-title RR - Algoritmo de Planificación - Versión Unificada
-
-title Round Robin - Algoritmo de Decisión de Scheduling
+@startuml RR_Algoritmo_Mejorado
+title Round Robin - Implementación Mejorada con Estados Suspendidos
 
 start
 
-:Evento requiere selección de proceso;
+:MotorSimulacionMejorado requiere selección de proceso;
 
 if (¿Ready Queue vacía?) then (SÍ)
   :CPU permanece idle;
+  :Activar procesos suspendidos si hay memoria;
+  note right: **NUEVA CARACTERÍSTICA**\nRevisar LISTO_SUSPENDIDO
   stop
 endif
 
-:Examinar Ready Queue;
+:Examinar Ready Queue (solo procesos LISTO);
+note right
+**Ready Queue Mejorada:**
+• Solo procesos con memoria asignada
+• LISTO_SUSPENDIDO NO incluidos
+• FIFO circular mantenido
+end note
 
-:proceso = primer elemento de Ready Queue (FIFO);
-note right: **RR:** Cola circular FIFO
+:proceso = elegirSiguiente(colaListos, tiempoActual);
+note right: **RR Mejorado:** EstrategiaSchedulerRoundRobin
 
 :Remover proceso de Ready Queue;
 
 :proceso.estado = LISTO → CORRIENDO;
 
-:Aplicar TCP;
-note right: TCP en despacho L→C
+:Aplicar TCP (ÚNICO lugar en RR);
+note right: **TCP MEJORADO**\nSolo en LISTO → CORRIENDO\nNUNCA en otras transiciones
 
-:procesoActualCPU = proceso;
+:estadoSistema.procesoEnCPU = proceso;
+:tiempoInicioQuantum = tiempoActual;
 
-:tiempoQuantumRestante = quantum;
-
-:Programar eventos concurrentes;
+:Programar EventoMejorado con prioridades;
 note right
-  FIN_RAFAGA_CPU: tiempo + duracionCPU
-  QUANTUM_EXPIRADO: tiempo + quantum
+**Eventos con Prioridad Académica:**
+• FIN_RAFAGA_CPU: prioridad 2
+• QUANTUM_EXPIRES: prioridad 3 (expropiación)
+• Orden correcto garantizado
 end note
 
-fork
-  :Esperar FIN_RAFAGA_CPU;
-  if (¿Ráfaga termina antes de quantum?) then (SÍ)
-    :Cancelar QUANTUM_EXPIRADO;
-    note right: **Fin natural:** NO hay TCP
-    if (¿Más ráfagas?) then (SÍ)
-      :estado = CORRIENDO → BLOQUEADO;
-      :Programar FIN_IO;
-    else (NO)
-      :estado = CORRIENDO → TERMINADO;
-      :Aplicar TFP;
-    endif
-  endif
-fork again
-  :Esperar QUANTUM_EXPIRADO;
-  if (¿Quantum expira primero?) then (SÍ)
-    :Cancelar FIN_RAFAGA_CPU;
-    note right: **Expropiación RR:** Aplicar TCP
-    :estado = CORRIENDO → LISTO;
-    :Aplicar TCP por expropiación;
-    :Agregar proceso al FINAL de Ready Queue;
-    :Actualizar tiempo restante ráfaga;
-  endif
-end fork
+:Motor procesa próximo EventoMejorado (orden prioridad);
 
-:CPU queda libre;
-:procesoActualCPU = null;
+switch (Tipo de evento procesado primero)
+case (FIN_RAFAGA_CPU - Prioridad 2)
+  if (¿Más ráfagas?) then (SÍ)
+    :estado = CORRIENDO → BLOQUEADO;
+    note right: **INSTANTÁNEO - NO TCP**
+    :Programar FIN_IO;
+    if (¿Hay suficiente memoria?) then (NO)
+      :estado = BLOQUEADO → BLOQUEADO_SUSPENDIDO;
+      :Liberar memoria del proceso;
+    endif
+  else (NO)
+    :estado = CORRIENDO → TERMINADO;
+    :Aplicar TFP + liberar memoria;
+    :Activar procesos suspendidos;
+  endif
+  
+case (QUANTUM_EXPIRES - Prioridad 3)
+  :estado = CORRIENDO → LISTO;
+  note right: **TCP PENDIENTE**\nSe cobrará en próximo DISPATCH
+  :Agregar proceso al FINAL de Ready Queue;
+  :Actualizar tiempo restante ráfaga;
+  if (¿Presión de memoria?) then (SÍ)
+    :Evaluar suspensión por memoria;
+  endif
+  
+endswitch
+
+:estadoSistema.procesoEnCPU = null;
+:verificarEstadoCPU();
+:evaluarDispatchInmediato();
 
 stop
 
 note left of start
-**Política Round Robin:**
-• Expropiativo por quantum
-• Time sharing justo
-• TCP SOLO por expiración quantum
-• NO TCP por fin natural
-• Overhead vs. responsiveness
+**RR Mejorado - Características:**
+• ✅ Estados suspendidos integrados
+• ✅ Gestión automática de memoria
+• ✅ Orden de eventos con prioridad académica
+• ✅ TCP solo en LISTO → CORRIENDO
+• ✅ Quantum no interrumpido por retorno I/O
 
-**Parámetros:**
-• Quantum típico: 4-20 unidades
-• Balance: pequeño=responsive, grande=throughput
-• Consigna TP: no interrumpir por retorno I/O
+**Implementación Actual:**
+• EstrategiaSchedulerRoundRobin.ts
+• Integrada con MotorSimulacionMejorado
+• Soporte completo para suspensión
+• 155 líneas de implementación
 
-**Casos TCP:**
+**Eventos TCP:**
+• ✅ LISTO → CORRIENDO (siempre)
+• ❌ CORRIENDO → BLOQUEADO (instantáneo)
+• ❌ CORRIENDO → LISTO (TCP pendiente)
+• ✅ Estados suspendidos (instantáneo)
 ✓ Despacho L→C
 ✓ Expiración quantum
 ✗ Fin natural ráfaga

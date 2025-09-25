@@ -2,118 +2,149 @@ import { EstrategiaSchedulerBase } from './Scheduler';
 import type { Proceso } from '../entities/Proceso';
 
 /**
- * Priority Scheduler Strategy
+ * Priority Scheduler Strategy según estadomejorado.puml
+ * Implementa reglas académicamente correctas con aging opcional
  * 
- * Características teóricas:
- * - Puede ser expropiativo o no expropiativo  
- * - Selecciona proceso con mayor prioridad externa (valor numérico más alto)
- * - Permite dar preferencia a procesos críticos del sistema
- * - Riesgo de inanición (starvation): procesos de baja prioridad pueden no ejecutarse nunca
- * - Solución: Prevención de inanición mediante incremento gradual de prioridad por tiempo de espera
+ * Características:
+ * - Expropiativo o no expropiativo
+ * - Criterio: Mayor prioridad (MENOR número = MAYOR prioridad)
+ * - Tie-breaker: Mantener proceso actual (NO expropiar en empates)
+ * - Anti-starvation: Aging solo mientras está en LISTO
+ * - Convención académica: prioridad 1 > prioridad 2 > ... > prioridad N
  */
 export class EstrategiaSchedulerPrioridad extends EstrategiaSchedulerBase {
   public readonly nombre: string;
   public readonly soportaExpropiacion: boolean;
   public readonly requiereQuantum = false;
 
-  private prevencionInanicionHabilitada: boolean;
-  private incrementoPrioridadPorEspera: number;
-  private intervaloIncrementoPrioridad: number;
-  private ultimoTiempoIncrementoPrioridad: number = 0;
+  private habilitarAging: boolean;
+  private incrementoAging: number;
+  private intervaloAging: number;
+  private ultimoTiempoAging: number = 0;
+  
+  // Mapa para tracking del aging por proceso
+  private agingPorProceso: Map<string, { prioridadOriginal: number; prioridadActual: number }> = new Map();
 
   constructor(
     expropiativo: boolean = true,
-    prevencionInanicionHabilitada: boolean = false,
-    incrementoPrioridadPorEspera: number = 1,
-    intervaloIncrementoPrioridad: number = 10
+    habilitarAging: boolean = false,
+    incrementoAging: number = 1,
+    intervaloAging: number = 10
   ) {
     super();
     this.nombre = expropiativo ? 'Priority (Expropiativo)' : 'Priority (No expropiativo)';
     this.soportaExpropiacion = expropiativo;
-    this.prevencionInanicionHabilitada = prevencionInanicionHabilitada;
-    this.incrementoPrioridadPorEspera = incrementoPrioridadPorEspera;
-    this.intervaloIncrementoPrioridad = intervaloIncrementoPrioridad;
+    this.habilitarAging = habilitarAging;
+    this.incrementoAging = incrementoAging;
+    this.intervaloAging = intervaloAging;
   }
 
   /**
-   * Selecciona el proceso con mayor prioridad
+   * Selecciona proceso con MAYOR prioridad (menor número)
+   * CONVENCIÓN: prioridad 1 > prioridad 2 > ... > prioridad N
    */
   public elegirSiguiente(colaListos: Proceso[], tiempoActual: number): Proceso | undefined {
     if (colaListos.length === 0) {
       return undefined;
     }
 
-    // Aplicar prevención de inanición si está habilitado
-    if (this.prevencionInanicionHabilitada) {
-      this.aplicarPrevencionInanicion(colaListos, tiempoActual);
+    // Aplicar aging si está habilitado
+    if (this.habilitarAging) {
+      this.aplicarAging(colaListos, tiempoActual);
     }
 
-    // Ordenar por prioridad (mayor prioridad primero)
-    this.ordenarColaListos(colaListos);
-    
-    return colaListos[0];
+    // Encontrar proceso con mayor prioridad (menor número)
+    return colaListos.reduce((mejor, actual) => {
+      const prioridadMejor = this.obtenerPrioridadEfectiva(mejor);
+      const prioridadActual = this.obtenerPrioridadEfectiva(actual);
+      
+      if (prioridadActual < prioridadMejor) {
+        return actual;
+      } else if (prioridadActual === prioridadMejor) {
+        // Tie-breaker: orden de llegada a READY
+        return this.compararPorTiempoLlegadaReady(actual, mejor) < 0 ? actual : mejor;
+      }
+      return mejor;
+    });
   }
 
   /**
-   * Ordena la cola por prioridad externa (mayor prioridad primero)
-   */
-  public ordenarColaListos(colaListos: Proceso[]): void {
-    colaListos.sort((a, b) => b.prioridad - a.prioridad);
-  }
-
-  /**
-   * En modo expropiativo, preempt si llega proceso con mayor prioridad
+   * REGLA CRÍTICA Priority: Solo expropia si prioridad_nuevo < prioridad_actual
+   * En empates: mantener proceso actual (NO expropiar)
    */
   public debeExpropiar(procesoActual: Proceso, procesoCandidato: Proceso, tiempoActual: number): boolean {
     if (!this.soportaExpropiacion) {
       return false;
     }
 
-    // Preempt si el proceso candidato tiene mayor prioridad
-    return procesoCandidato.prioridad > procesoActual.prioridad;
+    // IMPORTANTE: Solo expropiar si el candidato tiene ESTRICTAMENTE mayor prioridad (menor número)
+    // En empates, mantener el proceso actual
+    const prioridadActual = this.obtenerPrioridadEfectiva(procesoActual);
+    const prioridadCandidato = this.obtenerPrioridadEfectiva(procesoCandidato);
+    
+    return prioridadCandidato < prioridadActual;
   }
 
   /**
    * Se llama cuando un proceso se vuelve READY
-   * En modo expropiativo debemos verificar preempción
+   * Inicializa tracking de aging si está habilitado
    */
   public alVolverseListoProceso(proceso: Proceso, tiempoActual: number): void {
-    // La lógica de preempción se maneja en debeExpropiar
-    // Este método se puede usar para inicializar aging timestamp
+    if (this.habilitarAging && !this.agingPorProceso.has(proceso.id)) {
+      this.agingPorProceso.set(proceso.id, {
+        prioridadOriginal: proceso.prioridad,
+        prioridadActual: proceso.prioridad
+      });
+    }
   }
 
   /**
-   * Aplica prevención de inanición a procesos que han esperado mucho tiempo
-   * Incrementa gradualmente la prioridad según el tiempo de espera
+   * Implementa aging: Solo aplica mientras está en LISTO (regla crítica)
+   * Mejora gradualmente la prioridad para prevenir starvation
    */
-  private aplicarPrevencionInanicion(colaListos: Proceso[], tiempoActual: number): void {
-    if (tiempoActual - this.ultimoTiempoIncrementoPrioridad < this.intervaloIncrementoPrioridad) {
+  public aplicarAging(colaListos: Proceso[], tiempoActual: number): void {
+    if (tiempoActual - this.ultimoTiempoAging < this.intervaloAging) {
       return;
     }
 
     for (const proceso of colaListos) {
-      if (proceso.ultimoTiempoListo) {
-        const tiempoEspera = tiempoActual - proceso.ultimoTiempoListo;
+      if (proceso.ultimoTiempoListo !== undefined) {
+        const tiempoEnListo = tiempoActual - proceso.ultimoTiempoListo;
         
-        // Incrementar prioridad basado en tiempo de espera (prevenir inanición)
-        if (tiempoEspera >= this.intervaloIncrementoPrioridad) {
-          const incrementoPrioridad = Math.floor(tiempoEspera / this.intervaloIncrementoPrioridad) * this.incrementoPrioridadPorEspera;
-          // NOTA: En implementación real, se modificaría una prioridad dinámica
-          // Aquí solo documentamos el concepto de prevención de inanición
+        if (tiempoEnListo >= this.intervaloAging) {
+          const aging = this.agingPorProceso.get(proceso.id);
+          if (aging) {
+            // Mejorar prioridad (menor número = mayor prioridad)
+            const mejora = Math.floor(tiempoEnListo / this.intervaloAging) * this.incrementoAging;
+            aging.prioridadActual = Math.max(1, aging.prioridadOriginal - mejora);
+            this.agingPorProceso.set(proceso.id, aging);
+          }
         }
       }
     }
 
-    this.ultimoTiempoIncrementoPrioridad = tiempoActual;
+    this.ultimoTiempoAging = tiempoActual;
   }
 
   /**
-   * Habilita/deshabilita prevención de inanición  
+   * Obtiene la prioridad efectiva (incluyendo aging si aplica)
    */
-  public configurarPrevencionInanicion(habilitado: boolean, incremento: number = 1, intervalo: number = 10): void {
-    this.prevencionInanicionHabilitada = habilitado;
-    this.incrementoPrioridadPorEspera = incremento;
-    this.intervaloIncrementoPrioridad = intervalo;
+  private obtenerPrioridadEfectiva(proceso: Proceso): number {
+    if (!this.habilitarAging) {
+      return proceso.prioridad;
+    }
+    
+    const aging = this.agingPorProceso.get(proceso.id);
+    return aging ? aging.prioridadActual : proceso.prioridad;
+  }
+
+  /**
+   * Configura parámetros de aging
+   */
+  public configurarAging(habilitado: boolean, incremento: number = 1, intervalo: number = 10): void {
+    this.habilitarAging = habilitado;
+    this.incrementoAging = incremento;
+    this.intervaloAging = intervalo;
   }
 
   /**
@@ -164,23 +195,24 @@ export class EstrategiaSchedulerPrioridad extends EstrategiaSchedulerBase {
   }
 
   /**
-   * Obtiene información sobre prevención de inanición
+   * Obtiene información sobre aging
    */
-  public obtenerInfoPrevencionInanicion(): {
+  public obtenerInfoAging(): {
     habilitado: boolean;
-    incrementoPorEspera: number;
+    incremento: number;
     intervalo: number;
-    ultimoTiempoIncremento: number;
+    ultimoTiempo: number;
   } {
     return {
-      habilitado: this.prevencionInanicionHabilitada,
-      incrementoPorEspera: this.incrementoPrioridadPorEspera,
-      intervalo: this.intervaloIncrementoPrioridad,
-      ultimoTiempoIncremento: this.ultimoTiempoIncrementoPrioridad
+      habilitado: this.habilitarAging,
+      incremento: this.incrementoAging,
+      intervalo: this.intervaloAging,
+      ultimoTiempo: this.ultimoTiempoAging
     };
   }
 
   public reiniciar(): void {
-    this.ultimoTiempoIncrementoPrioridad = 0;
+    this.ultimoTiempoAging = 0;
+    this.agingPorProceso.clear();
   }
 }

@@ -7,7 +7,7 @@ import type { Workload, SimEvent, Metrics, EventType } from '../../domain/types'
 import { TipoEvento } from '../../domain/types';
 import { validarWorkloadParaSimulacion } from '../../core';
 import { MetricsCalculator } from '../../domain/services/MetricsCalculator';
-import { AdaptadorSimuladorDominio } from '../../core/adaptadorSimuladorDominio';
+import { AdaptadorMotorMejorado } from '../../core/adaptadorMotorMejorado';
 import { convertirEventosInternos } from '../../infrastructure/io/eventLogger';
 
 export interface ResultadoEjecucion {
@@ -45,10 +45,10 @@ export async function ejecutarSimulacionCompleta(
       };
     }
 
-    console.log('🏛️ Ejecutando simulación con entidades del dominio...');
+    console.log('🏛️ Ejecutando simulación con motor mejorado (estadomejorado.puml)...');
     
-    // Ejecutar con motor del dominio (ÚNICO MOTOR)
-    const motor = new AdaptadorSimuladorDominio(workload);
+    // Ejecutar con motor mejorado que implementa el diagrama académicamente correcto
+    const motor = new AdaptadorMotorMejorado(workload);
     const resultado = motor.ejecutar();
     
     if (!resultado.exitoso) {
@@ -78,14 +78,8 @@ export async function ejecutarSimulacionCompleta(
       'AgotamientoQuantum': TipoEvento.CORRIENDO_A_LISTO  // Round Robin expropiación
     };
 
-    // Convertir eventos del core a eventos del dominio
-    const eventosParaGantt: SimEvent[] = resultado.eventosInternos.map(evento => ({
-      tiempo: evento.tiempo,
-      tipo: mapeoTiposEventos[evento.tipo] || TipoEvento.DISPATCH,
-      proceso: evento.proceso || 'SISTEMA',
-      extra: evento.extra
-    }));    // Convertir eventos internos a formato SimEvent
-    const eventosConvertidos: SimEvent[] = resultado.eventosInternos.map(evento => ({
+    // Convertir eventos del motor mejorado a eventos del dominio
+    const eventosConvertidos: SimEvent[] = resultado.eventosInternos.map((evento: any) => ({
       tiempo: evento.tiempo,
       tipo: mapeoTiposEventos[evento.tipo] || TipoEvento.DISPATCH as EventType,
       proceso: evento.proceso || 'SISTEMA',

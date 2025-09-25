@@ -1,9 +1,9 @@
-@startuml Estados_Proceso_Unificado
-title Diagrama de Estados - Ciclo Completo de Vida de Procesos
+@startuml Estados_Proceso_Mejorado
+title Diagrama de Estados Mejorado - Con Estados Suspendidos (Implementación Actual)
 
 ' === ESTADOS PRINCIPALES ===
 
-state "Estados Fundamentales del Sistema" as sistema {
+state "Estados del Sistema - Implementación Mejorada" as sistema {
   
   state NUEVO {
     NUEVO : Proceso arriba al sistema (tiempo = arribo)
@@ -13,7 +13,7 @@ state "Estados Fundamentales del Sistema" as sistema {
   }
   
   state LISTO {
-    LISTO : Proceso en Ready Queue
+    LISTO : Proceso en Ready Queue con memoria asignada
     LISTO : Disponible para ser seleccionado por scheduler
     LISTO : Ordenamiento según algoritmo de planificación
     LISTO : Acumula tiempo de espera
@@ -29,7 +29,7 @@ state "Estados Fundamentales del Sistema" as sistema {
   }
   
   state BLOQUEADO {
-    BLOQUEADO : Proceso realizando operación I/O
+    BLOQUEADO : Proceso realizando operación I/O con memoria asignada
     BLOQUEADO : No consume tiempo de CPU
     BLOQUEADO : Duración fija (duracionIO del proceso)
     BLOQUEADO : Estado: esperando completar I/O
@@ -40,12 +40,31 @@ state "Estados Fundamentales del Sistema" as sistema {
     TERMINADO : Aplica TFP (Tiempo Finalización Proceso)
     TERMINADO : Métricas calculadas y finalizadas
     TERMINADO : Estado: proceso completado
+    TERMINADO : Memoria liberada
+  }
+  
+  ' === ESTADOS SUSPENDIDOS (NUEVA CARACTERÍSTICA) ===
+  
+  state LISTO_SUSPENDIDO {
+    LISTO_SUSPENDIDO : Proceso listo pero sin memoria asignada
+    LISTO_SUSPENDIDO : NO disponible para scheduling
+    LISTO_SUSPENDIDO : Esperando liberación de memoria
+    LISTO_SUSPENDIDO : NO acumula tiempo de espera
+    LISTO_SUSPENDIDO : Estado: suspendido por memoria
+  }
+  
+  state BLOQUEADO_SUSPENDIDO {
+    BLOQUEADO_SUSPENDIDO : Proceso en I/O pero sin memoria asignada
+    BLOQUEADO_SUSPENDIDO : Continúa operación I/O en segundo plano
+    BLOQUEADO_SUSPENDIDO : NO disponible para activación inmediata
+    BLOQUEADO_SUSPENDIDO : Estado: suspendido I/O sin memoria
   }
   
   ' === TRANSICIONES BÁSICAS ===
   [*] --> NUEVO : Proceso arriba\n(tiempo = arribo)
   
-  NUEVO --> LISTO : Fin TIP\n(INSTANTÁNEO - Δt=0)\n**NO hay TCP**
+  NUEVO --> LISTO : Fin TIP + memoria disponible\n(INSTANTÁNEO - Δt=0)\n**NO hay TCP**
+  NUEVO --> LISTO_SUSPENDIDO : Fin TIP + sin memoria\n(INSTANTÁNEO - Δt=0)\n**NO hay TCP**
   
   LISTO --> CORRIENDO : Proceso seleccionado\n**TCP APLICADO**\n(Listo → Corriendo)
   
@@ -53,7 +72,19 @@ state "Estados Fundamentales del Sistema" as sistema {
   
   BLOQUEADO --> LISTO : Fin I/O\n**INSTANTÁNEO - Δt=0**\n**NO hay TCP**
   
-  CORRIENDO --> TERMINADO : Ráfaga CPU completa\n+ rafagasRestantes = 0\nAplica TFP
+  CORRIENDO --> TERMINADO : Ráfaga CPU completa\n+ rafagasRestantes = 0\nAplica TFP + libera memoria
+  
+  ' === TRANSICIONES DE SUSPENSIÓN ===
+  
+  LISTO --> LISTO_SUSPENDIDO : Presión de memoria\nLibera memoria asignada
+  BLOQUEADO --> BLOQUEADO_SUSPENDIDO : Presión de memoria\nLibera memoria asignada
+  
+  LISTO_SUSPENDIDO --> LISTO : Memoria disponible\nAsigna memoria
+  BLOQUEADO_SUSPENDIDO --> BLOQUEADO : Memoria disponible\nAsigna memoria
+  
+  ' === TRANSICIONES DE EXPROPIACIÓN (SEGÚN POLÍTICA) ===
+  
+  CORRIENDO --> LISTO : Expropiación\n(RR: quantum | PRIORITY: mayor prioridad | SRTN: menor tiempo)
 }
 
 ' === TRANSICIONES ESPECÍFICAS POR POLÍTICA ===
@@ -138,41 +169,77 @@ state "Transiciones por Política de Planificación" as politicas {
 ' === REGLAS CRÍTICAS DE TEMPORIZACIÓN ===
 
 note top of sistema
-**REGLAS CRÍTICAS DE TEMPORIZACIÓN (Según Consigna)**
+**IMPLEMENTACIÓN MEJORADA - ESTADOS SUSPENDIDOS**
 
 1. **Transiciones INSTANTÁNEAS (Δt=0):**
-   • NUEVO → LISTO (fin TIP)
+   • NUEVO → LISTO/LISTO_SUSPENDIDO (fin TIP)
    • CORRIENDO → BLOQUEADO (fin ráfaga CPU)
    • BLOQUEADO → LISTO (fin I/O)
+   • Todas las transiciones de suspensión/activación
 
 2. **TCP (Tiempo Cambio Contexto):**
    • Se aplica ÚNICAMENTE en LISTO → CORRIENDO
-   • NUNCA en otras transiciones
+   • NUNCA en otras transiciones (incluidas suspensiones)
    • Incluye overhead del Sistema Operativo
 
-3. **Orden de Eventos Simultáneos:**
-   • 1° Corriendo → Terminado
-   • 2° Corriendo → Bloqueado  
-   • 3° Corriendo → Listo
-   • 4° Bloqueado → Listo
-   • 5° Nuevo → Listo
-   • 6° Listo → Corriendo
+3. **Orden de Eventos Simultáneos (EventoMejorado):**
+   • 1° FIN_PROCESO (Corriendo → Terminado)
+   • 2° FIN_RAFAGA_CPU (Corriendo → Bloqueado)  
+   • 3° EXPROPIACION (Corriendo → Listo)
+   • 4° FIN_IO (Bloqueado → Listo)
+   • 5° FIN_TIP (Nuevo → Listo)
+   • 6° DISPATCH (Listo → Corriendo)
+
+4. **Gestión de Memoria:**
+   • Procesos tienen tamaño (campo Proceso.tamaño)
+   • Sistema mantiene memoriaDisponible
+   • Suspensión automática cuando memoria < umbral
+   • Activación automática cuando se libera memoria
+end note
+
+note right of LISTO_SUSPENDIDO
+**ESTADOS SUSPENDIDOS - CARACTERÍSTICAS**
+
+• **LISTO_SUSPENDIDO:**
+  - Proceso listo pero SIN memoria
+  - NO elegible para scheduling
+  - NO acumula tiempo de espera
+  - Se activa cuando hay memoria
+
+• **BLOQUEADO_SUSPENDIDO:**
+  - Proceso en I/O pero SIN memoria
+  - Operación I/O continúa
+  - Se activa a BLOQUEADO cuando hay memoria
+  - Luego normal BLOQUEADO → LISTO
+
+• **Algoritmo de Suspensión:**
+  - Prioriza suspender procesos BLOQUEADOS
+  - Luego suspende procesos LISTO (por orden)
+  - Sistema mantiene memoria mínima funcional
+
+• **Algoritmo de Activación:**
+  - Al liberar memoria (proceso TERMINADO)
+  - Activa procesos por orden de suspensión
+  - Verifica disponibilidad antes de activar
 end note
 
 note bottom of politicas
-**COMPORTAMIENTOS POR POLÍTICA**
+**COMPORTAMIENTOS POR POLÍTICA (Actualizados)**
 
 • **No Expropiativos:** FCFS, SPN
   - Proceso ejecuta hasta completar ráfaga o requerir I/O
+  - Estados suspendidos NO afectan la lógica básica
   
 • **Expropiativos:** RR, PRIORITY, SRTN
   - Pueden interrumpir proceso en ejecución
   - Requieren manejo de TCP pendiente
+  - Estados suspendidos NO participan en evaluación de expropiación
   
 • **Casos Especiales:**
   - RR con proceso único: sigue usando quantum y TCP
   - PRIORITY: evita starvation con aging opcional
   - SRTN: recalcula tiempo restante en cada evento
+  - **NUEVO:** Suspensión durante TIP si no hay memoria
 end note
 
 @enduml
