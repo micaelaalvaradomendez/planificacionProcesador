@@ -1,0 +1,66 @@
+@startuml 02-prioridades-eventos
+title Prioridad de Eventos – Tabla y criterios de desempate
+
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+  FontName Arial
+}
+
+skinparam legend {
+  BackgroundColor #FFFEF5
+  BorderColor #E6D8A8
+  FontName Arial
+}
+
+skinparam note {
+  BackgroundColor #FFFEF0
+  BorderColor #E0E0E0
+  FontName Arial
+}
+
+skinparam defaultTextAlignment left
+
+' Representación compacta de los tipos de eventos con su prioridad
+rectangle TE [
+  TIPOS DE EVENTOS
+  (mayor prioridad = número menor)
+  
+  Prioridad 1: C→T (finalización)
+  Prioridad 2: C→B (bloqueo por E/S)
+  Prioridad 3: C→L (expropiación)
+  Prioridad 4: B→L (fin de E/S)
+  Prioridad 5: N→L (admisión)
+  Prioridad 6: L→C (despacho)
+]
+
+legend left
+  Tabla de prioridad (1 = más alta):
+    1) C→T  (finalización)
+    2) C→B  (bloqueo por E/S)
+    3) C→L  (expropiación)
+    4) B→L  (fin de E/S)
+    5) N→L  (admisión)
+    6) L→C  (despacho)
+
+  Orden en la cola:
+    • Ordenar por (t, prioridad) ascendente
+    • A igualdad, mantener orden de inserción (estable)
+endlegend
+
+note right of TE
+  Justificación práctica:
+  
+  • Cerrar procesos (C→T) primero previene retener recursos 
+    de forma innecesaria.
+    
+  • Bloqueos (C→B) antes que expropiaciones (C→L) para modelar
+    correctamente el fin de ráfaga vs. política de tiempo.
+    
+  • Reingresos desde E/S (B→L) antes que nuevas admisiones (N→L),
+    para favorecer continuidad de procesos ya activos.
+    
+  • El despacho (L→C) es el último; depende de la visibilidad de
+    todos los eventos previos en el mismo tick t.
+end note
+@enduml

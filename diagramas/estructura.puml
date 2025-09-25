@@ -1,8 +1,4 @@
-@startuml
-' ==========================================================
-' Estructura del proyecto (SvelteKit + TS) – Vista de carpetas/archivos
-' No detalla funciones; solo qué contiene cada archivo.
-' ==========================================================
+@startuml Estructura - Mapa de Archivos
 
 !define MODEL_COLOR #E8F4FD
 !define ENGINE_COLOR #FDF2E9
@@ -12,6 +8,7 @@
 !define GANTT_COLOR #FADBD8
 !define STORES_COLOR #FDEAA7
 !define ROUTES_COLOR #D5E8D4
+!define TEST_COLOR #FFF2CC
 
 skinparam shadowing false
 skinparam defaultTextAlignment left
@@ -44,28 +41,37 @@ package "src" as SRC {
         estados_ts -[hidden]down-> costos_ts
 
         note right of proceso_ts
-          Contiene:
+          **✓ Implementado**
           • Tipos de Proceso (pid, arribo, ráfagas)
           • Estado del proceso (N, L, C, B, F)
-          • Utilidades básicas (servicio total, clonaciones simples)
+          • servicioTotal() - suma de ráfagas CPU
+          • isProcesoValido() - validación básica
         end note
 
         note right of rafaga_ts
-          Contiene:
-          • Utilidades para manejar ráfagas
+          **✓ Implementado**
+          • Utilidades para manejar rafagas
           • Índice/actual y chequeos de restantes
+          • rafagaActual() - obtiene ráfaga por índice
+          • quedanRafagas() - verifica ráfagas restantes
         end note
 
         note right of estados_ts
-          Contiene:
+          **✓ Implementado**
           • Definición de estados
           • Reglas de transición válidas (invariantes)
+          • Estados canónicos (N,L,C,B,F)
+          • isTransicionLegal() - validador de transiciones
+          • assertTransicionLegal() - error si ilegal
+          • transicionarEstado() - transición inmutable
         end note
 
         note right of costos_ts
-          Contiene:
-          • Parámetros TIP, TCP, TFP y bloqueo de E/S
-          • Valores por defecto y helpers de costos
+          **✓ Implementado**
+          • Interface Costos (TIP, TCP, TFP, bloqueoES)
+          • COSTOS_DEF - defaults (bloqueoES=25)
+          • validarCostos() - verifica valores ≥ 0
+          • makeCostos() - constructor saneado
         end note
       }
 
@@ -78,27 +84,27 @@ package "src" as SRC {
         queue_ts -[hidden]down-> engine_ts
 
         note right of engine_types_ts
-          Contiene:
+          **✓ Implementado**
           • Tipos del motor (EventType, SimEvent)
           • Estructura de traza (slices, eventos)
           • Contratos de entrada/salida de run()
         end note
 
         note right of queue_ts
-          Contiene:
+          **✓ Implementado**
           • Cola de eventos
           • Orden por timestamp + prioridad de evento
         end note
 
         note right of engine_ts
-          Contiene:
+          **⏳ Pendiente**
           • Bucle principal de simulación (run)
           • Manejo de reloj, despacho, E/S y costos
           • Construcción de la traza
         end note
       }
 
-      package "sched" as SCHED {
+      package "scheduler" as SCHED {
         rectangle "scheduler.ts" as scheduler_ts
         rectangle "ready-queue.ts" as ready_queue_ts
         rectangle "fcfs.ts" as fcfs_ts
@@ -115,43 +121,43 @@ package "src" as SRC {
         srtn_ts -[hidden]down-> priority_ts
 
         note right of scheduler_ts
-          Contiene:
+          **⏳ Pendiente**
           • Interfaz/contrato de planificadores (IScheduler)
           • Enum/Tipo de políticas soportadas
         end note
 
         note right of ready_queue_ts
-          Contiene:
+          **⏳ Pendiente**
           • Implementaciones de colas de listos
           • FIFO y utilidades base (min-queue opcional)
         end note
 
         note right of fcfs_ts
-          Contiene:
+          **⏳ Pendiente**
           • Planificador FCFS
           • Integración con cola FIFO
         end note
 
         note right of rr_ts
-          Contiene:
+          **⏳ Pendiente**
           • Planificador Round Robin
           • Manejo de quantum y reencolado
         end note
 
         note right of spn_ts
-          Contiene:
+          **⏳ Pendiente**
           • Planificador SPN (no expropiativo)
           • Selección por ráfaga más corta siguiente
         end note
 
         note right of srtn_ts
-          Contiene:
+          **⏳ Pendiente**
           • Planificador SRTN (expropiativo)
           • Selección por menor tiempo restante
         end note
 
         note right of priority_ts
-          Contiene:
+          **⏳ Pendiente**
           • Planificador por prioridades
           • (Opcional) Envejecimiento/ajuste de prioridad
         end note
@@ -164,13 +170,13 @@ package "src" as SRC {
         parser_ts -[hidden]down-> export_ts
 
         note right of parser_ts
-          Contiene:
+          **⏳ Pendiente**
           • Validación y normalización de entrada (JSON/CSV)
           • Conversión a estructuras de Proceso
         end note
 
         note right of export_ts
-          Contiene:
+          **⏳ Pendiente**
           • Exportación de trazas/métricas (JSON/CSV)
           • Helpers para descarga/serialización
         end note
@@ -179,7 +185,7 @@ package "src" as SRC {
       package "metrics" as METRICS {
         rectangle "metricas.ts" as metricas_ts
         note right of metricas_ts
-          Contiene:
+          **⏳ Pendiente**
           • Cálculo de métricas por proceso y globales
           • TRp, TE, TRn, promedios y agregados
         end note
@@ -192,13 +198,13 @@ package "src" as SRC {
         schema_ts -[hidden]down-> builder_ts
 
         note right of schema_ts
-          Contiene:
+          **⏳ Pendiente**
           • Tipos para el modelo de Gantt de UI
           • Items, inicio/fin y normalizaciones
         end note
 
         note right of builder_ts
-          Contiene:
+          **⏳ Pendiente**
           • Conversión de trace.slices a modelo de Gantt
           • Agrupación y orden cronológico para pintar
         end note
@@ -208,16 +214,37 @@ package "src" as SRC {
     package "stores" as STORES {
       rectangle "simulacion.ts" as simulacion_store_ts
       note right of simulacion_store_ts
-        Contiene:
+        **⏳ Pendiente**
         • Svelte stores para política seleccionada
         • Resultados (trace/fin) y costos en UI
       end note
     }
-  } 
+
+    package "test" as TEST {
+      rectangle "test-paso1-modelo.ts" as test_paso1_ts
+      rectangle "test-paso2-engine.ts" as test_paso2_ts
+      
+      test_paso1_ts -[hidden]down-> test_paso2_ts
+
+      note right of test_paso1_ts
+        **✓ Implementado**
+        • Tests de aceptación del Paso 1
+        • Validación de servicioTotal, transiciones
+        • Verificación de costos y validaciones
+      end note
+
+      note right of test_paso2_ts
+        **✓ Implementado**
+        • Tests de aceptación del Paso 2
+        • Validación de cola de eventos
+        • Verificación de tipos del motor
+      end note
+    }
+  }
 
   package "routes" as ROUTES {
     rectangle "+layout.svelte" as layout_svelte
-    rectangle "+layout.ts" as layout_ts
+    rectangle "+page.svelte" as main_page
 
     package "simulacion" as R_SIM {
       rectangle "+page.svelte" as simulacion_page
@@ -227,29 +254,30 @@ package "src" as SRC {
       rectangle "+page.svelte" as resultados_page
     }
     
-    layout_svelte -[hidden]down-> layout_ts
-    layout_ts -[hidden]down-> R_SIM
+    layout_svelte -[hidden]down-> main_page
+    main_page -[hidden]down-> R_SIM
     R_SIM -[hidden]down-> R_RES
 
     note right of layout_svelte
-      Contiene:
+      **⏳ Pendiente**
       • Layout general, estilos, navigation shell
     end note
 
-    note right of layout_ts
-      Contiene:
-      • Load y configuración de layout (si aplica)
+    note right of main_page
+      **⏳ Pendiente**
+      • Página principal del simulador
+      • Landing page y navegación
     end note
 
     note right of simulacion_page
-      Contiene:
+      **⏳ Pendiente**
       • Pantalla para cargar tanda y ejecutar simulación
       • UI de selección de política y parámetros
       • Vista de métricas y Gantt básicos
     end note
 
     note right of resultados_page
-      Contiene:
+      **⏳ Pendiente**
       • Visualización de resultados finales
       • Botones de exportación (JSON/CSV)
     end note
@@ -257,7 +285,7 @@ package "src" as SRC {
 
   rectangle "app.d.ts" as app_dts
   note right of app_dts
-    Contiene:
+    **⏳ Pendiente**
     • Tipos globales para SvelteKit/ambient
     • Extensiones de App namespace (si las hay)
   end note
@@ -269,7 +297,8 @@ SCHED -[hidden]down-> IO
 IO -[hidden]down-> METRICS
 METRICS -[hidden]down-> GANTT
 GANTT -[hidden]down-> STORES
-STORES -[hidden]down-> ROUTES
+STORES -[hidden]down-> TEST
+TEST -[hidden]down-> ROUTES
 
 ' Motor y tipos
 engine_ts --> engine_types_ts : usa tipos
@@ -302,18 +331,23 @@ parser_ts --> proceso_ts
 legend bottom
 **Convenciones del Diagrama**
 • Cada rectángulo = archivo físico
-• Las notas indican "qué contiene" (sin detallar funciones)
+• Las notas indican "qué contiene" y estado actual
 • Las flechas muestran dependencias principales (informativas)
 
+**Estados de implementación:**
+• **✓ Implementado** - Código completo y testeado
+• **⏳ Pendiente** - Archivos creados, pendiente implementación
+
 **Colores por Módulo:**
-• <color:MODEL_COLOR>■</color> **model** - Tipos y entidades base
-• <color:ENGINE_COLOR>■</color> **engine** - Motor de simulación  
-• <color:SCHED_COLOR>■</color> **sched** - Algoritmos de planificación
-• <color:IO_COLOR>■</color> **io** - Entrada/salida de datos
-• <color:METRICS_COLOR>■</color> **metrics** - Cálculo de métricas
-• <color:GANTT_COLOR>■</color> **gantt** - Generación de diagramas
-• <color:STORES_COLOR>■</color> **stores** - Estado de aplicación
-• <color:ROUTES_COLOR>■</color> **routes** - Páginas de la aplicación
+• **model** - Tipos y entidades base
+• **engine** - Motor de simulación  
+• **scheduler** - Algoritmos de planificación
+• **io** - Entrada/salida de datos
+• **metrics** - Cálculo de métricas
+• **gantt** - Generación de diagramas
+• **stores** - Estado de aplicación
+• **routes** - Páginas de la aplicación
+• **test** - Tests de aceptación
 endlegend
 
 @enduml

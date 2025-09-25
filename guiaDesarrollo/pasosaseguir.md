@@ -1,8 +1,8 @@
-¡Vamos paso por paso y en serio, Mica! Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típicos** a evitar, alineados con la **teoría de planificación** y la **consigna del integrador** (TIP/TCP/TFP, bloqueos de E/S, prioridades de eventos, preempciones, métricas y Gantt).
+Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típicos** a evitar, alineados con la **teoría de planificación** y la **consigna del integrador** (TIP/TCP/TFP, bloqueos de E/S, prioridades de eventos, preempciones, métricas y Gantt).
 
 ---
 
-# 1) Modelo + Reglas Base (src/lib/sim/model/*)
+# 1) Modelo + Reglas Base (src/lib/sim/model/*) IMPLEMENTADO
 
 ## Qué implementás
 
@@ -31,7 +31,7 @@
 
 ---
 
-# 2) Tipos del Motor + Cola de Eventos (engine/types.ts, engine/queue.ts)
+# 2) Tipos del Motor + Cola de Eventos (engine/types.ts, engine/queue.ts) IMPLEMENTADO
 
 ## Qué implementás
 

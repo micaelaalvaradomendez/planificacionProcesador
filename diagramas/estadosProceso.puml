@@ -1,0 +1,58 @@
+@startuml 01-estados-proceso
+title Estados del Proceso – Legalidad de transiciones (Paso 1)
+
+skinparam state {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor #333333
+  FontName Arial
+}
+
+skinparam note {
+  BackgroundColor #FFFEF0
+  BorderColor #E0E0E0
+}
+
+skinparam defaultTextAlignment left
+!define NEW_COLOR #E8F4FD
+!define READY_COLOR #E8F8F5  
+!define RUNNING_COLOR #FDF2E9
+!define BLOCKED_COLOR #F3E5F5
+!define TERMINATED_COLOR #FADBD8
+
+' Alias para notación corta (N,L,C,B,T/F)
+state "NUEVO\n(N)" as N <<NEW_COLOR>>
+state "LISTO\n(L)" as L <<READY_COLOR>>
+state "CORRIENDO\n(C)" as C <<RUNNING_COLOR>>
+state "BLOQUEADO (esperando E/S)\n(B)" as B <<BLOCKED_COLOR>>
+state "TERMINADO / FINALIZADO\n(T/F)" as T <<TERMINATED_COLOR>>
+
+' Estado inicial
+[*] --> N : arribo / aplicar TIP
+
+' Transiciones canónicas
+N --> L : admisión al sistema\n(memoria/colas OK)
+L --> C : despacho por CPU / seleccionar proceso
+C --> B : solicitud E/S o bloqueo / iniciar E/S
+B --> L : fin de E/S / volver a ready
+C --> T : última ráfaga CPU completada /\naplicar TFP
+
+' (Opcional) mostrar preempción como transición explícita
+C --> L : expropiación por política\n(aplicar TCP)
+
+' Estado final
+T --> [*]
+
+' Invariantes y reglas operativas
+note right of T
+  **Invariantes (según teoría clásica):**
+  • Un proceso pertenece a UN único estado a la vez.
+  • Transiciones legales: N→L, L→C, C→B, B→L, C→T.
+  • Preempción adicional: C→L (con costo TCP).
+  • **Transiciones no listadas = ilegales** (p.ej., C→N).
+  • Cambios de estado pueden incurrir en costos (p.ej., TCP al conmutar).
+  • Preempción (expropiación) no cambia C→B: va C→L con costo TCP.
+  • Sólo T es absorbente.
+end note
+
+@enduml

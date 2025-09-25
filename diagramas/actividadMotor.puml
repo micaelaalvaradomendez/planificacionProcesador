@@ -1,0 +1,49 @@
+@startuml 02-actividad-motor
+title Motor de Simulación (Event Loop) – Orden (t, prioridad) estable
+
+start
+
+:Inicializar cola de eventos (priority queue ordenada por\n(tiempo, prioridad) con orden estable);
+note right
+  Regla de orden:
+  • Primero por tiempo t ascendente
+  • Luego por prioridad ascendente (1 mejor)
+  • A igualdad de (t, prioridad) mantener orden de inserción
+end note
+
+repeat
+  :pop() -> evento = (t, tipo, pid, meta...);
+
+  if (¿evento válido?) then (sí)
+    if (tipo == "C→T") then (sí)
+      :Aplicar transición C→T (finalización)\n• validar legalidad\n• actualizar estado=F\n• contabilizar TFP;
+      :Liberar CPU / recursos;
+      :Reevaluar despacho (si hay procesos en L, planificador puede generar L→C);
+    elseif (tipo == "C→B") then (sí)
+      :Aplicar transición C→B (bloqueo por E/S)\n• validar legalidad\n• estado=B\n• programar fin de E/S => (t + bloqueoES, B→L);
+      :Liberar CPU;
+      :Reevaluar despacho (posible L→C);
+    elseif (tipo == "C→L") then (sí)
+      :Aplicar transición C→L (expropiación)\n• validar legalidad\n• estado=L\n• costo TCP;
+      :Insertar en cola de listos (READY);
+      :Reevaluar despacho (L→C si corresponde);
+    elseif (tipo == "B→L") then (sí)
+      :Aplicar transición B→L (fin de E/S)\n• validar legalidad\n• estado=L;
+      :Reevaluar despacho (L→C si CPU libre o política lo decide);
+    elseif (tipo == "N→L") then (sí)
+      :Aplicar transición N→L (admisión)\n• validar legalidad\n• estado=L\n• aplicar TIP;
+      :Opcional: evaluar despacho inmediato (L→C) si CPU libre;
+    elseif (tipo == "L→C") then (sí)
+      :Aplicar transición L→C (despacho a CPU)\n• validar legalidad\n• estado=C;
+      :Programar siguiente evento de CPU según ráfaga:\n– Si era última ráfaga: programar C→T\n– Si quedan ráfagas: programar C→B\n– Si política expropiativa: también programar C→L al expirar quantum;
+    else (desconocido)
+      :Descartar / loggear evento inválido;
+    endif
+  else (no)
+    :Descartar / loggear evento corrupto;
+  endif
+
+repeat while (¿cola NO vacía?) is (sí)
+-> no;
+stop
+@enduml
