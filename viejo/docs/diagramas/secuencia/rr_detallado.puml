@@ -1,0 +1,262 @@
+@startuml  
+title Round Robin Mejorado - Q=4 - Con Estados Suspendidos
+participant "AdaptadorSimuladorDominio" as Adaptador
+participant "MotorSimulacion" as Motor
+participant "EstrategiaSchedulerRoundRobin" as RR
+participant "EstadoSistema" as Estado
+participant "EventQueue" as EQ
+participant "ReadyQ" as RQ
+participant "BlockedQ" as BQ
+participant "Logger" as Logger
+participant "CPU" as CPU
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+participant "P4" as P4 
+participant "P5" as P5
+
+== Configuración Inicial Mejorada ==
+note over Motor: TIP=1, TFP=1, TCP=1
+note over RR: **Round Robin: Quantum=4**\nExpropiación: Cada q unidades\nInserción tras expropiación: AL FINAL (pushTail)\nGestión timers: create/cancel quantum
+note over Estado: memoriaDisponible=1000, umbralSuspension=100
+note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, prio=2, tamaño=150
+note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, prio=1, tamaño=200
+note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, prio=3, tamaño=100
+note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, prio=2, tamaño=250
+note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, prio=1, tamaño=180
+
+note over of Motor: **Orden eventos simultáneos:**\n1.FIN_PROCESO 2.FIN_RAFAGA_CPU 3.QUANTUM_EXPIRES\n4.FIN_IO 5.FIN_TIP 6.DISPATCH
+
+== Bucle Principal Round Robin ==
+
+loop while EventQueue not empty
+    Motor -> EQ: popNext() [orden prioridad académica]
+    EQ --> Motor: evento
+    Motor -> Logger: registrar(t, tipo, pid, descripcion)
+
+group t=0: JOB_LLEGA P1 (prioridad 0)
+    Motor -> Estado: haySuficienteMemoria(150)
+    Estado -> Motor: true
+    ref over Motor, Estado : aplicarTIP(P1)\nNUEVO -> intermedio (t += TIP)
+    Motor -> EQ: schedule(FIN_TIP, 1, "P1") [prioridad 5]
+    Motor -> Logger: registrar(0, "JOB_LLEGA", "P1", "arribo al sistema")
+end
+
+group t=1: FIN_TIP P1 + JOB_LLEGA P2 (eventos simultáneos)
+    note right: **Orden:** JOB_LLEGA(0) antes que FIN_TIP(5)
+    
+    == Procesamiento JOB_LLEGA P2 primero ==
+    Motor -> Estado: haySuficienteMemoria(200)
+    Estado -> Motor: true
+    ref over Motor, Estado : aplicarTIP(P2)\nNUEVO -> intermedio (t += TIP)
+    Motor -> EQ: schedule(FIN_TIP, 2, "P2") [prioridad 5]
+    Motor -> Logger: registrar(1, "JOB_LLEGA", "P2", "arribo al sistema")
+    
+    == Procesamiento FIN_TIP P1 después ==
+    Motor -> P1: estado = NUEVO → LISTO
+    Motor -> Estado: reservarMemoria(150) → 850 disponible  
+    Motor -> RQ: push(P1) [circular FIFO]
+    Motor -> Logger: registrar(1, "N->L", "P1", "TIP completado")
+    
+    == Auto-dispatch con timer quantum ==
+    Motor -> EQ: schedule(DISPATCH, 1, "") [prioridad 6]
+    
+    == Procesamiento DISPATCH ==
+    Motor -> RR: elegirSiguiente([P1], 1)
+    RR -> Motor: P1 [circular FIFO]
+    Motor -> RQ: remove(P1)
+    ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO (t += TCP)
+    Motor -> P1: estado = LISTO → CORRIENDO
+    Motor -> CPU: asignar(P1)
+    Motor -> EQ: schedule(FIN_RAFAGA_CPU, 7, "P1") [t+TCP+5=7, prioridad 2]
+    Motor -> EQ: schedule(QUANTUM_EXPIRES, 6, "P1") [t+TCP+q=6, prioridad 3]
+    Motor -> Logger: registrar(1, "L->C", "P1", "dispatch + TCP + quantum timer")
+    note right: **RR Guard:** Quantum timer creado simultáneamente
+end
+
+group t=2: FIN_TIP P2 (prioridad 5)
+    Motor -> P2: estado = NUEVO → LISTO
+    Motor -> Estado: reservarMemoria(200) → 650 disponible
+    Motor -> RQ: push(P2) [cola circular = [P2]]
+    Motor -> Logger: registrar(2, "N->L", "P2", "TIP completado")
+    note right: **P1 sigue en CPU** hasta quantum o fin de ráfaga
+end
+
+group t=6: QUANTUM_EXPIRES P1 (prioridad 3)
+    alt [q==0] quantum agotado
+        Motor -> P1: estado = CORRIENDO → LISTO
+        Motor -> CPU: liberar()
+        Motor -> RQ: pushTail(P1) [cola = [P2, P1] - al FINAL]
+        Motor -> EQ: cancel(FIN_RAFAGA_CPU, "P1") [cancelar timer ráfaga]
+        Motor -> Logger: registrar(6, "C->L", "P1", "expropiado por quantum")
+        
+        == Auto-dispatch siguiente ==
+        Motor -> EQ: schedule(DISPATCH, 6, "") [prioridad 6]
+        
+        == Procesamiento DISPATCH ==
+        Motor -> RR: elegirSiguiente([P2, P1], 6)
+        RR -> Motor: P2 [circular FIFO: siguiente en cola]
+        Motor -> RQ: remove(P2) [cola = [P1]]
+        ref over Motor, CPU : aplicarTCP()\nLISTO -> CORRIENDO (t += TCP)
+        Motor -> P2: estado = LISTO → CORRIENDO
+        Motor -> CPU: asignar(P2)
+        Motor -> EQ: schedule(FIN_RAFAGA_CPU, 13, "P2") [t+TCP+6=13, prioridad 2]
+        Motor -> EQ: schedule(QUANTUM_EXPIRES, 11, "P2") [t+TCP+q=11, prioridad 3]
+        Motor -> Logger: registrar(6, "L->C", "P2", "dispatch + TCP + quantum timer")
+    end
+end
+
+group t=11: QUANTUM_EXPIRES P2 (prioridad 3) 
+    alt [q==0] quantum agotado para P2
+        Motor -> P2: estado = CORRIENDO → LISTO
+        Motor -> CPU: liberar()
+        Motor -> RQ: pushTail(P2) [cola = [P1, P2] - P2 al FINAL]
+        Motor -> EQ: cancel(FIN_RAFAGA_CPU, "P2") [cancelar timer ráfaga]
+        Motor -> Logger: registrar(11, "C->L", "P2", "expropiado por quantum")
+        
+        == Continúa rotación circular ==
+        Motor -> EQ: schedule(DISPATCH, 11, "") [prioridad 6]
+    end
+end
+
+group Ejemplo: Terminación antes de quantum
+    note over Motor: **Caso especial:** Si proceso termina antes de q
+    
+    alt [terminó ráfaga] antes de quantum
+        Motor -> EQ: cancel(QUANTUM_EXPIRES, pid) [**CRÍTICO: cancelar timer**]
+        Motor -> Logger: registrar(t, "CANCEL_QUANTUM", pid, "terminó antes de q")
+        note right: **RR Guard:** Evita "eventos fantasma"
+    end
+end
+
+note over Motor, Logger: **Round Robin continúa rotación circular**\n• Quantum fijo para todos los procesos\n• Expropiación cada q unidades\n• Cancelación de timers si termina antes\n• Inserción al FINAL tras expropiación
+
+end
+
+group t=2: P2 entra (FIN_TIP)
+    Motor -> P2: estado = NUEVO → LISTO
+    Motor -> Estado: reservar memoria(200) → 650 disponible
+    Motor -> ReadyQ: agregar P2 [P2] (P1 en CPU, Q restante=4)
+end
+
+group t=3: Arribo P3
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra al sistema
+    Sys -> P3: estado = LISTO
+    Sys -> RQ: agregar P3 [P2, P3] (P1 con Q=2 restante)
+end
+
+group t=5: EXPIRA QUANTUM P1, Arribo P4
+    T -> CPU: QUANTUM_EXPIRADO
+    CPU -> P1: expropiación, estado = LISTO
+    P1 -> P1: ráfaga parcial ejecutada (4u), quedan 1u
+    Sys -> Sys: **TCP = 1u** (cambio de contexto)
+    Sys -> P4: JOB_LLEGA
+    P4 -> P4: estado = NUEVO
+    
+    note right: **RR Critical:** TCP por expiración quantum
+    Sys -> RQ: agregar P1 al final [P2, P3, P1]
+end
+
+group t=6: Despacho P2, P4 entra, Arribo P5  
+    RQ -> CPU: despachar P2 (próximo en cola RR)
+    CPU -> P2: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=10
+    P2 -> P2: ejecutar CPU (min(6, 4) = 4u)
+    
+    Sys -> P4: estado = LISTO
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    Sys -> RQ: [P3, P1, P4] (P2 en CPU)
+end
+
+group t=7: P5 entra al sistema
+    Sys -> P5: estado = LISTO
+    Sys -> RQ: [P3, P1, P4, P5] (P2 con Q=3 restante)
+end
+
+group t=10: EXPIRA QUANTUM P2
+    T -> CPU: QUANTUM_EXPIRADO  
+    CPU -> P2: expropiación, estado = LISTO
+    P2 -> P2: ráfaga parcial (4u), quedan 2u
+    Sys -> Sys: **TCP = 1u**
+    Sys -> RQ: agregar P2 al final [P3, P1, P4, P5, P2]
+end
+
+group t=11: Despacho P3
+    RQ -> CPU: despachar P3
+    CPU -> P3: estado = CORRIENDO  
+    T -> T: quantum=4, fin en t=15
+    P3 -> P3: ejecutar CPU (min(3, 4) = 3u completos)
+    Sys -> RQ: [P1, P4, P5, P2] (P3 en CPU)
+end
+
+group t=14: P3 TERMINA RÁFAGA (antes de quantum)
+    CPU -> P3: fin ráfaga natural
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=16)
+    note right: **RR:** Fin natural, NO hay TCP
+    
+    RQ -> CPU: despachar P1 (próximo en cola)
+    CPU -> P1: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=18  
+    P1 -> P1: ejecutar CPU restante (1u completo)
+    Sys -> RQ: [P4, P5, P2] (P3 en I/O)
+end
+
+group t=15: P1 TERMINA RÁFAGA
+    CPU -> P1: fin ráfaga natural
+    P1 -> P1: estado = BLOQUEADO (I/O 4u hasta t=19)
+    note right: **RR:** Fin natural, NO hay TCP
+    
+    RQ -> CPU: despachar P4
+    CPU -> P4: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=19
+    P4 -> P4: ejecutar CPU (min(4, 4) = 4u completos)
+    Sys -> RQ: [P5, P2] (P1 y P3 en I/O)
+end
+
+group t=16: P3 termina I/O
+    P3 -> P3: fin I/O, estado = LISTO
+    Sys -> RQ: [P5, P2, P3] (P3 al final cola RR)
+end
+
+group t=19: P4 TERMINA + EXPIRA Q, P1 termina I/O
+    CPU -> P4: fin ráfaga natural (justo en quantum)
+    P4 -> P4: estado = BLOQUEADO (I/O 2u hasta t=21)
+    P1 -> P1: fin I/O, estado = LISTO
+    note right: **RR:** Fin natural en quantum, NO TCP
+    
+    RQ -> CPU: despachar P5
+    CPU -> P5: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=23
+    P5 -> P5: ejecutar CPU (min(7, 4) = 4u)
+    Sys -> RQ: [P2, P3, P1] (P4 en I/O)
+end
+
+group t=21: P4 termina I/O
+    P4 -> P4: fin I/O, estado = LISTO  
+    Sys -> RQ: [P2, P3, P1, P4] (P4 al final)
+end
+
+group t=23: EXPIRA QUANTUM P5
+    T -> CPU: QUANTUM_EXPIRADO
+    CPU -> P5: expropiación, estado = LISTO
+    P5 -> P5: ráfaga parcial (4u), quedan 3u  
+    Sys -> Sys: **TCP = 1u**
+    Sys -> RQ: agregar P5 al final [P2, P3, P1, P4, P5]
+end
+
+note right of RQ
+**Patrón Round Robin:**
+- Quantum fijo Q=4 con timer
+- TCP SOLO por expiración quantum  
+- NO TCP por fin natural de ráfaga
+- Cola circular: expropado → final
+- Fairness garantizado
+- Overhead TCP vs throughput
+end note
+
+@enduml

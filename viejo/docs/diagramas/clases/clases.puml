@@ -1,0 +1,691 @@
+@startuml UML_Classes
+
+!theme plain
+skinparam backgroundColor White
+skinparam classBackgroundColor LightGray
+skinparam classBorderColor Gray
+skinparam stereotypeCBackgroundColor LightBlue
+skinparam packageBackgroundColor WhiteSmoke
+skinparam packageBorderColor Gray
+
+title Diagrama de Clases - Simulador de Planificacion de Procesos (Actualizado 2025)
+
+' ===============================
+' CAPA DE DOMINIO (Domain Layer)
+' ===============================
+package "DOMAIN LAYER" as domain {
+  
+  package "Entities" as entities {
+    class Proceso {
+      ' Propiedades inmutables (readonly)
+      +id: string {readonly}
+      +arribo: number {readonly}
+      +rafagasCPU: number {readonly}
+      +duracionCPU: number {readonly}
+      +duracionIO: number {readonly}
+      +prioridad: number {readonly}
+      +tamaño: number {readonly}
+      
+      ' Estado dinámico de simulacion
+      +estado: EstadoProceso
+      +rafagasRestantes: number
+      +restanteCPU: number
+      +restanteIO: number
+      +restanteTotalCPU: number
+      
+      ' Timestamps para metricas
+      +inicioTIP?: number
+      +finTIP?: number
+      +pendienteTFP: boolean
+      +inicio?: number
+      +fin?: number
+      +ultimoDispatch?: number
+      +tiempoListoTotal: number
+      +ultimoTiempoListo?: number
+      
+      ' Campos adicionales para scheduling
+      +rafagasCompletadas: number
+      +tiempoCPUConsumido: number
+      +tiempoUltimoReady?: number
+      --
+      +constructor(data: ProcesData)
+      +iniciarTIP(tiempo: number): void
+      +finalizarTIP(tiempo: number): void
+      +activar(tiempo: number): void
+      +expropiar(tiempo: number): void
+      +bloquearIO(tiempo: number): void
+      +completarCPU(tiempo: number): void
+      +completarIO(tiempo: number): void
+      +terminar(tiempo: number): void
+      +procesarCPU(tiempo: number): void
+      +procesarIO(tiempo: number): void
+      +estaCPUCompleta(): boolean
+      +estaIOCompleto(): boolean
+      +estaCompleto(): boolean
+      +tiempoTotalCPU(): number
+      +clone(): Proceso
+    }
+
+    class MotorSimulacionCompleto {
+      ' Estado temporal y control
+      +tiempoActual: number
+      +parametros: ParametrosSimulacion {readonly}
+      -estrategia: EstrategiaScheduler
+      -estadoSistema: EstadoSistema
+      
+      ' Colas del sistema segun diagramas
+      +readyQueue: Proceso[]
+      +readySuspendedQueue: Proceso[]
+      +blockedQueue: Proceso[]
+      +blockedSuspendedQueue: Proceso[]
+      +procesosTerminados: Proceso[]
+      
+      ' Registro completo del sistema
+      +todosLosProcesos: Map<string, Proceso>
+      +colaEventos: PriorityQueue<EventoMejorado>
+      +logger: RegistroEvento[]
+      
+      ' Metricas del sistema
+      +tiempoTotalInactivo: number
+      +tiempoTotalSO: number
+      +tiempoTotalUsuario: number
+      
+      ' Gestion de timers (RR/SRTF)
+      -timersActivos: Map<string, EventoMejorado>
+      --
+      +constructor(parametros: ParametrosSimulacion, estrategia: EstrategiaScheduler)
+      +agregarProceso(proceso: Proceso): void
+      +ejecutarSimulacion(): void
+      
+      ' Procesamiento de eventos segun tipo
+      -procesarEvento(evento: EventoMejorado): void
+      -procesarLlegadaProceso(evento: EventoMejorado, proceso: Proceso): void
+      -procesarFinTIP(evento: EventoMejorado, proceso: Proceso): void
+      -procesarDispatch(evento: EventoMejorado): void
+      -procesarFinRafagaCPU(evento: EventoMejorado, proceso: Proceso): void
+      -procesarExpropiacion(evento: EventoMejorado, proceso: Proceso): void
+      -procesarFinIO(evento: EventoMejorado, proceso: Proceso): void
+      
+      ' Gestion de tiempo y planificacion
+      -avanzarTiempo(nuevoTiempo: number): void
+      -evaluarPlanificacion(): void
+      
+      ' Gestion de memoria y suspension
+      -suspenderProcesosPorMemoria(memoriaRequerida: number): void
+      -reactivarProcesosSuspendidos(): void
+      -intentarReactivarProceso(proceso: Proceso): void
+      
+      ' Logging y estado
+      -log(evento: string, proceso: string, descripcion: string, ...): void
+      -registrarTimer(clave: string, evento: EventoMejorado): void
+      -cancelarTimer(clave: string): boolean
+      +obtenerEstadisticas(): any
+    }
+    
+    class Simulador {
+      ' Compatibilidad con adaptador legacy
+      +tiempoActual: number
+      +readyQueue: Proceso[]
+      +procesosBloqueados: Proceso[]
+      +procesosTerminados: Proceso[]
+      +todosLosProcesos: Map<string, Proceso>
+      +colaEventos: PriorityQueue<Evento>
+      +registroEventos: Evento[]
+      +parametros: ParametrosSimulacion {readonly}
+      
+      ' Estado de CPU y SO
+      +procesoEnCPU?: Proceso
+      +cpuOcupadaHasta: number
+      +actividadCPU: string
+      +tiempoTotalUsuario: number
+      +tiempoTotalSO: number
+      +tiempoTotalInactivo: number
+      --
+      +constructor(parametros: ParametrosSimulacion)
+      +agregarProceso(proceso: Proceso): void
+      +programarEvento(tiempo: number, tipo: TipoEvento, id: string, desc?: string): void
+      +avanzarTiempo(nuevoTiempo: number): void
+      +obtenerSiguienteEvento(): Evento | undefined
+      +procesarSiguienteEvento(): Evento | undefined
+      +todosProcesosTerminados(): boolean
+      +esCpuDisponible(): boolean
+      +ocuparCpu(hasta: number, actividad: string): void
+      +asignarProcesoACpu(proceso: Proceso): void
+      +removerProcesoDeCpu(): Proceso | undefined
+      +agregarAReadyQueue(proceso: Proceso): void
+      +obtenerEstadisticas(): any
+    }
+  }
+
+  package "Algorithms" as algorithms {
+    interface EstrategiaScheduler {
+      +nombre: string {readonly}
+      +soportaExpropiacion: boolean {readonly}
+      +requiereQuantum: boolean {readonly}
+      --
+      +alLlegarProceso(proceso: Proceso, tiempo: number): void
+      +alVolverseListoProceso(proceso: Proceso, tiempo: number): void
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +debeExpropiar?(actual: Proceso, candidato: Proceso, tiempo: number): boolean
+      +reiniciar(): void
+      +aplicarAging?(colaListos: Proceso[], tiempo: number): void
+      +obtenerCriterioOrden?(proceso: Proceso): number
+    }
+
+    abstract class EstrategiaSchedulerBase {
+      +nombre: string {readonly, abstract}
+      +soportaExpropiacion: boolean {readonly, abstract}
+      +requiereQuantum: boolean {readonly, abstract}
+      --
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso? {abstract}
+      +alLlegarProceso(proceso: Proceso, tiempo: number): void
+      +alVolverseListoProceso(proceso: Proceso, tiempo: number): void
+      +debeExpropiar?(actual: Proceso, candidato: Proceso, tiempo: number): boolean
+      +reiniciar(): void
+    }
+
+    class EstrategiaSchedulerFcfs {
+      +nombre: "FCFS"
+      +soportaExpropiacion: false
+      +requiereQuantum: false
+      --
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +reiniciar(): void
+    }
+
+    class EstrategiaSchedulerSjf {
+      +nombre: "SJF"
+      +soportaExpropiacion: false
+      +requiereQuantum: false
+      --
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +reiniciar(): void
+    }
+
+    class EstrategiaSchedulerSrtf {
+      +nombre: "SRTF"
+      +soportaExpropiacion: true
+      +requiereQuantum: false
+      --
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +debeExpropiar(actual: Proceso, candidato: Proceso, tiempo: number): boolean
+      +reiniciar(): void
+    }
+
+    class EstrategiaSchedulerRoundRobin {
+      +nombre: "RR"
+      +soportaExpropiacion: true
+      +requiereQuantum: true
+      -quantum: number
+      --
+      +constructor(quantum: number)
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +debeExpropiar(actual: Proceso, candidato: Proceso, tiempo: number): boolean
+      +reiniciar(): void
+    }
+
+    class EstrategiaSchedulerPrioridad {
+      +nombre: "PRIORITY"
+      +soportaExpropiacion: true
+      +requiereQuantum: false
+      -factorAging: number
+      -tiempoUltimoAging: number
+      --
+      +constructor(factorAging?: number)
+      +elegirSiguiente(colaListos: Proceso[], tiempo: number): Proceso?
+      +debeExpropiar(actual: Proceso, candidato: Proceso, tiempo: number): boolean
+      +aplicarAging(colaListos: Proceso[], tiempo: number): void
+      +reiniciar(): void
+    }
+
+    class FactoriaEstrategias <<Singleton>> {
+      --
+      +crear(algoritmo: string, parametros?: any): EstrategiaScheduler {static}
+      +obtenerEstrategiasDisponibles(): string[] {static}
+    }
+  }
+
+  package "Services" as services {
+    class MetricsCalculator <<Servicio de Dominio>> {
+      --
+      +calcularMetricas(procesos: Proceso[], eventos: SimEvent[], tiempoTotal: number): Metrics {static}
+      +calcularEstadisticasExtendidas(eventos: SimEvent[], config?: RunConfig): EstadisticasExtendidas {static}
+      +generarAnalisisRendimiento(metricas: Metrics, eventos: SimEvent[]): AnalisisRendimiento {static}
+      +compararMetricas(m1: Metrics, m2: Metrics): MetricasComparativas {static}
+      +calcularMetricasProceso(proceso: Proceso, eventos: SimEvent[]): MetricsPerProcess {static}
+      -calcularTiempoRetorno(proceso: Proceso): number {static}
+      -calcularTiempoServicio(proceso: Proceso): number {static}
+      -analizarRendimiento(metricas: Metrics, eventos: SimEvent[]): AnalisisRendimiento {static}
+    }
+
+    class GanttBuilder <<Servicio de Dominio>> {
+      --
+      +construirDiagramaGantt(eventos: SimEvent[], config?: RunConfig): DiagramaGantt {static}
+      +validarConsistencia(segmentos: GanttSlice[]): boolean {static}
+      +calcularEstadisticas(segmentos: GanttSlice[], tiempoTotal: number): EstadisticasGantt {static}
+      +optimizarVisualizacion(segmentos: GanttSlice[]): GanttSlice[] {static}
+      -generarSegmentosAlternativos(eventos: SimEvent[], config?: RunConfig): GanttSlice[] {static}
+      -procesarSegmentosSO(segmentos: GanttSlice[]): GanttSlice[] {static}
+      -validarSecuenciaEventos(eventos: SimEvent[]): boolean {static}
+    }
+  }
+
+  package "Types & Events" as types {
+    enum EstadoProceso {
+      NUEVO
+      LISTO  
+      CORRIENDO
+      BLOQUEADO
+      TERMINADO
+      ' Estados suspendidos segun estadomejorado.puml
+      LISTO_SUSPENDIDO
+      BLOQUEADO_SUSPENDIDO
+    }
+
+    enum TipoEvento {
+      ' Eventos principales con prioridades academicas
+      JOB_LLEGA           ' 0 - Llegada de proceso
+      FIN_PROCESO         ' 1 - Terminacion completa
+      FIN_RAFAGA_CPU      ' 2 - Fin de rafaga CPU
+      EXPROPIACION        ' 3 - Expropiacion por scheduler
+      QUANTUM_EXPIRES     ' 3 - Expiracion de quantum (RR)
+      FIN_IO              ' 4 - Fin de operacion I/O
+      FIN_TIP             ' 5 - Fin de TIP
+      DISPATCH            ' 6 - Asignacion de CPU
+      ' Eventos de transicion de estado
+      NUEVO_A_LISTO
+      LISTO_A_CORRIENDO
+      CORRIENDO_A_LISTO
+      CORRIENDO_A_BLOQUEADO
+      BLOQUEADO_A_LISTO
+      CORRIENDO_A_TERMINADO
+      ' Eventos de suspension de memoria
+      LISTO_A_LISTO_SUSPENDIDO
+      BLOQUEADO_A_BLOQUEADO_SUSPENDIDO
+      LISTO_SUSPENDIDO_A_LISTO
+      BLOQUEADO_SUSPENDIDO_A_BLOQUEADO
+    }
+
+    class Evento {
+      +tiempo: number
+      +tipo: TipoEvento
+      +idProceso: string
+      +descripcion?: string
+      --
+      +constructor(tiempo: number, tipo: TipoEvento, id: string)
+      +compare(otro: Evento): number
+    }
+    
+    class EventoMejorado {
+      +tiempo: number
+      +tipo: TipoEvento
+      +idProceso: string
+      +descripcion?: string
+      +prioridad: number {readonly}
+      --
+      +constructor(tiempo: number, tipo: TipoEvento, id: string, desc?: string)
+      -obtenerPrioridad(tipo: TipoEvento): number
+      +compare(otro: EventoMejorado): number
+    }
+    
+    interface ParametrosSimulacion {
+      +TIP: number
+      +TCP: number
+      +TFP: number
+      +quantum?: number
+      +algoritmo: string
+    }
+
+    interface ConfiguracionSimulacion {
+      +procesos: any[]
+      +algoritmo: string
+      +parametros: ParametrosSimulacion
+      +parametrosEstrategia?: any
+    }
+
+    class PriorityQueue<T> {
+      -items: T[]
+      -compareFn: Function
+      --
+      +enqueue(item: T): void
+      +dequeue(): T | undefined
+      +isEmpty(): boolean
+      +size(): number
+    }
+  }
+}
+
+    class TxtParser {
+      +parseTxtToWorkload(content: string, config: ParseConfig, filename: string): Workload
+      +parsearLineaProceso(linea: string, separador: string): ProcessSpec
+      +validarFormatoTxt(content: string): boolean
+    }
+  }
+
+  package "📤 IO & Export" as io {
+    class GanttExporter {
+      +exportarJson(gantt: DiagramaGantt): string
+      +exportarSvg(gantt: DiagramaGantt): string
+      +exportarAscii(gantt: DiagramaGantt): string
+      +generarReportePdf(gantt: DiagramaGantt): Blob
+    }
+
+    class EventLogger {
+      +logearEvento(evento: SimEvent): void
+      +exportarLog(eventos: SimEvent[]): string
+      +filtrarEventos(eventos: SimEvent[], filtros: any): SimEvent[]
+    }
+
+    class ExportMetrics {
+      +exportarCsv(metricas: Metrics): string
+      +exportarJson(metricas: Metrics): string
+      +generarReporte(metricas: Metrics): string
+    }
+  }
+}
+
+' ===============================
+' CAPA DE UI (User Interface Layer)
+' ===============================
+package "🎨 UI LAYER" as ui {
+  
+  package "🧩 Components" as components {
+    class CargaArchivo {
+      +archivo: File?
+      +cargando: boolean
+      +error: string?
+      --
+      +onArchivoSeleccionado(event: CustomEvent): void
+      +onArchivoRemovido(): void
+      +validarArchivo(file: File): boolean
+    }
+
+    class TablaProcesos {
+      +procesos: ProcesoSimple[]
+      +modoEdicion: boolean
+      --
+      +agregarProceso(): void
+      +eliminarProceso(index: number): void
+      +editarProceso(index: number, proceso: ProcesoSimple): void
+    }
+
+    class ConfiguracionPanel {
+      +configuracion: ConfiguracionSimulacion
+      +validacion: ResultadoValidacion
+      --
+      +onConfiguracionChange(config: ConfiguracionSimulacion): void
+      +validarQuantum(valor: number): boolean
+      +resetearConfiguracion(): void
+    }
+
+    class GanttFixed {
+      +gantt: DiagramaGantt
+      +zoom: number
+      +filtros: FiltrosGantt
+      --
+      +renderizarSegmentos(): void
+      +manejarZoom(factor: number): void
+      +exportarImagen(): void
+    }
+
+    class EventosSimulacion {
+      +eventos: SimEvent[]
+      +filtros: FiltrosEvento
+      --
+      +filtrarEventos(): SimEvent[]
+      +exportarEventos(): void
+      +buscarEvento(criterio: string): void
+    }
+  }
+
+  package "Data Types" as uitypes {
+    class ProcesoSimple {
+      +nombre: string
+      +llegada: number
+      +rafaga: number
+      +prioridad: number
+    }
+
+    class ConfiguracionSimulacion {
+      +policy: Policy
+      +tip: number
+      +tfp: number
+      +tcp: number
+      +quantum?: number
+    }
+
+    class DatosSimulacionCompleta {
+      +procesos: ProcesoSimple[]
+      +configuracion: ConfiguracionSimulacion
+      +resultados: ResultadoSimulacion
+      +timestamp: string
+    }
+  }
+}
+
+' ===============================
+' RELACIONES ENTRE CAPAS
+' ===============================
+
+' Dominio - Entities y Algorithms (Implementación Mejorada)
+MotorSimulacionMejorado *-- "many" Proceso : gestiona
+MotorSimulacionMejorado *-- PriorityQueue : usa
+MotorSimulacionMejorado *-- "many" EventoMejorado : programa
+MotorSimulacionMejorado *-- EstadoSistema : mantiene
+MotorSimulacionMejorado --> EstrategiaScheduler : utiliza
+Proceso --> EstadoProceso : estado actual
+EventoMejorado --|> Evento : extends
+EventoMejorado --> TipoEventoMejorado : prioridad basada en
+EstrategiaSchedulerBase ..|> EstrategiaScheduler : implements
+EstrategiaSchedulerFcfs --|> EstrategiaSchedulerBase : extends
+EstrategiaSchedulerSjf --|> EstrategiaSchedulerBase : extends
+EstrategiaSchedulerSrtf --|> EstrategiaSchedulerBase : extends
+EstrategiaSchedulerRoundRobin --|> EstrategiaSchedulerBase : extends
+EstrategiaSchedulerPrioridad --|> EstrategiaSchedulerBase : extends
+
+' Dominio - Services
+MetricsCalculator ..> Proceso : analiza
+GanttBuilder ..> Evento : construye desde
+
+' Application - Use Cases
+RunSimulation --> AdaptadorSimuladorDominio : delega a
+BuildGantt --> GanttBuilder : usa
+ComputeStatistics --> MetricsCalculator : usa
+SimuladorLogic --> RunSimulation : orquesta
+SimuladorLogic --> BuildGantt : usa
+SimuladorLogic --> ComputeStatistics : usa
+UseSimulationUI --> SimuladorLogic : delega a
+
+' Core - Adaptadores (Actualizado para Motor Mejorado)
+AdaptadorSimuladorDominio --> MotorSimulacionMejorado : encapsula
+AdaptadorSimuladorDominio --> EstrategiaScheduler : configura
+AdaptadorEntidadesDominio ..> Proceso : factory
+AdaptadorEntidadesDominio ..> ProcesoSimple : transforma
+
+' Infrastructure - Parsers e IO
+WorkloadParser --> JsonParser : usa
+WorkloadParser --> TxtParser : usa
+GanttExporter ..> GanttBuilder : exporta desde
+EventLogger ..> Evento : registra
+ExportMetrics ..> MetricsCalculator : exporta desde
+
+' UI - Components
+CargaArchivo --> WorkloadParser : carga archivos con
+TablaProcesos --> ProcesoSimple : muestra
+ConfiguracionPanel --> ConfiguracionSimulacion : configura
+GanttFixed --> GanttBuilder : visualiza
+EventosSimulacion --> EventLogger : muestra
+
+' Cross-layer dependencies
+SimuladorLogic --> WorkloadParser : carga archivos
+SimuladorLogic --> GanttExporter : exporta con
+UseSimulationUI --> CargaArchivo : integra
+UseSimulationUI --> ConfiguracionPanel : integra
+
+' Notes para clarificación de la implementación mejorada
+note top of domain : "Capa de Dominio\nImplementa estadomejorado.puml\nStates suspendidos + Memory management\nEventos con prioridad académica (1-6)"
+note top of application : "Capa de Aplicación\nCasos de uso y orquestación\nCoordina dominio e infraestructura"
+note top of core : "Capa de Núcleo\nAdaptadores entre capas\nPatrón Adapter"
+note top of infrastructure : "Capa de Infraestructura\nPersistencia, parsing, export\nImplementa ports del dominio"
+note top of ui : "Capa de UI\nComponentes Svelte\nManejo de estado reactivo"
+
+  ' Facade principal del sistema
+  class AdaptadorSimuladorDominio <<Facade>> {
+    -motor?: MotorSimulacionCompleto
+    -estrategia?: EstrategiaScheduler
+    --
+    +ejecutarSimulacion(config: ConfiguracionSimulacion): Promise<ResultadosSimulacion>
+    -cargarProcesos(procesosData: any[]): void
+    -generarResultados(): ResultadosSimulacion
+    -calcularMetricasProceso(proceso: Proceso): MetricasProceso
+    -calcularMetricasGlobales(procesos: MetricasProceso[], estadisticas: any): any
+    -generarTimelineEventos(): any[]
+    +validarConfiguracion(config: ConfiguracionSimulacion): void {static}
+    +obtenerEstadoSistema(): any
+  }
+}
+
+
+' ===============================
+' CAPA DE APLICACION (Application Layer)  
+' ===============================
+package "APPLICATION LAYER" as application {
+  
+  package "Use Cases" as usecases {
+    class SimulationUseCase {
+      -adaptadorDominio: AdaptadorSimuladorDominio
+      --
+      +ejecutar(workload: Workload): Promise<SimulationResult>
+      +validarEntrada(workload: Workload): ValidationResult
+      -transformarResultado(resultado: ResultadosSimulacion): SimulationResult
+    }
+  }
+
+  package "Composables" as composables {
+    class useSimulationUI {
+      +simulationState: Ref<SimulationState>
+      +isRunning: Ref<boolean>
+      +error: Ref<string | null>
+      --
+      +runSimulation(config: SimulationConfig): Promise<void>
+      +resetSimulation(): void
+      +exportResults(format: ExportFormat): void
+    }
+  }
+  
+  class SimuladorLogic {
+    +cargarArchivoProcesos(file: File): Promise<ResultadoCarga>
+    +validarConfiguracion(config: ConfiguracionSimulacion): ResultadoValidacion
+    +ejecutarSimulacion(procesos: ProcesoSimple[], config: ConfiguracionSimulacion): Promise<ResultadoSimulacion>
+    +guardarDatosSimulacion(datos: DatosSimulacionCompleta): Promise<void>
+    +cargarDatosSimulacion(): Promise<DatosSimulacionCompleta?>
+  }
+}
+
+' ===============================
+' CAPA CORE (Legacy/Compatibility)
+' ===============================
+package "CORE LAYER" as core {
+  
+  class AdaptadorSimuladorDominio_Legacy {
+    ' Adaptador de compatibilidad con Simulador.ts
+    -simuladorDominio: Simulador
+    -state: SimState  
+    -procesosDominio: Map<string, Proceso>
+    -estrategia: EstrategiaScheduler
+    --
+    +constructor(workload: Workload)
+    +ejecutar(): ResultadoSimulacionDominio
+    -ejecutarSimulacionDominio(): void
+    -crearEstrategia(algoritmo: string, quantum: number): EstrategiaScheduler
+  }
+  
+  class AdaptadorEntidadesDominio {
+    --
+    +workloadAProcesos(workload: Workload): Proceso[] {static}
+    +workloadAParametrosSimulacion(workload: Workload): ParametrosSimulacion {static}
+  }
+
+  class SimState {
+    +events: EventoInterno[]
+    +ganttSegments: GanttSlice[]
+    +totalTime: number
+    --
+    +addEvent(evento: EventoInterno): void
+    +getEvents(): EventoInterno[]
+  }
+
+  class EventQueue {
+    -queue: PriorityQueue<Function>
+    --
+    +enqueue(callback: Function, priority: number): void
+    +dequeue(): Function | undefined
+    +isEmpty(): boolean
+  }
+}
+
+' ===============================
+' CAPA DE INFRAESTRUCTURA (Infrastructure Layer)
+' ===============================  
+package "INFRASTRUCTURE LAYER" as infrastructure {
+  
+  package "IO Adapters" as io {
+    class WorkloadParser {
+      --
+      +parseJSON(json: string): Workload {static}
+      +parseCSV(csv: string): Workload {static}
+      +validateWorkload(workload: Workload): boolean {static}
+    }
+
+    class ResultExporter {
+      --
+      +exportToJSON(result: SimulationResult): string {static}
+      +exportToCSV(result: SimulationResult): string {static}
+      +exportGanttToSVG(gantt: GanttData): string {static}
+    }
+  }
+}
+
+' ===============================
+' RELACIONES ENTRE CLASES
+' ===============================
+
+' Domain relationships
+MotorSimulacionCompleto --> Proceso : gestiona
+MotorSimulacionCompleto --> EstrategiaScheduler : usa
+AdaptadorSimuladorDominio --> MotorSimulacionCompleto : orquesta
+AdaptadorSimuladorDominio --> FactoriaEstrategias : crea estrategias con
+EstrategiaSchedulerBase <|-- EstrategiaSchedulerFcfs
+EstrategiaSchedulerBase <|-- EstrategiaSchedulerSjf
+EstrategiaSchedulerBase <|-- EstrategiaSchedulerSrtf
+EstrategiaSchedulerBase <|-- EstrategiaSchedulerRoundRobin
+EstrategiaSchedulerBase <|-- EstrategiaSchedulerPrioridad
+EstrategiaScheduler <|.. EstrategiaSchedulerBase
+
+' Application relationships  
+SimulationUseCase --> AdaptadorSimuladorDominio : usa
+useSimulationUI --> SimulationUseCase : coordina
+SimuladorLogic --> AdaptadorSimuladorDominio : usa
+
+' Core relationships
+AdaptadorSimuladorDominio_Legacy --> Simulador : usa
+AdaptadorSimuladorDominio_Legacy --> AdaptadorEntidadesDominio : convierte con
+
+' Infrastructure relationships
+WorkloadParser ..> Proceso : crea
+ResultExporter ..> MetricsCalculator : exporta desde
+ResultExporter ..> GanttBuilder : exporta desde
+
+' Cross-layer relationships
+SimulationUseCase --> WorkloadParser : carga archivos con
+useSimulationUI --> ResultExporter : exporta con
+
+' Notes para documentacion
+note top of domain : "CAPA DE DOMINIO\nEntidades + Algoritmos + Servicios\nImplementa logica de negocio pura\nSin dependencias externas"
+note top of application : "CAPA DE APLICACION\nCasos de uso y orquestacion\nCoordina dominio e infraestructura"
+note top of core : "CAPA CORE (Legacy)\nAdaptadores de compatibilidad\nPatron Adapter para migracion"
+note top of infrastructure : "CAPA DE INFRAESTRUCTURA\nPersistencia, parsing, export\nImplementa ports del dominio"
+
+note right of MotorSimulacionCompleto : "Motor Completo 2025\nImplementa diagramas de secuencia\nGestion completa de estados suspendidos\nEventos con prioridad academica (0-6)\nTransiciones segun estadomejorado.puml\nMemory management automatico"
+
+@enduml

@@ -1,0 +1,306 @@
+@startuml Componentes_Simulador_Integrador_v2
+
+title "Simulador de Planificación - Componentes (Alineado a Consigna del Integrador)"
+
+!define PRESENTATION_COLOR #E8F4FD
+!define APPLICATION_COLOR #E8F8F5  
+!define DOMAIN_COLOR #FDF2E9
+!define INFRASTRUCTURE_COLOR #F3E5F5
+
+' ===============================
+' CAPA DE PRESENTACIÓN (SvelteKit + UI) - Solo DTOs
+' ===============================
+package "PRESENTACIÓN (SvelteKit + UI)" <<PRESENTATION_COLOR>> {
+  
+  package "SvelteKit Routes" {
+    component [+page.svelte\n(Carga y Configuración)] as HomePage
+    component [resultados/+page.svelte\n(Visualización Resultados)] as ResultsPage
+    component [+layout.svelte\n(Layout Principal)] as Layout
+  }
+  
+  package "UI Components - Entrada de Datos" {
+    component [CargaArchivo.svelte\nFormatos: TXT, JSON, CSV] as CargaArchivo
+    component [TablaProcesos.svelte\nProceso: ID,Arribo,Ráfaga,Prioridad] as TablaProcesos
+    component [ConfiguracionPanel.svelte\nPolítica+TIP+TCP+TFP+Quantum] as ConfigPanel
+  }
+  
+  package "UI Components - Visualización Resultados" {
+    component [GanttFixed.svelte\nDiagrama Temporal (colores TIP/CPU/ES/TFP/IDLE)] as GanttVisualizacion
+    component [IndicadoresProceso.svelte\nTR,TRn,Tiempo Listo] as MetricasProceso
+    component [IndicadoresTanda.svelte\nTRt,Throughput,Utilización] as MetricasTanda
+    component [EventosSimulacion.svelte\nLog Cronológico con Filtros] as EventosLog
+    component [PanelExportacion.svelte\nExportar JSON,CSV,SVG] as PanelExport
+  }
+  
+  package "UI Composables" {
+    component [useSimulationUI.ts\nGestión Estado Reactivo] as UseSimUI
+    component [useFileDownload.ts\nDescarga de Archivos] as UseDownload
+  }
+}
+
+' ===============================
+' CAPA DE APLICACIÓN (Casos de Uso - Solo Mappers)  
+' ===============================
+package "APLICACIÓN (Casos de Uso)" <<APPLICATION_COLOR>> {
+  
+  package "Casos de Uso Principales" {
+    component [RunSimulation.ts\nCaso de uso principal] as UC_RunSimulation
+    note top of UC_RunSimulation
+    **Orquestador Principal (NO recalcula):**
+    1. Procesar workload con parsers
+    2. Configurar motor único del dominio
+    3. Ejecutar simulación por eventos discretos  
+    4. Devolver ResultDTO con {events, processes, totals}
+    end note
+    
+    component [BuildGantt.ts\nMapper: eventos→gantt DTO] as UC_BuildGantt
+    component [ComputeMetrics.ts\nMapper: eventos/totals→metrics DTO] as UC_ComputeMetrics
+    component [ExportResults.ts\nOrquestador de exportación] as UC_ExportResults
+  }
+  
+  package "DTOs y Contratos" {
+    component [dto.ts\nWorkloadDTO, ConfigDTO,\nGanttDTO, MetricsDTO,\nResultDTO, EventDTO] as APP_DTO
+    note right of APP_DTO
+    **DTOs como contratos:**
+    • WorkloadDTO: entrada parsers
+    • ConfigDTO: parámetros SO
+    • EventDTO: log de eventos
+    • GanttDTO: timeline visual
+    • MetricsDTO: TR, TRn, utilización
+    • ResultDTO: salida completa
+    end note
+  }
+}
+
+' ===============================
+' CAPA DE DOMINIO (Motor Único por Eventos Discretos)
+' ===============================  
+package "DOMINIO (Motor por Eventos Discretos)" <<DOMAIN_COLOR>> {
+  
+  package "Motor de Simulación Único" {
+    component [Simulation.ts\nAggr. raíz: Motor único] as DM_Simulation
+    note top of DM_Simulation
+    **Motor Principal del Integrador (ÚNICO):**
+    • Simulación por eventos discretos (t=0 → t_fin)
+    • Estados canónicos: NUEVO→LISTO→CORRIENDO→BLOQUEADO→TERMINADO  
+    • Cobra TIP: N→L (admisión)
+    • Cobra TCP: L→C (dispatch) y C→L (expropiación)
+    • Cobra TFP: C→T (finalización)
+    • Event Log = fuente única de verdad
+    end note
+    
+    component [EventQueue.ts\nCola estable (time,prio,seq)] as DM_EventQueue
+    component [Cpu.ts\ndispatch, preempt, TCP] as DM_Cpu
+    component [ReadyQueue.ts\nFCFS/SJF/SRTF/Priority/RR] as DM_ReadyQueue
+    component [Scheduler.ts\npick, shouldPreempt, onDispatch?] as DM_Scheduler
+  }
+  
+  package "Entidades del Dominio" {
+    component [Process.ts\n5 estados canónicos, transiciones] as DM_Process
+    note right of DM_Process
+    **Estados según Integrador:**
+    • NUEVO: proceso arribó al sistema
+    • LISTO: en Ready Queue, disponible
+    • CORRIENDO: ejecutando en CPU
+    • BLOQUEADO: operación I/O
+    • TERMINADO: proceso finalizado
+    **Transiciones válidas únicamente**
+    end note
+  }
+  
+  package "Eventos del Sistema" {
+    component [Events.ts\nArribo, FinTIP, Dispatch,\nFinRafaga, FinES, FinTFP,\nQuantumExpires + orden 1–6] as DM_Events
+    
+    note right of DM_Events
+    **7 Eventos + Orden de Desempate:**
+    1. Arribo proceso al sistema
+    2. Fin TIP (NUEVO→LISTO)
+    3. Dispatch (LISTO→CORRIENDO)
+    4. Fin ráfaga CPU
+    5. Fin E/S (BLOQUEADO→LISTO)
+    6. Fin TFP (proceso termina)
+    7. Expiración quantum (RR)
+    
+    **Orden eventos simultáneos:**
+    **1) C→T**, **2) C→B**, **3) C→L**,
+    **4) B→L**, **5) N→L**, **6) L→C**
+    end note
+  }
+  
+  package "Políticas de Planificación" {
+    component [Policies/*\nFCFS,SJF,SRTF,RR,Priority] as DM_Policies
+    
+    note bottom of DM_Policies
+    **Comportamientos Específicos:**
+    • **FCFS/SJF:** No expropiativos
+    • **RR:** onDispatch programa QuantumExpires(t+q)
+    • **SRTF/Priority:** Empates NO expropian (mantener actual)
+    • **Priority:** Aging solo en READY
+    • **SJF:** Por próxima ráfaga CPU
+    • **SRTF:** Por resto de ráfaga actual
+    end note
+  }
+}
+
+' ===============================
+' CAPA DE INFRAESTRUCTURA (Adapters - Solo DTOs)
+' ===============================
+package "INFRAESTRUCTURA (Adapters)" <<INFRASTRUCTURE_COLOR>> {
+  
+  package "Parsers de Entrada - Consigna" {
+    component [ParserTXT.ts\nFormato Especificado → WorkloadDTO] as INF_ParserTXT
+    note top of INF_ParserTXT
+    **Formato TXT según Consigna:**
+    "ID,TiempoArribo,TiempoRafaga,Prioridad"
+    P1,0,8,3
+    P2,1,4,1  
+    P3,2,9,2
+    **Output:** WorkloadDTO únicamente
+    end note
+    
+    component [ParserJSON.ts\n→ WorkloadDTO] as INF_ParserJSON
+    component [ParserCSV.ts\n→ WorkloadDTO] as INF_ParserCSV
+  }
+  
+  package "Exportadores - Salidas Integrador" {
+    component [ExportadorEventos.ts\nEventDTO[] → JSON/CSV] as INF_ExportadorEventos
+    component [ExportadorGantt.ts\nGanttDTO → JSON/SVG/ASCII] as INF_ExportadorGantt  
+    component [ExportadorMetricas.ts\nMetricsDTO → JSON/CSV] as INF_ExportadorMetricas
+    
+    note bottom of INF_ExportadorGantt
+    **Salidas Gantt Integrador:**
+    • JSON con tramos temporales
+    • SVG para visualización  
+    • ASCII para consola
+    • **Input:** GanttDTO del mapper
+    end note
+  }
+  
+  package "Validadores de Integridad" {
+    component [ValidadorIntegridad.ts\nOverlaps, secuencias, continuidad] as INF_ValidadorIntegridad
+    
+    note right of INF_ValidadorIntegridad
+    **Validaciones críticas:**
+    • Gantt sin overlaps temporales
+    • Secuencia de estados válida
+    • Continuidad temporal eventos
+    • Conservación tiempo: user+os+idle=makespan
+    end note
+  }
+}
+
+' ===============================
+' RELACIONES PRINCIPALES
+' ===============================
+
+' UI → Application (Solo DTOs)
+HomePage --> UC_RunSimulation : WorkloadDTO + ConfigDTO
+ResultsPage --> UC_BuildGantt : ResultDTO  
+CargaArchivo --> UC_RunSimulation : archivos entrada
+ConfigPanel --> UC_RunSimulation : parámetros SO
+GanttVisualizacion --> UC_BuildGantt : GanttDTO
+EventosLog --> UC_RunSimulation : EventDTO[]
+MetricasProceso --> UC_ComputeMetrics : MetricsDTO
+MetricasTanda --> UC_ComputeMetrics : MetricsDTO
+PanelExport --> UC_ExportResults : ResultDTO
+UseSimUI --> APP_DTO : manejo DTOs
+
+' Application → Domain (Único motor)
+UC_RunSimulation --> DM_Simulation : ejecuta simulación única
+UC_BuildGantt --> APP_DTO : mapper eventos→gantt
+UC_ComputeMetrics --> APP_DTO : mapper eventos/totals→metrics
+UC_ExportResults --> APP_DTO : orquesta DTOs
+
+' Domain - Motor Único
+DM_Simulation --> DM_EventQueue : programa eventos ordenados
+DM_Simulation --> DM_Cpu : dispatch, preempt, TCP
+DM_Simulation --> DM_ReadyQueue : gestión cola listos
+DM_Simulation --> DM_Scheduler : selección y expropiación
+DM_Simulation --> DM_Process : transiciones estados
+DM_Simulation --> DM_Events : manejo 7 eventos + orden
+DM_Scheduler --> DM_Policies : algoritmos específicos
+
+' Application → Infrastructure (Solo DTOs)
+UC_RunSimulation --> INF_ParserTXT : WorkloadDTO
+UC_RunSimulation --> INF_ParserJSON : WorkloadDTO
+UC_RunSimulation --> INF_ParserCSV : WorkloadDTO
+UC_ExportResults --> INF_ExportadorEventos : EventDTO[] → JSON/CSV
+UC_BuildGantt --> INF_ExportadorGantt : GanttDTO → formatos
+UC_ComputeMetrics --> INF_ExportadorMetricas : MetricsDTO → archivos
+UC_BuildGantt --> INF_ValidadorIntegridad : validación overlaps
+UC_ComputeMetrics --> INF_ValidadorIntegridad : validación consistencia
+
+' ===============================
+' NOTAS ARQUITECTÓNICAS CORREGIDAS
+' ===============================
+
+note top of DM_Simulation
+**🎯 PRINCIPIOS ARQUITECTÓNICOS CORREGIDOS**
+
+**Motor Único de Eventos Discretos:**
+  Event Log = única fuente de verdad (Gantt y métricas leen de ahí)
+  Application SOLO orquesta/mappea DTOs (no recalcula SO)
+  Domain cobra TIP/TCP/TFP en los puntos correctos
+  RR programa QuantumExpires al DISPATCH
+  SJF/SRTF: clave por próxima ráfaga / resto de ráfaga actual
+  Priority: mayor prioridad expropia, empates mantener; aging solo en READY
+  Orden eventos simultáneos: 1) C→T, 2) C→B, 3) C→L, 4) B→L, 5) N→L, 6) L→C
+
+**Overheads SO (solo en dominio):**
+• TIP: N→L (admisión al sistema)
+• TCP: L→C (dispatch) y C→L (expropiación)  
+• TFP: C→T (finalización proceso)
+end note
+
+note bottom of INF_ParserTXT
+**📋 CONTRATOS DTO - NO CLASES DOMINIO**
+
+**Parsers → WorkloadDTO:**
+```typescript
+interface WorkloadDTO {
+  processes: ProcessInputDTO[];
+}
+
+interface ProcessInputDTO {
+  id: string;
+  arrivalTime: number;
+  burstTime: number;
+  priority: number;
+}
+```
+
+**Mappers → EventDTO/GanttDTO/MetricsDTO:**
+• EventDTO: timestamp, type, processId, metadata
+• GanttDTO: timeline con tramos TIP/CPU/ES/TFP/IDLE
+• MetricsDTO: TR, TRn, tiempo listo, utilización
+• ResultDTO: {events, gantt, metrics, totals}
+end note
+
+note right of INF_ExportadorGantt
+**📊 VALIDACIÓN DE INTEGRIDAD**
+
+**ValidadorIntegridad chequea:**
+• Gantt sin overlaps temporales
+• Conservación tiempo: user+os+idle = makespan
+• Secuencia estados válida por proceso
+• Continuidad temporal en eventos
+• B→L instantáneo (sin TCP)
+• RR: Dispatch agenda QuantumExpires
+• Empates timestamp siguen orden 1–6
+
+**Salidas validadas:**
+• JSON/CSV eventos cronológicos
+• SVG/ASCII Gantt coloreado
+• Métricas derivadas del log únicamente
+end note
+
+note bottom
+**🔧 PRINCIPIOS DE IMPLEMENTACIÓN:**
+• **Dominio:** Motor único, Event Log fuente verdad, TIP/TCP/TFP solo donde corresponde
+• **Application:** Solo mappers, NO recalcula overheads SO, trabaja con DTOs
+• **Infrastructure:** Adapters puros, validación integridad, sin lógica negocio  
+• **UI:** Consume DTOs únicamente, colores por estado, filtros eventos
+• **Tests mínimos:** Conservación tiempo, RR programa quantum, empates orden 1–6, B→L sin TCP
+end note
+
+@enduml

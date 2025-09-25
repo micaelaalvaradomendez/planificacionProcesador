@@ -1,0 +1,281 @@
+@startuml Estados_Proceso_Mejorado
+title Diagrama de Estados - Implementacion Actual del Proyecto (Actualizado 2025)
+
+' === ESTADOS SEGUN IMPLEMENTACION ACTUAL ===
+
+state "Estados del Proceso - MotorSimulacionCompleto" as sistema {
+  
+  state NUEVO {
+    NUEVO : Proceso arriba al sistema (tiempo = arribo)
+    NUEVO : Programa evento JOB_LLEGA  
+    NUEVO : Inicia TIP (Tiempo Ingreso Proceso)
+    NUEVO : Estado: proceso no disponible para scheduling
+    NUEVO : Duracion: parametros.TIP unidades de tiempo
+  }
+  
+  state LISTO {
+    LISTO : Proceso en readyQueue con memoria asignada
+    LISTO : Disponible para ser seleccionado por EstrategiaScheduler
+    LISTO : Ordenamiento segun algoritmo (FCFS/SJF/SRTF/RR/Priority)
+    LISTO : Acumula tiempoListoTotal para metricas
+    LISTO : Estado: esperando asignacion de CPU (DISPATCH)
+  }
+  
+  state CORRIENDO {
+    CORRIENDO : Proceso ejecutando en CPU
+    CORRIENDO : Consumiendo restanteCPU de rafaga actual
+    CORRIENDO : Sujeto a expropiacion segun estrategia
+    CORRIENDO : Estado: usando CPU activamente
+    CORRIENDO : TCP aplicado en transicion L->C
+  }
+  
+  state BLOQUEADO {
+    BLOQUEADO : Proceso en blockedQueue realizando I/O
+    BLOQUEADO : No consume tiempo de CPU
+    BLOQUEADO : Duracion fija (duracionIO del proceso)
+    BLOQUEADO : Estado: esperando completar operacion I/O
+    BLOQUEADO : Con memoria asignada
+  }
+  
+  state TERMINADO {
+    TERMINADO : Todas las rafagas CPU completadas (rafagasRestantes = 0)
+    TERMINADO : Aplica TFP (Tiempo Finalizacion Proceso)
+    TERMINADO : Metricas calculadas (TR, TE, TRn, etc.)
+    TERMINADO : Estado: proceso completado definitivamente
+    TERMINADO : Memoria liberada automaticamente
+  }
+  
+  ' === ESTADOS SUSPENDIDOS (GESTION DE MEMORIA) ===
+  
+  state LISTO_SUSPENDIDO {
+    LISTO_SUSPENDIDO : Proceso en readySuspendedQueue
+    LISTO_SUSPENDIDO : Sin memoria asignada (liberada por presion)
+    LISTO_SUSPENDIDO : NO disponible para scheduling hasta reactivacion
+    LISTO_SUSPENDIDO : NO acumula tiempo de espera en metricas
+    LISTO_SUSPENDIDO : Estado: suspendido por falta de memoria
+  }
+  
+  state BLOQUEADO_SUSPENDIDO {
+    BLOQUEADO_SUSPENDIDO : Proceso en blockedSuspendedQueue
+    BLOQUEADO_SUSPENDIDO : Operacion I/O continua en segundo plano
+    BLOQUEADO_SUSPENDIDO : Sin memoria asignada (liberada por presion)
+    BLOQUEADO_SUSPENDIDO : NO disponible para reactivacion inmediata
+    BLOQUEADO_SUSPENDIDO : Estado: I/O suspendido sin memoria
+  }
+  
+  ' === TRANSICIONES IMPLEMENTADAS EN EL MOTOR ===
+  [*] --> NUEVO : Evento JOB_LLEGA\n(tiempo = proceso.arribo)\nProgramado automaticamente
+  
+  NUEVO --> LISTO : Evento FIN_TIP + haySuficienteMemoria()\n(INSTANTANEO)\n**NO aplica TCP**
+  NUEVO --> LISTO_SUSPENDIDO : Evento FIN_TIP + !haySuficienteMemoria()\n(INSTANTANEO)\n**NO aplica TCP**
+  
+  LISTO --> CORRIENDO : Evento DISPATCH\n**TCP APLICADO** (parametros.TCP)\nEstrategiaScheduler.elegirSiguiente()
+  
+  CORRIENDO --> BLOQUEADO : Evento FIN_RAFAGA_CPU\n+ proceso.rafagasRestantes > 0\n+ proceso.duracionIO > 0\n**INSTANTANEO**
+  
+  CORRIENDO --> LISTO : Evento FIN_RAFAGA_CPU\n+ proceso.rafagasRestantes > 0\n+ proceso.duracionIO = 0\n**INSTANTANEO**
+  
+  BLOQUEADO --> LISTO : Evento FIN_IO + haySuficienteMemoria()\n**INSTANTANEO**
+  BLOQUEADO --> LISTO_SUSPENDIDO : Evento FIN_IO + !haySuficienteMemoria()\n**INSTANTANEO**
+  
+  CORRIENDO --> TERMINADO : Evento FIN_RAFAGA_CPU\n+ proceso.rafagasRestantes = 0\n**Aplica TFP** + libera memoria
+  
+  ' === TRANSICIONES DE SUSPENSION (GESTION DE MEMORIA) ===
+  
+  LISTO --> LISTO_SUSPENDIDO : suspenderProcesosPorMemoria()\nPresion de memoria detectada\nLibera memoria asignada
+  BLOQUEADO --> BLOQUEADO_SUSPENDIDO : suspenderProcesosPorMemoria()\nPresion de memoria detectada\nLibera memoria asignada
+  
+  LISTO_SUSPENDIDO --> LISTO : reactivarProcesosSuspendidos()\nMemoria disponible detectada\nAsigna memoria nuevamente
+  BLOQUEADO_SUSPENDIDO --> BLOQUEADO : reactivarProcesosSuspendidos()\nMemoria disponible detectada\nAsigna memoria nuevamente
+  
+  ' === TRANSICIONES DE EXPROPIACION (SEGUN ESTRATEGIA) ===
+  
+  CORRIENDO --> LISTO : Evento EXPROPIACION\n**TCP APLICADO**\n(RR: quantum expires | SRTF: proceso mas corto | PRIORITY: mayor prioridad)
+}
+
+' === COMPORTAMIENTO ESPECIFICO POR ESTRATEGIA DE SCHEDULING ===
+
+state "Estrategias Implementadas - 2025" as estrategias {
+  
+  state "EstrategiaSchedulerFcfs" as FCFS {
+    state FCFS_Comportamiento {
+      FCFS_Comportamiento : Implementacion: EstrategiaSchedulerFcfs
+      FCFS_Comportamiento : soportaExpropiacion: false
+      FCFS_Comportamiento : requiereQuantum: false
+      FCFS_Comportamiento : 
+      FCFS_Comportamiento : Transiciones:
+      FCFS_Comportamiento :   • LISTO → CORRIENDO (primer proceso en readyQueue)
+      FCFS_Comportamiento :   • CORRIENDO → BLOQUEADO (rafaga CPU completa)
+      FCFS_Comportamiento :   • CORRIENDO → TERMINADO (proceso completo)
+      FCFS_Comportamiento :   • CORRIENDO → LISTO (NUNCA - no expropiativo)
+      FCFS_Comportamiento : 
+      FCFS_Comportamiento : Criterio elegirSiguiente(): readyQueue[0]
+      FCFS_Comportamiento : TCP aplicado solo en L→C
+    }
+  }
+  
+  state "EstrategiaSchedulerRoundRobin" as RR {
+    state RR_Comportamiento {
+      RR_Comportamiento : Implementacion: EstrategiaSchedulerRoundRobin
+      RR_Comportamiento : soportaExpropiacion: true  
+      RR_Comportamiento : requiereQuantum: true
+      RR_Comportamiento : 
+      RR_Comportamiento : Transiciones:
+      RR_Comportamiento :   • LISTO → CORRIENDO (siguiente en cola circular)
+      RR_Comportamiento :   • CORRIENDO → BLOQUEADO (rafaga CPU completa)
+      RR_Comportamiento :   • CORRIENDO → TERMINADO (proceso completo)
+      RR_Comportamiento :   • CORRIENDO → LISTO (evento QUANTUM_EXPIRES)
+      RR_Comportamiento : 
+      RR_Comportamiento : Evento especial: QUANTUM_EXPIRES (prioridad 3)
+      RR_Comportamiento : TCP aplicado en L→C y tras expropiacion
+    }
+  }
+  
+  state "EstrategiaSchedulerPrioridad" as PRIORITY {
+    state PRIORITY_Comportamiento {
+      PRIORITY_Comportamiento : Implementacion: EstrategiaSchedulerPrioridad
+      PRIORITY_Comportamiento : soportaExpropiacion: true
+      PRIORITY_Comportamiento : requiereQuantum: false
+      PRIORITY_Comportamiento : 
+      PRIORITY_Comportamiento : Transiciones:
+      PRIORITY_Comportamiento :   • LISTO → CORRIENDO (menor numero = mayor prioridad)
+      PRIORITY_Comportamiento :   • CORRIENDO → BLOQUEADO (rafaga CPU completa)
+      PRIORITY_Comportamiento :   • CORRIENDO → TERMINADO (proceso completo)
+      PRIORITY_Comportamiento :   • CORRIENDO → LISTO (proceso mayor prioridad arriba)
+      PRIORITY_Comportamiento : 
+      PRIORITY_Comportamiento : Aging: aplicarAging() opcional contra starvation
+      PRIORITY_Comportamiento : Expropiacion: debeExpropiar() compara prioridades
+    }
+  }
+  
+  state "EstrategiaSchedulerSjf" as SJF {
+    state SJF_Comportamiento {
+      SJF_Comportamiento : Implementacion: EstrategiaSchedulerSjf
+      SJF_Comportamiento : soportaExpropiacion: false
+      SJF_Comportamiento : requiereQuantum: false
+      SJF_Comportamiento : 
+      SJF_Comportamiento : Transiciones:
+      SJF_Comportamiento :   • LISTO → CORRIENDO (menor duracionCPU total)
+      SJF_Comportamiento :   • CORRIENDO → BLOQUEADO (rafaga CPU completa)  
+      SJF_Comportamiento :   • CORRIENDO → TERMINADO (proceso completo)
+      SJF_Comportamiento :   • CORRIENDO → LISTO (NUNCA - no expropiativo)
+      SJF_Comportamiento : 
+      SJF_Comportamiento : Criterio: proceso.duracionCPU (rafaga individual)
+      SJF_Comportamiento : Orden: menor tiempo primero
+    }
+  }
+  
+  state "EstrategiaSchedulerSrtf" as SRTF {
+    state SRTF_Comportamiento {
+      SRTF_Comportamiento : Implementacion: EstrategiaSchedulerSrtf
+      SRTF_Comportamiento : soportaExpropiacion: true
+      SRTF_Comportamiento : requiereQuantum: false
+      SRTF_Comportamiento : 
+      SRTF_Comportamiento : Transiciones:
+      SRTF_Comportamiento :   • LISTO → CORRIENDO (menor restanteCPU)
+      SRTF_Comportamiento :   • CORRIENDO → BLOQUEADO (rafaga CPU completa)
+      SRTF_Comportamiento :   • CORRIENDO → TERMINADO (proceso completo)
+      SRTF_Comportamiento :   • CORRIENDO → LISTO (proceso con menor tiempo restante)
+      SRTF_Comportamiento : 
+      SRTF_Comportamiento : Criterio: proceso.restanteCPU de rafaga actual
+      SRTF_Comportamiento : Expropiacion: candidato.restanteCPU < actual.restanteCPU
+    }
+  } 
+      SPN_Transiciones : Características:
+      SPN_Transiciones : • No hay expropiación
+      SPN_Transiciones : • TCP solo en LISTO → CORRIENDO
+      SPN_Transiciones : • Selección por menor tiempo CPU total
+      SPN_Transiciones : • Mitiga efecto convoy vs FCFS
+    }
+  }
+  
+  state "SRTN - Shortest Remaining Time Next" as SRTN {
+    state SRTN_Transiciones {
+      SRTN_Transiciones :   LISTO → CORRIENDO (menor tiempo restante)
+      SRTN_Transiciones :   CORRIENDO → BLOQUEADO (ráfaga completa)
+      SRTN_Transiciones :   CORRIENDO → TERMINADO (proceso completo)
+      SRTN_Transiciones :   CORRIENDO → LISTO (proceso menor tiempo restante)
+      SRTN_Transiciones : 
+      SRTN_Transiciones : Características:
+      SRTN_Transiciones : • Expropiación por menor tiempo restante
+      SRTN_Transiciones : • TCP en LISTO → CORRIENDO
+      SRTN_Transiciones : • Recalcula tiempo restante continuamente
+      SRTN_Transiciones : • Óptimo para tiempo promedio respuesta
+    }
+  }
+}
+
+' === REGLAS CRITICAS DE IMPLEMENTACION ACTUAL ===
+
+note top of sistema
+**MOTOR SIMULACION COMPLETO - IMPLEMENTACION 2025**
+
+1. **Orden de Eventos Simultaneos (EventoMejorado.prioridad):**
+   • 0: JOB_LLEGA (llegada de proceso)
+   • 1: FIN_PROCESO (Corriendo → Terminado)  
+   • 2: FIN_RAFAGA_CPU (Corriendo → Bloqueado/Listo)
+   • 3: EXPROPIACION/QUANTUM_EXPIRES (Corriendo → Listo)
+   • 4: FIN_IO (Bloqueado → Listo)
+   • 5: FIN_TIP (Nuevo → Listo)
+   • 6: DISPATCH (Listo → Corriendo)
+
+2. **TCP (Tiempo Cambio Contexto):**
+   • Se aplica SOLO en transiciones L→C (DISPATCH)
+   • Parametros.TCP configurado en simulacion
+   • NUNCA aplicado en transiciones instantaneas
+   • Incluye overhead del Sistema Operativo
+
+3. **Gestion de Memoria Automatica:**
+   • Procesos tienen proceso.tamaño (MB)
+   • Sistema mantiene estadoSistema.memoriaDisponible
+   • Suspension cuando memoria insuficiente
+   • Reactivacion cuando se libera memoria
+
+4. **Transiciones INSTANTANEAS (Δt=0):**
+   • Todas excepto L→C (que aplica TCP)
+   • Suspension/reactivacion inmediata
+   • Fin de TIP, Fin de I/O, Fin de rafaga CPU
+end note
+
+note right of LISTO_SUSPENDIDO
+**ESTADOS SUSPENDIDOS - IMPLEMENTACION REAL**
+
+• **readySuspendedQueue:**
+  - Procesos listos SIN memoria asignada
+  - NO participan en elegirSiguiente()
+  - NO acumulan tiempoListoTotal
+  - Reactivados por reactivarProcesosSuspendidos()
+
+• **blockedSuspendedQueue:**
+  - Procesos en I/O SIN memoria asignada
+  - Operacion I/O continua en segundo plano
+  - Al terminar I/O van a LISTO_SUSPENDIDO
+  - Reactivados cuando hay memoria disponible
+
+• **Gestion Automatica:**
+  - suspenderProcesosPorMemoria() cuando necesario
+  - intentarReactivarProceso() cuando se libera memoria
+  - Basado en estadoSistema.umbralSuspension
+end note
+
+note bottom of estrategias
+**ESTRATEGIAS IMPLEMENTADAS - COMPORTAMIENTO REAL**
+
+• **No Expropiativos:** FCFS, SJF
+  - soportaExpropiacion: false
+  - Proceso ejecuta hasta completar o ir a I/O
+  - Estados suspendidos NO afectan la logica basica
+  
+• **Expropiativos:** RR, PRIORITY, SRTF
+  - soportaExpropiacion: true
+  - Pueden interrumpir proceso en ejecucion
+  - Estados suspendidos NO participan en debeExpropiar()
+  
+• **Implementacion Real:**
+  - FactoriaEstrategias.crear() instancia estrategia
+  - EstrategiaSchedulerBase como clase base
+  - Cada estrategia implementa elegirSiguiente()
+  - Motor llama evaluarPlanificacion() tras cada evento
+end note
+
+@enduml

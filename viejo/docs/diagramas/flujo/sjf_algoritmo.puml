@@ -1,0 +1,169 @@
+@startuml SJF_Algoritmo_Actualizado
+title "Algoritmo SJF (SPN) - Implementación Real del Sistema"
+
+start
+
+:elegirSiguiente() llamado por Motor;
+
+if (colaListos.length === 0?) then (SÍ)
+  :return undefined;
+  stop
+endif
+
+:ordenarColaListos(colaListos);
+note right
+**Algoritmo de Ordenamiento:**
+Para cada proceso calcular:
+servicioRestante = rafagasRestantes × duracionCPU
+end note
+
+partition "**Criterios de Ordenamiento**" {
+  :1. Comparar servicioRestanteA vs servicioRestanteB;
+  note right: Menor servicio restante = mayor prioridad
+
+  :2. Si empate: comparar arribo;
+  note right: Menor tiempo arribo = mayor prioridad
+
+  :3. Si empate: orden alfabético por id;
+  note right: a.id.localeCompare(b.id) - determinístico
+}
+
+:return colaListos[0];
+note right
+**Proceso Seleccionado:**
+• Menor servicio total restante
+• Empates resueltos consistentemente
+• NO expropiativo una vez iniciado
+end note
+
+stop
+
+note top of start
+**ESTRATEGIA SJF (SPN) - CARACTERÍSTICAS**
+
+**Propiedades de la Clase:**
+• nombre = 'SJF (SPN)'
+• soportaExpropiación = false
+• requiereQuantum = false
+
+**Métodos Clave:**
+• elegirSiguiente(): ordena y selecciona primero
+• ordenarColaListos(): criterios múltiples
+• debeExpropiar(): siempre false
+
+**Filosofía:** Shortest Process Next
+• Servicio total restante, no próxima ráfaga
+• Minimiza tiempo promedio de retorno
+• Puede causar inanición de procesos largos
+end note
+
+note bottom of stop
+**ALGORITMO SJF - IMPLEMENTACIÓN REAL**
+
+**Cálculo de Servicio Restante:**
+servicio = rafagasRestantes × duracionCPU
+• NO considera solo próxima ráfaga
+• Considera trabajo total pendiente
+• Incluye todas las ráfagas futuras
+
+**Criterios de Desempate (en orden):**
+1. **Servicio restante:** menor servicio primero
+2. **Tiempo arribo:** menor arribo primero  
+3. **ID alfabético:** determinístico y consistente
+
+**Ventajas:**
+• Minimiza tiempo promedio retorno
+• Óptimo teóricamente para tiempo espera
+• Predecible y determinístico
+
+**Desventajas:**
+• Puede causar inanición procesos largos
+• Requiere conocimiento tiempo ejecución
+• No apropiado para sistemas interactivos
+
+**Casos de Uso:**
+• Sistemas batch conocidos
+• Procesamiento por lotes
+• Entornos no interactivos
+end note
+•   Minimiza tiempo promedio de retorno
+•   Puede causar starvation de procesos largos
+•   Óptimo para workloads conocidos
+•   Gestión transparente de memoria
+
+**Eventos TCP:**
+•   LISTO → CORRIENDO (siempre)
+•    CORRIENDO → BLOQUEADO (instantáneo)  
+•    No hay expropiación
+•   Estados suspendidos (instantáneo)
+
+stop
+
+note left of start
+**Política SJF:**
+• No expropiativo
+• Minimiza tiempo promedio de respuesta  
+• Predicción basada en servicio total restante
+• Reordenación tras cada retorno I/O
+
+**Cálculo Servicio Restante:**
+• Total = ráfagas pendientes × duración CPU
+• Se recalcula tras cada ráfaga completada
+• Procesos largos pueden sufrir starvation
+
+**Optimal Properties:**
+• Minimiza average waiting time
+• Predictable para workloads conocidos
+• No hay expropiación por llegadas nuevas
+
+**Casos TCP:**
+✓ Despacho L→C (único)
+✗ Llegada proceso más corto
+✗ Retorno I/O con menor servicio
+end note
+
+
+' === VERSIÓN SIMPLIFICADA ===
+
+title Shortest Job First (SJF)
+
+start
+
+:Evento requiere seleccion de proceso;
+
+if (Ready Queue vacia?) then (SI)
+  :CPU permanece idle;
+  stop
+endif
+
+:Calcular servicio restante para cada proceso;
+note right: servicio = rafagasRestantes x duracionCPU
+
+:Ordenar Ready Queue por servicio restante;
+
+:proceso = proceso con menor servicio;
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO -> CORRIENDO;
+
+:Aplicar TCP;
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+stop
+
+note right
+SJF Caracteristicas:
+- No expropiativo
+- Servicio restante = rafagas x duracion CPU
+- Minimiza tiempo promedio respuesta
+- Reordenacion tras retorno I/O
+- TCP solo en despacho L->C
+- Puede causar starvation jobs largos
+end note
+
+
+@enduml

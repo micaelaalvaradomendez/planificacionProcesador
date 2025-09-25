@@ -1,0 +1,219 @@
+@startuml Componentes_Simulador_Mejorado
+title Diagrama de Componentes - Simulador Mejorado con Estados Suspendidos
+
+package "SvelteKit Routes" {
+  component [+page.svelte (Home)] as HomePage
+  component [resultados/+page.svelte] as ResultsPage
+  component [+layout.svelte] as Layout
+}
+
+package "UI Components" {
+  component [CargaArchivo.svelte] as CargaArchivo
+  component [TablaProcesos.svelte] as TablaProcesos
+  component [ConfiguracionPanel.svelte] as ConfigPanel
+  component [GanttFixed.svelte] as GanttFixed
+  component [IndicadoresProceso.svelte] as IndicadoresProceso
+  component [IndicadoresTanda.svelte] as IndicadoresTanda
+  component [UtilizacionCPU.svelte] as UtilizacionCPU
+  component [TablaResumenComparativa.svelte] as TablaComparativa
+  component [PanelExportacion.svelte] as PanelExport
+  component [EventosSimulacion.svelte] as EventosComp
+}
+
+package "Application Layer" {
+  component [simuladorLogic.ts] as SimLogic
+  component [simulation.ts] as SimStore
+  component [runSimulation.ts] as RunSim
+  component [buildGantt.ts] as BuildGantt
+  component [computeStatistics.ts] as ComputeStats
+  component [simulationRunner.ts] as SimRunner
+  component [useSimulationUI.ts] as UseSimUI
+  component [useFileDownload.ts] as UseDownload
+}
+
+package "Domain Entities" {
+  component [MotorSimulacionMejorado.ts] as MotorEntity
+  component [Proceso.ts] as ProcesoEntity
+  component [EventoMejorado.ts] as EventoMejorado
+  component [EstadoSistema.ts] as EstadoSistema
+}
+
+package "Domain Algorithms" {
+  component [fcfs.ts] as FCFS
+  component [rr.ts] as RR
+  component [priority.ts] as Priority
+  component [sjf.ts] as SJF
+  component [srtf.ts] as SRTF
+  component [Scheduler.ts] as SchedulerBase
+}
+
+package "Domain Services" {
+  component [GanttBuilder.ts] as GanttBuilder
+  component [MetricsCalculator.ts] as MetricsCalc
+}
+
+package "Core Layer" {
+  component [adaptadorSimuladorDominio.ts] as AdaptadorSim
+  component [adaptadorEntidadesDominio.ts] as AdaptadorEnt
+  component [state.ts] as CoreState
+  component [eventQueue.ts] as EventQueue
+  component [priorityQueue.ts] as PriorityQueue
+  component [workloadAdapter.ts] as WorkloadAdapter
+}
+
+package "Infrastructure Parsers" {
+  component [workloadParser.ts] as WorkloadParser
+  component [jsonParser.ts] as JsonParser
+  component [txtParser.ts] as TxtParser
+  component [csvParser.ts] as CsvParser
+}
+
+package "Infrastructure IO" {
+  component [fileDownloader.ts] as FileDownloader
+  component [exportEvents.ts] as ExportEvents
+  component [exportMetrics.ts] as ExportMetrics
+  component [ganttExporter.ts] as GanttExporter
+  component [csvUtils.ts] as CsvUtils
+  component [eventLogger.ts] as EventLogger
+}
+
+package "Domain Types" {
+  component [types.ts] as DomainTypes
+  component [validators.ts] as Validators
+}
+
+' === ROUTES TO UI COMPONENTS ===
+HomePage --> CargaArchivo : uses file upload
+HomePage --> TablaProcesos : displays processes
+HomePage --> ConfigPanel : simulation config
+HomePage --> SimLogic : orchestrates simulation
+
+ResultsPage --> GanttFixed : displays timeline
+ResultsPage --> IndicadoresProceso : shows process metrics
+ResultsPage --> IndicadoresTanda : shows batch metrics
+ResultsPage --> UtilizacionCPU : shows CPU usage charts
+ResultsPage --> TablaComparativa : displays comparative results
+ResultsPage --> PanelExport : file export options
+ResultsPage --> EventosComp : simulation events
+ResultsPage --> SimLogic : loads results
+
+Layout --> SimStore : shared state
+
+' === APPLICATION LAYER CONNECTIONS ===
+SimLogic --> WorkloadParser : file parsing
+SimLogic --> RunSim : simulation execution
+SimLogic --> BuildGantt : gantt construction
+SimLogic --> ComputeStats : metrics calculation
+SimLogic --> DomainTypes : uses domain types
+
+UseSimUI --> WorkloadParser : file loading
+UseSimUI --> SimRunner : simulation with timeout
+UseSimUI --> BuildGantt : gantt construction
+
+UseDownload --> FileDownloader : file downloads
+SimRunner --> RunSim : core execution
+SimRunner --> BuildGantt : timeline generation
+SimRunner --> ComputeStats : statistics computation
+
+RunSim --> AdaptadorSim : domain adapter
+RunSim --> MetricsCalc : metrics calculation
+RunSim --> EventLogger : event conversion
+
+BuildGantt --> GanttBuilder : gantt service
+ComputeStats --> MetricsCalc : metrics service
+
+' === DOMAIN LAYER CONNECTIONS (MOTOR MEJORADO) ===
+MotorEntity --> ProcesoEntity : manages processes
+MotorEntity --> EventoMejorado : schedules priority events
+MotorEntity --> EstadoSistema : maintains system state
+MotorEntity --> DomainTypes : uses parameters
+
+FCFS --> SchedulerBase : extends base scheduler
+RR --> SchedulerBase : extends base scheduler
+Priority --> SchedulerBase : extends base scheduler
+SJF --> SchedulerBase : extends base scheduler
+SRTF --> SchedulerBase : extends base scheduler
+
+SchedulerBase --> ProcesoEntity : operates on processes
+GanttBuilder --> DomainTypes : uses SimEvent types
+MetricsCalc --> ProcesoEntity : calculates metrics
+MetricsCalc --> DomainTypes : uses metric types
+
+' === CORE LAYER CONNECTIONS (MOTOR MEJORADO) ===
+AdaptadorSim --> MotorEntity : uses improved motor
+AdaptadorSim --> FCFS : FCFS strategy
+AdaptadorSim --> RR : Round Robin strategy
+AdaptadorSim --> Priority : Priority strategy  
+AdaptadorSim --> SJF : SJF strategy
+AdaptadorSim --> SRTF : SRTF strategy
+AdaptadorSim --> CoreState : simulation state
+AdaptadorSim --> EventQueue : event management
+
+AdaptadorEnt --> ProcesoEntity : entity mapping
+CoreState --> EventQueue : event handling
+EventQueue --> PriorityQueue : priority ordering
+WorkloadAdapter --> DomainTypes : type conversion
+
+' === INFRASTRUCTURE CONNECTIONS ===
+WorkloadParser --> JsonParser : JSON file parsing
+WorkloadParser --> TxtParser : TXT file parsing
+WorkloadParser --> CsvParser : CSV file parsing
+WorkloadParser --> DomainTypes : produces Workload
+
+JsonParser --> DomainTypes : workload types
+TxtParser --> DomainTypes : workload types
+CsvParser --> Validators : data validation
+
+FileDownloader --> ExportEvents : event export
+FileDownloader --> ExportMetrics : metrics export
+FileDownloader --> DomainTypes : type handling
+
+ExportEvents --> CsvUtils : CSV formatting
+ExportEvents --> DomainTypes : SimEvent processing
+ExportMetrics --> DomainTypes : Metrics processing
+GanttExporter --> DomainTypes : GanttSlice processing
+
+EventLogger --> DomainTypes : SimEvent types
+
+' === UI COMPONENT CONNECTIONS ===
+CargaArchivo --> WorkloadParser : file processing
+TablaProcesos --> DomainTypes : process types
+ConfigPanel --> DomainTypes : policy types
+GanttFixed --> DomainTypes : gantt types
+IndicadoresProceso --> DomainTypes : process metrics
+IndicadoresTanda --> DomainTypes : batch metrics
+EventosComp --> DomainTypes : SimEvent types
+
+PanelExport --> FileDownloader : file downloads
+PanelExport --> ExportEvents : event export
+PanelExport --> ExportMetrics : metrics export
+PanelExport --> GanttExporter : gantt export
+
+' === CARACTERÍSTICAS NUEVAS ===
+EventoMejorado --> PriorityQueue : priority-based ordering
+EstadoSistema --> MotorEntity : memory management
+ProcesoEntity --> EstadoSistema : size-based suspension
+
+note bottom of MotorEntity
+Motor Mejorado - Implementa estadomejorado.puml:
+  Estados suspendidos (LISTO_SUSPENDIDO, BLOQUEADO_SUSPENDIDO)
+  Gestión automática de memoria con suspensión
+  Orden de eventos simultáneos (prioridad 1-6):
+   1. FIN_PROCESO (C→T)
+   2. FIN_RAFAGA_CPU (C→B) 
+   3. EXPROPIACION (C→L)
+   4. FIN_IO (B→L)
+   5. FIN_TIP (N→L)
+   6. DISPATCH (L→C)
+  TCP solo en DISPATCH y EXPROPIACIÓN
+  Transiciones académicamente correctas
+  767 líneas de implementación completa
+end note
+
+note right of EventoMejorado
+EventoMejorado hereda de Evento base pero
+agrega prioridad académica para eventos
+simultáneos según estadomejorado.puml
+end note
+
+@enduml
