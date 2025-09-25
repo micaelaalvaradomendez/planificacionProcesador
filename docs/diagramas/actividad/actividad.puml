@@ -1,0 +1,328 @@
+@startuml Actividades_Simulador_Unificado
+title Diagramas de Actividad - Simulador de Planificación de Procesos
+
+|Sistema Principal - Bucle Central|
+start
+
+:Inicializar simulador;
+note right
+• Configurar política de planificación
+• Establecer parámetros (quantum, TCP, TIP, TFP)
+• Inicializar colas y estructuras
+• Definir conjunto de procesos
+end note
+
+:Cargar procesos y configuración;
+:Programar eventos JOB_LLEGA iniciales;
+
+while (¿Cola de eventos no vacía?) is (SÍ)
+  :Obtener próximo evento cronológico;
+  :Avanzar tiempo del sistema al evento;
+  
+  switch (Tipo de evento)
+  case (JOB_LLEGA)
+    |Ingreso de Procesos|
+    :Proceso P arriba al sistema;
+    :P.estado = NUEVO;
+    :Aplicar TIP (Tiempo Ingreso Proceso);
+    note right: Sobrecarga administrativa del SO
+    :P.estado = NUEVO → LISTO (instantáneo, Δt=0);
+    :Insertar P en Ready Queue según algoritmo;
+    
+    if (¿Algoritmo expropiativo?) then (SÍ)
+      :Evaluar expropiación inmediata;
+      note right
+      • PRIORITY: Si P.prioridad > procesoActual.prioridad
+      • SRTN: Si P.tiempoRestante < procesoActual.tiempoRestante
+      • RR: No aplica expropiación por llegada
+      end note
+    endif
+    
+  case (FIN_RAFAGA_CPU)
+    |Finalización Ráfaga CPU|
+    :P termina ráfaga CPU actual;
+    :Actualizar estadísticas de CPU utilizada;
+    :P.rafagasRestantes--;
+    :P.tiempoCPUConsumido += duraciónRáfaga;
+    
+    if (¿P tiene más ráfagas?) then (SÍ)
+      :P.estado = CORRIENDO → BLOQUEADO;
+      note right: **INSTANTÁNEO (Δt=0) - NO TCP**
+      :Programar evento FIN_IO;
+      note right: tiempo = actual + duracionIO
+    else (NO)
+      :P.estado = CORRIENDO → TERMINADO;
+      :Aplicar TFP (Tiempo Finalización Proceso);
+      :Agregar P a procesosTerminados;
+      :Calcular métricas finales de P;
+    endif
+    :CPU queda libre (procesoActualCPU = null);
+    
+  case (FIN_IO)
+    |Finalización Operación I/O|
+    :P termina operación I/O;
+    :P.estado = BLOQUEADO → LISTO;
+    note right: **INSTANTÁNEO (Δt=0) - NO TCP**
+    :Insertar P en Ready Queue según algoritmo;
+    
+    if (¿Algoritmo expropiativo?) then (SÍ)
+      :Evaluar expropiación inmediata;
+      note right
+      Evalúa si P debe expropiar procesoActualCPU
+      según criterio del algoritmo
+      end note
+    endif
+    
+  case (QUANTUM_EXPIRADO)
+    |Round Robin Específico|
+    :Quantum de P expira;
+    :P.estado = CORRIENDO → LISTO;
+    note right: **TCP SE APLICA** por expropiación
+    :Aplicar TCP (sobrecarga por cambio contexto);
+    :Insertar P al final de Ready Queue (circular);
+    :CPU queda libre;
+    
+  endswitch
+  
+  if (¿CPU libre y Ready Queue no vacía?) then (SÍ)
+    |Despacho de Procesos|
+    
+    partition "Selección según Algoritmo" {
+      fork
+      |FCFS|
+        :Tomar primer proceso (FIFO);
+        note bottom: Sin expropiación
+      fork again
+      |Round Robin|
+        :Tomar primer proceso (FIFO);
+        :Asignar quantum nuevo;
+        :Programar QUANTUM_EXPIRADO;
+        note bottom: Quantum fijo, cola circular
+      fork again
+      |Priority|
+        :Tomar proceso mayor prioridad;
+        :Evaluar aging si está habilitado;
+        note bottom: Expropiativo, riesgo starvation
+      fork again
+      |SJF/SPN|
+        :Calcular servicio restante para c/proceso;
+        :Tomar proceso menor servicio total;
+        note bottom: No expropiativo, óptimo tiempo espera
+      fork again
+      |SRTF/SRTN|
+        :Calcular tiempo restante total;
+        :Tomar proceso menor remaining time;
+        note bottom: Expropiativo agresivo, óptimo respuesta
+      end fork
+    }
+    
+    :P.estado = LISTO → CORRIENDO;
+    note right: **TCP SE APLICA** siempre en despacho
+    :Aplicar TCP (cambio de contexto);
+    :Programar evento FIN_RAFAGA_CPU;
+    note right: tiempo = actual + TCP + duraciónRáfagaActual
+    :procesoActualCPU = P;
+  endif
+  
+endwhile (NO)
+
+|Finalización y Resultados|
+:Calcular estadísticas finales del sistema;
+note right
+• Tiempo promedio de retorno
+• Tiempo promedio de espera  
+• Tiempo promedio de respuesta
+• Utilización de CPU
+• Throughput del sistema
+end note
+
+:Generar timeline Gantt;
+:Exportar resultados y métricas;
+stop
+
+|Algoritmos Detallados|
+
+partition "FCFS - First Come First Served" {
+  start
+  :Evento requiere selección de proceso;
+  if (¿Ready Queue vacía?) then (SÍ)
+    :CPU permanece idle;
+    stop
+  endif
+  :proceso = readyQueue[0] (primer llegado);
+  :Remover de Ready Queue;
+  :Despachar con TCP;
+  stop
+  
+  note right
+  **Características:**
+  • No expropiativo
+  • FIFO estricto por tiempo llegada
+  • Procesos post-I/O → final cola
+  • Simple implementación
+  • Puede causar efecto convoy
+  end note
+}
+
+partition "Round Robin" {
+  start
+  :Evento requiere selección de proceso;
+  if (¿Ready Queue vacía?) then (SÍ)
+    :CPU permanece idle;
+    stop
+  endif
+  :proceso = readyQueue[0];
+  :Iniciar timer quantum;
+  :Remover de Ready Queue;
+  :Despachar con TCP;
+  
+  fork
+    :Esperar FIN_RAFAGA_CPU;
+    :Cancelar quantum timer;
+    note right: Fin natural, NO TCP adicional
+  fork again
+    :Esperar QUANTUM_EXPIRADO;
+    :Aplicar TCP por expropiación;
+    :Proceso → final Ready Queue (circular);
+  end fork
+  stop
+  
+  note right
+  **Características:**
+  • Quantum fijo por configuración
+  • TCP solo por expiración quantum
+  • Cola circular (FIFO + time slice)
+  • Fair sharing CPU
+  • Overhead por cambios frecuentes
+  end note
+}
+
+partition "Priority Scheduling" {
+  start
+  :Evento requiere evaluación prioridades;
+  if (¿Ready Queue vacía?) then (SÍ)
+    :CPU permanece idle;
+    stop
+  endif
+  :Ordenar Ready Queue por prioridad;
+  :proceso = mayor prioridad disponible;
+  
+  if (¿CPU ocupada y algoritmo expropiativo?) then (SÍ)
+    if (¿prioridad nueva > prioridad actual?) then (SÍ)
+      :Expropiar proceso actual;
+      :Aplicar TCP por expropiación;
+      :Proceso actual → Ready Queue;
+    else (NO)
+      :Proceso con menor prioridad espera;
+      stop
+    endif
+  endif
+  
+  :Despachar proceso con TCP;
+  stop
+  
+  note right
+  **Características:**
+  • Expropiación por prioridad mayor
+  • Aging opcional anti-starvation
+  • Riesgo starvation procesos baja prioridad
+  • Refleja importancia real procesos
+  • Requiere gestión prioridades dinámicas
+  end note
+}
+
+partition "SJF - Shortest Job First" {
+  start
+  :Evento requiere selección de proceso;
+  if (¿Ready Queue vacía?) then (SÍ)
+    :CPU permanece idle;
+    stop
+  endif
+  :Calcular servicio restante por proceso;
+  note right
+  servicio_restante = 
+  rafagasRestantes × duraciónCPU
+  end note
+  :Ordenar por servicio restante ascendente;
+  :proceso = menor servicio restante;
+  :Despachar con TCP;
+  stop
+  
+  note right
+  **Características:**
+  • No expropiativo (hasta completar ráfaga)
+  • Óptimo para tiempo promedio espera
+  • Reordenación post-I/O por servicio restante
+  • Requiere conocimiento ráfagas futuras
+  • Favorece procesos cortos
+  end note
+}
+
+partition "SRTF - Shortest Remaining Time First" {
+  start
+  :Evento requiere evaluación tiempos;
+  if (¿Ready Queue vacía?) then (SÍ)
+    :CPU permanece idle;
+    stop
+  endif
+  :Calcular tiempo restante total por proceso;
+  note right
+  tiempo_restante = 
+  sum(rafagasRestantes × duraciónCPU) +
+  sum(rafagasRestantes × duracionIO)
+  end note
+  :Ordenar por tiempo restante ascendente;
+  :proceso = menor tiempo restante;
+  
+  if (¿CPU ocupada?) then (SÍ)
+    if (¿tiempo restante nuevo < tiempo restante actual?) then (SÍ)
+      :Expropiar proceso actual;
+      :Aplicar TCP por expropiación;
+      :Proceso actual → Ready Queue;
+    else (NO)
+      :Proceso con mayor tiempo restante espera;
+      stop
+    endif
+  endif
+  
+  :Despachar proceso con TCP;
+  stop
+  
+  note right
+  **Características:**
+  • Expropiación agresiva por tiempo restante
+  • Óptimo para tiempo promedio respuesta
+  • Mayor overhead TCP por expropiaciones frecuentes
+  • Continua reevaluación tiempos restantes
+  • Versión expropiativa de SJF
+  end note
+}
+
+note top of "Sistema Principal - Bucle Central"
+**REGLAS CRÍTICAS DE TEMPORIZACIÓN**
+
+1. **TCP (Tiempo Cambio Contexto):**
+   • Se aplica ÚNICAMENTE en LISTO → CORRIENDO
+   • Se aplica en expropiaciones (CORRIENDO → LISTO → CORRIENDO)
+   • NUNCA en transiciones instantáneas
+
+2. **Transiciones INSTANTÁNEAS (Δt=0):**
+   • NUEVO → LISTO (fin TIP)
+   • CORRIENDO → BLOQUEADO (fin ráfaga CPU)  
+   • BLOQUEADO → LISTO (fin I/O)
+
+3. **Tiempos Administrativos:**
+   • TIP: al ingreso del proceso (NUEVO)
+   • TFP: al término del proceso (TERMINADO)
+   • TCP: solo en despacho y expropiación
+
+4. **Orden Eventos Simultáneos (por prioridad):**
+   1. Corriendo → Terminado
+   2. Corriendo → Bloqueado
+   3. Corriendo → Listo (expropiación)
+   4. Bloqueado → Listo (fin I/O)
+   5. Nuevo → Listo (fin TIP)
+   6. Listo → Corriendo (despacho)
+end note
+
+@enduml

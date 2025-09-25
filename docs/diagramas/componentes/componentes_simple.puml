@@ -1,0 +1,121 @@
+@startuml Componentes_Simulador_Simple@startuml Componentes_Simple
+
+title Diagrama de Componentes - Arquitectura del Simuladortitle Arquitectura del Simulador - Componentes
+
+
+
+package "Routes" {package "Frontend SvelteKit" {
+
+  component [HomePage] as HomePage  [UI Web] as UI
+
+  component [ResultsPage] as ResultsPage  [Carga Archivos] as Upload
+
+  component [Layout] as Layout  [Configuracion] as Config
+
+}  [Gantt Viewer] as Gantt
+
+}
+
+package "UI Components" {
+
+  component [CargaArchivo] as CargaArchivopackage "Core Simulador" {
+
+  component [TablaProcesos] as TablaProcesos  [Motor Simulacion] as Engine
+
+  component [ConfigPanel] as ConfigPanel  [Gestor Procesos] as ProcessMgr
+
+  component [GanttFixed] as GanttFixed  [Cola Eventos] as EventQueue
+
+}  [Estadisticas] as Stats
+
+}
+
+package "Application" {
+
+  component [SimLogic] as SimLogicpackage "Algoritmos Scheduling" {
+
+  component [RunSim] as RunSim  [FCFS] as FCFS
+
+  component [BuildGantt] as BuildGantt  [Round Robin] as RR
+
+}  [Priority] as Priority
+
+  [SJF] as SJF
+
+package "Domain" {  [SRTF] as SRTF
+
+  component [Simulador] as SimuladorEntity}
+
+  component [Proceso] as ProcesoEntity
+
+  component [FCFS] as FCFSpackage "Utilidades" {
+
+  component [RR] as RR  [Validadores] as Validators
+
+}  [Parser Archivos] as Parser
+
+  [Exportador] as Exporter
+
+package "Core" {  [Priority Queue] as PQueue
+
+  component [AdaptadorSim] as AdaptadorSim}
+
+  component [State] as CoreState
+
+}' Conexiones Frontend
+
+UI --> Upload
+
+' Conexiones principalesUI --> Config  
+
+HomePage --> CargaArchivoUI --> Gantt
+
+HomePage --> TablaProcesosUpload --> Parser
+
+HomePage --> SimLogicConfig --> Validators
+
+
+
+ResultsPage --> GanttFixed' Conexiones Core
+
+ResultsPage --> SimLogicEngine --> ProcessMgr
+
+Engine --> EventQueue
+
+SimLogic --> RunSimEngine --> Stats
+
+RunSim --> AdaptadorSimProcessMgr --> Validators
+
+AdaptadorSim --> SimuladorEntity
+
+SimuladorEntity --> ProcesoEntity' Conexiones Algoritmos
+
+Engine --> FCFS
+
+@endumlEngine --> RR
+Engine --> Priority
+Engine --> SJF
+Engine --> SRTF
+
+' Conexiones Utilidades
+EventQueue --> PQueue
+Stats --> Exporter
+Gantt --> Exporter
+
+note right of Engine
+Motor principal que:
+- Maneja reloj sistema
+- Procesa eventos
+- Aplica overheads TCP/TIP/TFP
+- Gestiona transiciones estado
+end note
+
+note bottom of "Algoritmos Scheduling"
+Cada algoritmo implementa:
+- Seleccion proceso siguiente
+- Politicas expropiacion
+- Ordenamiento Ready Queue
+- Reglas especificas TCP
+end note
+
+@enduml

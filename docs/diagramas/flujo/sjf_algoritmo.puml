@@ -1,0 +1,121 @@
+@startuml SJF_Algoritmo_Unificado
+title SJF - Algoritmo de Planificación - Versión Unificada
+
+title Shortest Job First (SJF) - Algoritmo de Decisión
+
+start
+
+:Evento requiere selección de proceso;
+
+if (¿Ready Queue vacía?) then (SÍ)
+  :CPU permanece idle;
+  stop
+endif
+
+:Calcular servicio restante para cada proceso;
+note right
+  **Servicio Total Restante:**
+  servicioRestante = rafagasRestantes × duracionCPU
+end note
+end note
+
+:Ordenar Ready Queue por servicio restante;
+note right: Menor servicio restante primero
+
+:proceso = primer elemento (shortest job);
+
+if (¿Empates en servicio restante?) then (SÍ)
+  :Aplicar criterios de desempate;
+  note right: 
+  1. Menor tiempo arribo
+  2. Orden alfabético ID (determinístico)
+  end note
+endif
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO → CORRIENDO;
+
+:Aplicar TCP;
+note right: TCP solo en despacho L→C
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+:Actualizar estadísticas;
+note right: **SJF No Expropiativo:**
+Proceso ejecuta hasta completar ráfaga
+Sin interrupciones por llegadas
+end note
+
+stop
+
+note left of start
+**Política SJF:**
+• No expropiativo
+• Minimiza tiempo promedio de respuesta  
+• Predicción basada en servicio total restante
+• Reordenación tras cada retorno I/O
+
+**Cálculo Servicio Restante:**
+• Total = ráfagas pendientes × duración CPU
+• Se recalcula tras cada ráfaga completada
+• Procesos largos pueden sufrir starvation
+
+**Optimal Properties:**
+• Minimiza average waiting time
+• Predictable para workloads conocidos
+• No hay expropiación por llegadas nuevas
+
+**Casos TCP:**
+✓ Despacho L→C (único)
+✗ Llegada proceso más corto
+✗ Retorno I/O con menor servicio
+end note
+
+
+' === VERSIÓN SIMPLIFICADA ===
+
+title Shortest Job First (SJF)
+
+start
+
+:Evento requiere seleccion de proceso;
+
+if (Ready Queue vacia?) then (SI)
+  :CPU permanece idle;
+  stop
+endif
+
+:Calcular servicio restante para cada proceso;
+note right: servicio = rafagasRestantes x duracionCPU
+
+:Ordenar Ready Queue por servicio restante;
+
+:proceso = proceso con menor servicio;
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO -> CORRIENDO;
+
+:Aplicar TCP;
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+stop
+
+note right
+SJF Caracteristicas:
+- No expropiativo
+- Servicio restante = rafagas x duracion CPU
+- Minimiza tiempo promedio respuesta
+- Reordenacion tras retorno I/O
+- TCP solo en despacho L->C
+- Puede causar starvation jobs largos
+end note
+
+
+@enduml

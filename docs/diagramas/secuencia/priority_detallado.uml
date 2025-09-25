@@ -1,0 +1,147 @@
+@startuml
+title Priority Scheduling - Tanda de 5 Procesos Ejemplo
+participant "Sistema" as Sys
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3  
+participant "P4" as P4
+participant "P5" as P5
+participant "CPU" as CPU
+participant "PriorityQueue" as PQ
+
+== Configuración Inicial ==
+note over Sys: TIP=1, TFP=1, TCP=1
+note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, **prio=2**
+note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, **prio=1** (ALTA)
+note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, **prio=3** (BAJA)
+note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, **prio=2**
+note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, **prio=1** (ALTA)
+
+== Cronología Priority Scheduling ==
+
+group t=0: Arribo P1
+    Sys -> P1: JOB_LLEGA
+    P1 -> P1: estado = NUEVO
+    Sys -> Sys: TIP = 1u
+end
+
+group t=1: P1 entra al sistema, Arribo P2
+    Sys -> P1: estado = LISTO
+    Sys -> PQ: insertar P1 (prio=2)
+    
+    Sys -> P2: JOB_LLEGA  
+    P2 -> P2: estado = NUEVO
+    
+    PQ -> CPU: despachar P1 (único disponible)
+    CPU -> P1: estado = CORRIENDO
+    P1 -> P1: ejecutar ráfaga 1 (5u)
+end
+
+group t=2: P2 entra - PRIORIDAD ALTA
+    Sys -> P2: estado = LISTO
+    Sys -> PQ: insertar P2 (prio=1) 
+    note right: **Priority:** P2 (prio=1) > P1 (prio=2)
+    
+    PQ -> CPU: **EXPROPIACIÓN INMEDIATA**
+    CPU -> P1: expropiado, estado = LISTO
+    P1 -> P1: ráfaga parcial (1u), quedan 4u
+    Sys -> Sys: **TCP = 1u** (cambio contexto)
+    
+    PQ -> CPU: despachar P2 (mayor prioridad)
+    CPU -> P2: estado = CORRIENDO
+    P2 -> P2: ejecutar ráfaga 1 (6u)
+    Sys -> PQ: [P1(prio=2)] (P2 en CPU)
+end
+
+group t=3: Arribo P3
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra - BAJA PRIORIDAD  
+    Sys -> P3: estado = LISTO
+    Sys -> PQ: insertar P3 (prio=3)
+    note right: P3 (prio=3) < P2 (prio=1): NO expropia
+    Sys -> PQ: [P1(prio=2), P3(prio=3)] ordenada por prioridad
+end
+
+group t=5: Arribo P4
+    Sys -> P4: JOB_LLEGA
+    P4 -> P4: estado = NUEVO
+end
+
+group t=6: P4 entra, Arribo P5
+    Sys -> P4: estado = LISTO  
+    Sys -> PQ: insertar P4 (prio=2)
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    note right: P4 (prio=2) < P2 (prio=1): NO expropia
+    Sys -> PQ: [P1(prio=2), P4(prio=2), P3(prio=3)]
+end
+
+group t=7: P5 entra - ALTA PRIORIDAD
+    Sys -> P5: estado = LISTO
+    Sys -> PQ: insertar P5 (prio=1)
+    note right: **Priority:** P5 (prio=1) = P2 (prio=1) → NO expropia
+    note right: Empate: mantener job actual
+    Sys -> PQ: [P5(prio=1), P1(prio=2), P4(prio=2), P3(prio=3)]
+end
+
+group t=8: P2 termina ráfaga 1  
+    CPU -> P2: fin ráfaga CPU
+    P2 -> P2: estado = BLOQUEADO (I/O 3u hasta t=11)
+    
+    PQ -> CPU: despachar P5 (mayor prioridad disponible)  
+    CPU -> P5: estado = CORRIENDO
+    P5 -> P5: ejecutar ráfaga 1 (7u)
+    Sys -> PQ: [P1(prio=2), P4(prio=2), P3(prio=3)] (P2 en I/O)
+end
+
+group t=11: P2 termina I/O - REINGRESO PRIORITARIO
+    P2 -> P2: fin I/O, estado = LISTO
+    Sys -> PQ: insertar P2 (prio=1)
+    note right: **Priority:** P2 (prio=1) > P5 (prio=1 ejecutando)
+    note right: Empate mantenido: P5 continúa
+    
+    Sys -> PQ: [P2(prio=1), P1(prio=2), P4(prio=2), P3(prio=3)]
+end
+
+group t=15: P5 termina ráfaga 1
+    CPU -> P5: fin ráfaga CPU  
+    P5 -> P5: estado = BLOQUEADO (I/O 5u hasta t=20)
+    
+    PQ -> CPU: despachar P2 (mayor prioridad disponible)
+    CPU -> P2: estado = CORRIENDO  
+    P2 -> P2: ejecutar ráfaga 2 (6u)
+    Sys -> PQ: [P1(prio=2), P4(prio=2), P3(prio=3)] (P5 en I/O)
+end
+
+group t=20: P5 termina I/O
+    P5 -> P5: fin I/O, estado = LISTO
+    Sys -> PQ: insertar P5 (prio=1)
+    note right: P5 (prio=1) = P2 (prio=1 ejecutando): NO expropia
+    Sys -> PQ: [P5(prio=1), P1(prio=2), P4(prio=2), P3(prio=3)]
+end
+
+group t=21: P2 termina ráfaga 2 - FINALIZACIÓN
+    CPU -> P2: fin ráfaga CPU
+    P2 -> P2: estado = TERMINADO
+    Sys -> Sys: **TFP = 1u**
+    
+    PQ -> CPU: despachar P5 (mayor prioridad disponible)
+    CPU -> P5: estado = CORRIENDO
+    P5 -> P5: ejecutar ráfaga 2 (7u)  
+    Sys -> PQ: [P1(prio=2), P4(prio=2), P3(prio=3)]
+end
+
+note right of PQ
+**Patrón Priority Scheduling:**
+- Expropiación inmediata si nueva prio > actual
+- En empate de prioridad: mantener actual  
+- Cola ordenada por prioridad (1=alta, 3=baja)
+- Riesgo starvation procesos baja prioridad
+- Optimal para workloads heterogéneos
+- TCP solo en expropiaciones reales
+end note
+
+@enduml

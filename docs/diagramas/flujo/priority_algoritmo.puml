@@ -1,0 +1,138 @@
+@startuml PRIORITY_Algoritmo_Unificado
+title PRIORITY - Algoritmo de Planificación - Versión Unificada
+
+title Priority Scheduling - Algoritmo de Decisión
+
+start
+
+:Evento requiere selección/evaluación;
+
+note right
+  **Eventos disparadores:**
+  • CPU libre + Ready Queue no vacía
+  • Nuevo proceso arriba (si expropiativo)
+  • Proceso retorna de I/O (si expropiativo)
+end note
+
+if (¿Ready Queue vacía?) then (SÍ)
+  :CPU permanece idle;
+  stop
+endif
+
+:Ordenar Ready Queue por prioridad;
+note right: Mayor valor numérico = mayor prioridad
+
+:proceso = primer elemento (mayor prioridad);
+
+if (¿CPU ocupada y modo expropiativo?) then (SÍ)
+  :procesoActual = procesoEnCPU;
+  if (¿proceso.prioridad > procesoActual.prioridad?) then (SÍ)
+    :Expropiar procesoActual;
+    :procesoActual.estado = CORRIENDO → LISTO;
+    :Aplicar TCP por expropiación;
+    :Insertar procesoActual en Ready Queue;
+    note right: **Expropiación inmediata por prioridad**
+  elseif (¿proceso.prioridad == procesoActual.prioridad?) then (EMPATE)
+    :Mantener procesoActual en CPU;
+    note right: **Política empate:** conservar proceso actual
+    stop
+  else (procesoActual tiene mayor prioridad)
+    :Proceso espera en Ready Queue;
+    stop
+  endif
+endif
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO → CORRIENDO;
+
+:Aplicar TCP;
+note right: TCP en despacho L→C
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+if (¿Prevención inanición habilitada?) then (SÍ)
+  :Inicializar aging timestamp;
+  :Programar incremento prioridad periódico;
+  note right: Prevenir starvation procesos baja prioridad
+endif
+
+:Actualizar estadísticas;
+
+stop
+
+note left of start
+**Política Priority:**
+• Expropiativo/No expropiativo configurable
+• Valor numérico mayor = mayor prioridad
+• Expropiación inmediata si nueva prioridad > actual
+• En empate de prioridad: mantener proceso actual
+
+**Gestión Starvation:**
+• Aging: incremento gradual prioridad por espera
+• Intervalo configurable de boost
+• Previene inanición procesos baja prioridad
+
+**Casos TCP:**
+✓ Despacho L→C
+✓ Expropiación por mayor prioridad
+✗ Empate de prioridades
+✗ Proceso menor prioridad arriba
+end note
+
+
+' === VERSIÓN SIMPLIFICADA ===
+
+title Priority Scheduling
+
+start
+
+:Evento requiere evaluacion;
+
+if (Ready Queue vacia?) then (SI)
+  :CPU permanece idle;
+  stop
+endif
+
+:Ordenar Ready Queue por prioridad;
+
+:proceso = proceso con mayor prioridad;
+
+if (CPU ocupada y modo expropiativo?) then (SI)
+  :procesoActual = procesoEnCPU;
+  if (proceso.prioridad > procesoActual.prioridad?) then (SI)
+    :Expropiar procesoActual;
+    :procesoActual.estado = CORRIENDO -> LISTO;
+    :Aplicar TCP por expropiacion;
+    :Insertar procesoActual en Ready Queue;
+  else (NO)
+    :Proceso espera en Ready Queue;
+    stop
+  endif
+endif
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO -> CORRIENDO;
+
+:Aplicar TCP;
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+stop
+
+note right
+Priority Scheduling:
+- Mayor valor numerico = mayor prioridad
+- Expropiacion inmediata si nueva prio > actual
+- En empate: mantener proceso actual
+- TCP en despacho L->C y expropiaciones
+- Riesgo starvation procesos baja prioridad
+end note
+
+
+@enduml

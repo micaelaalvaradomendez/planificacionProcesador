@@ -1,0 +1,502 @@
+@startuml
+title Diagrama de Secuencia General - Simulador de Procesos
+actor Usuario
+participant "AdaptadorSimuladorDominio" as Adaptador
+participant "Simulador" as Sim
+participant "EstrategiaScheduler" as Scheduler
+participant "Proceso" as Proc
+participant "RegistroEventos" as Eventos
+participant "ColaEventos" as Cola
+
+== Inicialización ==
+Usuario -> Adaptador: ejecutar(workload)
+activate Adaptador
+Adaptador -> Sim: new Simulador(parametros)
+activate Sim
+Adaptador -> Scheduler: crearEstrategia(algoritmo)
+activate Scheduler
+
+loop Para cada proceso en workload
+    Adaptador -> Proc: new Proceso(data)
+    activate Proc
+    Adaptador -> Sim: agregarProceso(proceso)
+    Sim -> Cola: programarEvento(arribo, JOB_LLEGA, proceso.id)
+    deactivate Proc
+end
+
+== Simulación Principal ==
+loop Mientras haya eventos pendientes
+    Sim -> Cola: obtenerSiguienteEvento()
+    Cola --> Sim: evento
+    
+    alt Evento: JOB_LLEGA (Arribo de Proceso)
+        Sim -> Eventos: registrar('Arribo', proceso.id)
+        Sim -> Proc: estado = NUEVO
+        
+        alt TIP > 0
+            Sim -> Cola: programarEvento(tiempo+TIP, NUEVO_A_LISTO)
+        else TIP = 0
+            Sim -> Proc: estado = LISTO
+            Sim -> Sim: agregarAReadyQueue(proceso)
+            Sim -> Eventos: registrar('FinTIP', proceso.id)
+        end
+        
+    else Evento: NUEVO_A_LISTO (Fin TIP)
+        Sim -> Proc: estado = LISTO
+        Sim -> Sim: agregarAReadyQueue(proceso)
+        Sim -> Eventos: registrar('FinTIP', proceso.id)
+        
+    else Evento: LISTO_A_CORRIENDO (Despacho)
+        alt CPU disponible
+            Sim -> Scheduler: elegirSiguiente(readyQueue)
+            Scheduler --> Sim: procesoSeleccionado
+            Sim -> Sim: removerDeReadyQueue(proceso.id)
+            Sim -> Proc: activar(tiempoActual)
+            Proc -> Proc: estado = CORRIENDO
+            Sim -> Sim: asignarProcesoACpu(proceso)
+            Sim -> Eventos: registrar('Despacho', proceso.id)
+            
+            alt Hay TCP
+                Sim -> Cola: programarEvento(tiempo+TCP, FIN_TCP)
+            else Sin TCP
+                Sim -> Cola: programarEvento(tiempo+duracionRafaga, FIN_RAFAGA_CPU)
+            end
+        end
+        
+    else Evento: FIN_RAFAGA_CPU
+        Sim -> Proc: completarRafaga()
+        
+        alt Proceso terminado (todas las ráfagas completadas)
+            Sim -> Proc: estado = TERMINADO
+            Sim -> Sim: removerProcesoDeCpu()
+            Sim -> Sim: marcarComoTerminado(proceso)
+            Sim -> Eventos: registrar('FinRafagaCPU', proceso.id)
+            
+            alt TFP > 0
+                Sim -> Cola: programarEvento(tiempo+TFP, PROCESO_TERMINA)
+            end
+            
+        else Proceso necesita E/S
+            Sim -> Proc: estado = BLOQUEADO
+            Sim -> Sim: removerProcesoDeCpu()
+            Sim -> Sim: agregarAListaBloqueados(proceso)
+            Sim -> Eventos: registrar('FinRafagaCPU', proceso.id)
+            Sim -> Cola: programarEvento(tiempo+duracionIO, IO_COMPLETA)
+        end
+        
+    else Evento: IO_COMPLETA (Fin E/S)
+        Sim -> Sim: removerDeListaBloqueados(proceso.id)
+        Sim -> Proc: estado = LISTO
+        Sim -> Sim: agregarAReadyQueue(proceso)
+        Sim -> Eventos: registrar('FinES', proceso.id)
+        
+    else Evento: QUANTUM_EXPIRES (Solo RR)
+        alt Proceso aún en CPU
+            Sim -> Proc: expropiar()
+            Sim -> Proc: estado = LISTO
+            Sim -> Sim: removerProcesoDeCpu()
+            Sim -> Sim: agregarAReadyQueue(proceso)  
+            Sim -> Eventos: registrar('AgotamientoQuantum', proceso.id)
+            Sim -> Sim: marcarTCPPendiente()
+        end
+        
+    else Evento: PROCESO_TERMINA (Fin TFP)
+        Sim -> Eventos: registrar('FinTFP', proceso.id)
+    end
+    
+    alt CPU libre y hay procesos en READY
+        Sim -> Scheduler: elegirSiguiente(readyQueue)
+        note right: Intento de nuevo despacho
+    end
+end
+
+== Finalización ==
+Sim -> Eventos: obtenerEventosInternos()
+Sim -> Eventos: proyectarEventosExportacion()
+Adaptador -> Usuario: ResultadoSimulacion
+deactivate Scheduler
+deactivate Sim
+deactivate Adaptador
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA ESPECÍFICO PARA FCFS (First Come, First Served)
+' ====================================================================
+
+@startuml
+title Secuencia FCFS - First Come, First Served
+participant "Simulador" as Sim
+participant "EstrategiaFCFS" as FCFS
+participant "ReadyQueue" as RQ
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+
+== Ejemplo: P1(arribo=0, CPU=5), P2(arribo=1, CPU=3), P3(arribo=2, CPU=4) ==
+
+note over Sim: t=0 - Arribo P1
+Sim -> P1: estado = LISTO
+Sim -> RQ: [P1]
+
+note over Sim: t=1 - Arribo P2, pero P1 puede ejecutar
+Sim -> P2: estado = LISTO  
+Sim -> RQ: [P1, P2]
+Sim -> FCFS: elegirSiguiente([P1, P2])
+FCFS --> Sim: P1 (primero en cola FIFO)
+Sim -> P1: estado = CORRIENDO (t=1)
+
+note over Sim: t=2 - Arribo P3, P1 sigue ejecutando
+Sim -> P3: estado = LISTO
+Sim -> RQ: [P2, P3] (P1 ya en CPU)
+
+note over Sim: t=6 - P1 termina su ejecución
+Sim -> P1: estado = TERMINADO
+Sim -> FCFS: elegirSiguiente([P2, P3])
+FCFS --> Sim: P2 (siguiente en orden FIFO)
+Sim -> P2: estado = CORRIENDO (t=6)
+
+note over Sim: t=9 - P2 termina su ejecución  
+Sim -> P2: estado = TERMINADO
+Sim -> FCFS: elegirSiguiente([P3])
+FCFS --> Sim: P3 (último en cola)
+Sim -> P3: estado = CORRIENDO (t=9)
+
+note over Sim: t=13 - P3 termina, simulación completa
+Sim -> P3: estado = TERMINADO
+
+note right of FCFS
+**Características FCFS:**
+- No expropiativo
+- Orden FIFO estricto
+- Puede causar efecto convoy
+- Simple pero no optimal
+end note
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA ESPECÍFICO PARA ROUND ROBIN (RR)
+' ====================================================================
+
+@startuml
+title Secuencia Round Robin - Quantum=2
+participant "Simulador" as Sim
+participant "EstrategiaRR" as RR
+participant "ReadyQueue" as RQ
+participant "Timer" as Timer
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+
+== Ejemplo: P1(CPU=5), P2(CPU=3), P3(CPU=4), Quantum=2 ==
+
+note over Sim: t=0 - Todos los procesos listos
+Sim -> RQ: [P1, P2, P3]
+
+Sim -> RR: elegirSiguiente([P1, P2, P3])
+RR --> Sim: P1 (primero en cola circular)
+Sim -> P1: estado = CORRIENDO
+Sim -> Timer: programarQuantumExpire(t=2)
+
+note over Sim: t=2 - Expira quantum de P1
+Timer -> Sim: QUANTUM_EXPIRES
+Sim -> P1: expropiar(), estado = LISTO
+Sim -> RQ: [P2, P3, P1] (P1 va al final)
+
+Sim -> RR: elegirSiguiente([P2, P3, P1])
+RR --> Sim: P2 (siguiente en rotación)
+Sim -> P2: estado = CORRIENDO  
+Sim -> Timer: programarQuantumExpire(t=4)
+
+note over Sim: t=4 - Expira quantum de P2
+Timer -> Sim: QUANTUM_EXPIRES
+Sim -> P2: expropiar(), estado = LISTO
+Sim -> RQ: [P3, P1, P2] (P2 va al final)
+
+Sim -> RR: elegirSiguiente([P3, P1, P2])
+RR --> Sim: P3 (siguiente en rotación)
+Sim -> P3: estado = CORRIENDO
+Sim -> Timer: programarQuantumExpire(t=6)
+
+note over Sim: t=6 - Expira quantum de P3
+Timer -> Sim: QUANTUM_EXPIRES
+Sim -> P3: expropiar(), estado = LISTO
+Sim -> RQ: [P1, P2, P3] (P3 va al final, rotación completa)
+
+note over RR: Continúa rotación hasta que todos terminen...
+
+note right of RR
+**Características RR:**
+- Expropiativo por tiempo
+- Reparto equitativo de CPU
+- Cola circular (FIFO rotativo)
+- Quantum determina overhead
+- Ideal para interactividad
+end note
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA ESPECÍFICO PARA PRIORITY SCHEDULING
+' ====================================================================
+
+@startuml
+title Secuencia Priority Scheduling - Expropiativo
+participant "Simulador" as Sim
+participant "EstrategiaPriority" as Priority
+participant "ReadyQueue" as RQ
+participant "P1_Prio2" as P1
+participant "P2_Prio1" as P2  
+participant "P3_Prio3" as P3
+
+== Ejemplo: P1(prio=2, CPU=5), P2(prio=1, CPU=3), P3(prio=3, CPU=4) ==
+== Mayor número = Mayor prioridad ==
+
+note over Sim: t=0 - Arribo P1 (prioridad=2)
+Sim -> P1: estado = LISTO
+Sim -> RQ: [P1]
+Sim -> Priority: elegirSiguiente([P1])
+Priority --> Sim: P1 (única opción)
+Sim -> P1: estado = CORRIENDO
+
+note over Sim: t=1 - Arribo P2 (prioridad=1, menor que P1)
+Sim -> P2: estado = LISTO
+Sim -> RQ: [P1_CPU, P2] (P1 sigue en CPU)
+note right: P2 no expropía (prioridad menor)
+
+note over Sim: t=2 - Arribo P3 (prioridad=3, MAYOR que P1)
+Sim -> P3: estado = LISTO
+Sim -> Priority: verificarExpropiacion(P1_prio2, P3_prio3)
+Priority --> Sim: EXPROPIACION_REQUERIDA
+
+Sim -> P1: expropiar(), estado = LISTO
+Sim -> RQ: [P2, P1, P3]
+Sim -> Priority: elegirSiguiente([P2, P1, P3])
+Priority -> Priority: ordenarPorPrioridad()
+Priority --> Sim: P3 (prioridad=3, más alta)
+Sim -> P3: estado = CORRIENDO
+
+note over Sim: t=6 - P3 termina (CPU=4)
+Sim -> P3: estado = TERMINADO
+Sim -> Priority: elegirSiguiente([P2, P1])
+Priority --> Sim: P1 (prioridad=2 > prioridad=1)
+Sim -> P1: estado = CORRIENDO (retoma ejecución)
+
+note over Sim: t=9 - P1 termina su tiempo restante
+Sim -> P1: estado = TERMINADO
+Sim -> Priority: elegirSiguiente([P2])
+Priority --> Sim: P2 (único restante)
+Sim -> P2: estado = CORRIENDO
+
+note over Sim: t=12 - P2 termina
+Sim -> P2: estado = TERMINADO
+
+note right of Priority
+**Características Priority:**
+- Expropiativo por prioridad
+- Mayor número = mayor prioridad
+- Reordena cola por prioridad
+- Puede causar inanición (starvation)
+- Respuesta rápida para alta prioridad
+end note
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA ESPECÍFICO PARA SJF (Shortest Job First)
+' ====================================================================
+
+@startuml  
+title Secuencia SJF - Shortest Job First (No Expropiativo)
+participant "Simulador" as Sim
+participant "EstrategiaSJF" as SJF
+participant "ReadyQueue" as RQ
+participant "P1_CPU5" as P1
+participant "P2_CPU3" as P2
+participant "P3_CPU4" as P3
+
+== Ejemplo: P1(CPU=5), P2(CPU=3), P3(CPU=4) arribando en diferentes momentos ==
+
+note over Sim: t=0 - Arribo P1 (CPU=5)
+Sim -> P1: estado = LISTO
+Sim -> RQ: [P1]
+Sim -> SJF: elegirSiguiente([P1])
+SJF --> Sim: P1 (única opción)
+Sim -> P1: estado = CORRIENDO
+
+note over Sim: t=1 - Arribo P2 (CPU=3, menor que P1)
+Sim -> P2: estado = LISTO
+Sim -> RQ: [P1_CPU, P2]
+note right: SJF no es expropiativo, P1 continúa
+
+note over Sim: t=2 - Arribo P3 (CPU=4)  
+Sim -> P3: estado = LISTO
+Sim -> RQ: [P1_CPU, P2, P3]
+note right: P1 sigue ejecutando hasta completar
+
+note over Sim: t=5 - P1 termina
+Sim -> P1: estado = TERMINADO
+Sim -> SJF: elegirSiguiente([P2, P3])
+SJF -> SJF: compararTiemposCPU(P2=3, P3=4)
+SJF --> Sim: P2 (tiempo=3 < tiempo=4)
+Sim -> P2: estado = CORRIENDO
+
+note over Sim: t=8 - P2 termina
+Sim -> P2: estado = TERMINADO  
+Sim -> SJF: elegirSiguiente([P3])
+SJF --> Sim: P3 (único restante)
+Sim -> P3: estado = CORRIENDO
+
+note over Sim: t=12 - P3 termina
+Sim -> P3: estado = TERMINADO
+
+note right of SJF
+**Características SJF:**
+- No expropiativo
+- Selecciona proceso con menor tiempo CPU
+- Minimiza tiempo promedio de espera
+- Requiere conocer tiempos a priori
+- Puede causar inanición de jobs largos
+- Optimal para tiempo promedio turnaround
+end note
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA ESPECÍFICO PARA SRTF (Shortest Remaining Time First) 
+' ====================================================================
+
+@startuml
+title Secuencia SRTF - Shortest Remaining Time First (Expropiativo)  
+participant "Simulador" as Sim
+participant "EstrategiaSRTF" as SRTF
+participant "ReadyQueue" as RQ
+participant "P1_Rem5" as P1
+participant "P2_Rem3" as P2
+participant "P3_Rem4" as P3
+
+== Ejemplo: P1(CPU=5), P2(CPU=3), P3(CPU=4) con expropiación ==
+
+note over Sim: t=0 - Arribo P1 (tiempo restante=5)
+Sim -> P1: estado = LISTO, tiempoRestante = 5
+Sim -> RQ: [P1]
+Sim -> SRTF: elegirSiguiente([P1])
+SRTF --> Sim: P1 (única opción)
+Sim -> P1: estado = CORRIENDO
+
+note over Sim: t=1 - Arribo P2 (tiempo restante=3)
+Sim -> P2: estado = LISTO, tiempoRestante = 3
+Sim -> SRTF: verificarExpropiacion(P1_rem4, P2_rem3)
+note right: P1 ejecutó 1u, le quedan 4u
+SRTF --> Sim: EXPROPIACION_REQUERIDA (3 < 4)
+
+Sim -> P1: expropiar(), estado = LISTO
+P1 -> P1: tiempoRestante = 4 (ejecutó 1u)
+Sim -> RQ: [P1, P2]
+Sim -> SRTF: elegirSiguiente([P1, P2]) 
+SRTF -> SRTF: compararTiemposRestantes(P1=4, P2=3)
+SRTF --> Sim: P2 (tiempo restante menor)
+Sim -> P2: estado = CORRIENDO
+
+note over Sim: t=2 - Arribo P3 (tiempo restante=4)
+Sim -> P3: estado = LISTO, tiempoRestante = 4
+Sim -> SRTF: verificarExpropiacion(P2_rem2, P3_rem4)
+note right: P2 ejecutó 1u, le quedan 2u
+SRTF --> Sim: NO_EXPROPIACION (2 < 4)
+Sim -> RQ: [P1, P2_CPU, P3] (P2 continúa)
+
+note over Sim: t=4 - P2 termina
+Sim -> P2: estado = TERMINADO
+Sim -> SRTF: elegirSiguiente([P1, P3])
+SRTF -> SRTF: compararTiemposRestantes(P1=4, P3=4)
+SRTF --> Sim: P1 (empate, toma el primero por FIFO)
+Sim -> P1: estado = CORRIENDO
+
+note over Sim: t=8 - P1 termina su tiempo restante
+Sim -> P1: estado = TERMINADO
+Sim -> SRTF: elegirSiguiente([P3])
+SRTF --> Sim: P3 (único restante)
+Sim -> P3: estado = CORRIENDO
+
+note over Sim: t=12 - P3 termina
+Sim -> P3: estado = TERMINADO
+
+note right of SRTF
+**Características SRTF:**
+- Expropiativo por tiempo restante
+- Óptimo para tiempo promedio respuesta
+- Actualiza tiempo restante continuamente
+- Puede causar inanición extreme
+- Mayor overhead por decisiones frecuentes
+- Versión preemptive de SJF
+end note
+
+@enduml
+
+' ====================================================================
+' DIAGRAMA DE INTERACCIÓN CON E/S (TODOS LOS ALGORITMOS)
+' ====================================================================
+
+@startuml
+title Interacción con E/S - Aplicable a Todos los Algoritmos
+participant "Simulador" as Sim
+participant "Scheduler" as Sched
+participant "Proceso" as Proc
+participant "DispositivoIO" as IO
+
+== Proceso con Múltiples Ráfagas CPU-IO ==
+
+note over Proc: Proceso con rafagasCPU=3, duracionCPU=4, duracionIO=2
+
+Sim -> Sched: elegirSiguiente()
+Sched --> Sim: Proceso
+Sim -> Proc: estado = CORRIENDO
+Proc -> Proc: ejecutarRafaga1() (4u)
+
+note over Sim: Fin de primera ráfaga CPU
+Sim -> Proc: completarRafaga()
+Proc -> Proc: rafagasRestantes = 2
+alt Quedan ráfagas
+    Proc -> Proc: estado = BLOQUEADO
+    Sim -> IO: iniciarOperacion(duracionIO=2)
+    activate IO
+    Sim -> Sim: agregarAListaBloqueados(proceso)
+    
+    note over IO: Operación E/S durante 2 unidades
+    IO -> Sim: operacionCompleta()
+    deactivate IO
+    
+    Sim -> Proc: estado = LISTO
+    Sim -> Sim: agregarAReadyQueue(proceso)
+    
+    note over Sim: El proceso vuelve al final de la cola READY
+    note over Sim: Debe esperar su turno según el algoritmo
+end
+
+== Segunda Ráfaga CPU ==
+Sim -> Sched: elegirSiguiente() 
+note right: El proceso debe esperar según algoritmo
+Sched --> Sim: Proceso (cuando le toque)
+Sim -> Proc: estado = CORRIENDO
+Proc -> Proc: ejecutarRafaga2() (4u)
+
+note over Sim: Fin de segunda ráfaga CPU
+Sim -> Proc: completarRafaga()
+Proc -> Proc: rafagasRestantes = 1
+
+alt Quedan ráfagas  
+    note over Sim: Repite patrón CPU-IO...
+else Última ráfaga completada
+    Proc -> Proc: estado = TERMINADO
+end
+
+note right of Sched
+**Puntos Clave E/S:**
+- Proceso va al final de READY tras I/O
+- No conserva posición privilegiada
+- Todos los algoritmos manejan igual
+- El orden de retorno depende del scheduler
+end note
+
+@enduml

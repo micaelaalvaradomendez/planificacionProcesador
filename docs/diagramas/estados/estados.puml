@@ -1,0 +1,178 @@
+@startuml Estados_Proceso_Unificado
+title Diagrama de Estados - Ciclo Completo de Vida de Procesos
+
+' === ESTADOS PRINCIPALES ===
+
+state "Estados Fundamentales del Sistema" as sistema {
+  
+  state NUEVO {
+    NUEVO : Proceso arriba al sistema (tiempo = arribo)
+    NUEVO : Inicia TIP (Tiempo Ingreso Proceso)
+    NUEVO : Estado: proceso no disponible para scheduling
+    NUEVO : Duración: TIP unidades de tiempo
+  }
+  
+  state LISTO {
+    LISTO : Proceso en Ready Queue
+    LISTO : Disponible para ser seleccionado por scheduler
+    LISTO : Ordenamiento según algoritmo de planificación
+    LISTO : Acumula tiempo de espera
+    LISTO : Estado: esperando CPU
+  }
+  
+  state CORRIENDO {
+    CORRIENDO : Proceso ejecutando en CPU
+    CORRIENDO : Consumiendo tiempo de ráfaga actual
+    CORRIENDO : Sujeto a políticas de expropiación
+    CORRIENDO : Estado: usando CPU activamente
+    CORRIENDO : Acumula tiempo de CPU utilizado
+  }
+  
+  state BLOQUEADO {
+    BLOQUEADO : Proceso realizando operación I/O
+    BLOQUEADO : No consume tiempo de CPU
+    BLOQUEADO : Duración fija (duracionIO del proceso)
+    BLOQUEADO : Estado: esperando completar I/O
+  }
+  
+  state TERMINADO {
+    TERMINADO : Todas las ráfagas CPU completadas
+    TERMINADO : Aplica TFP (Tiempo Finalización Proceso)
+    TERMINADO : Métricas calculadas y finalizadas
+    TERMINADO : Estado: proceso completado
+  }
+  
+  ' === TRANSICIONES BÁSICAS ===
+  [*] --> NUEVO : Proceso arriba\n(tiempo = arribo)
+  
+  NUEVO --> LISTO : Fin TIP\n(INSTANTÁNEO - Δt=0)\n**NO hay TCP**
+  
+  LISTO --> CORRIENDO : Proceso seleccionado\n**TCP APLICADO**\n(Listo → Corriendo)
+  
+  CORRIENDO --> BLOQUEADO : Ráfaga CPU completa\n+ rafagasRestantes > 0\n**INSTANTÁNEO - Δt=0**\n**NO hay TCP**
+  
+  BLOQUEADO --> LISTO : Fin I/O\n**INSTANTÁNEO - Δt=0**\n**NO hay TCP**
+  
+  CORRIENDO --> TERMINADO : Ráfaga CPU completa\n+ rafagasRestantes = 0\nAplica TFP
+}
+
+' === TRANSICIONES ESPECÍFICAS POR POLÍTICA ===
+
+state "Transiciones por Política de Planificación" as politicas {
+  
+  state "FCFS - First Come First Served" as FCFS {
+    state FCFS_Transiciones {
+      FCFS_Transiciones : ✅ LISTO → CORRIENDO (por orden FIFO)
+      FCFS_Transiciones : ✅ CORRIENDO → BLOQUEADO (ráfaga completa)
+      FCFS_Transiciones : ✅ CORRIENDO → TERMINADO (proceso completo)
+      FCFS_Transiciones : ❌ CORRIENDO → LISTO (NO expropiativo)
+      FCFS_Transiciones : 
+      FCFS_Transiciones : Características:
+      FCFS_Transiciones : • No hay expropiación
+      FCFS_Transiciones : • TCP solo en LISTO → CORRIENDO
+      FCFS_Transiciones : • Orden estricto FIFO en Ready Queue
+    }
+  }
+  
+  state "RR - Round Robin" as RR {
+    state RR_Transiciones {
+      RR_Transiciones : ✅ LISTO → CORRIENDO (selección circular)
+      RR_Transiciones : ✅ CORRIENDO → BLOQUEADO (ráfaga completa)
+      RR_Transiciones : ✅ CORRIENDO → TERMINADO (proceso completo)
+      RR_Transiciones : ✅ CORRIENDO → LISTO (quantum agotado)
+      RR_Transiciones : 
+      RR_Transiciones : Características:
+      RR_Transiciones : • Expropiación por quantum
+      RR_Transiciones : • TCP en LISTO → CORRIENDO
+      RR_Transiciones : • TCP pendiente tras expropiación
+      RR_Transiciones : • Proceso único: usa TCP igual
+    }
+  }
+  
+  state "PRIORITY - Por Prioridad" as PRIORITY {
+    state PRIORITY_Transiciones {
+      PRIORITY_Transiciones : ✅ LISTO → CORRIENDO (mayor prioridad)
+      PRIORITY_Transiciones : ✅ CORRIENDO → BLOQUEADO (ráfaga completa)
+      PRIORITY_Transiciones : ✅ CORRIENDO → TERMINADO (proceso completo)
+      PRIORITY_Transiciones : ✅ CORRIENDO → LISTO (proceso mayor prioridad llega)
+      PRIORITY_Transiciones : 
+      PRIORITY_Transiciones : Características:
+      PRIORITY_Transiciones : • Expropiación por prioridad mayor
+      PRIORITY_Transiciones : • TCP en LISTO → CORRIENDO
+      PRIORITY_Transiciones : • Ready Queue ordenada por prioridad
+      PRIORITY_Transiciones : • Prevención de starvation opcional
+    }
+  }
+  
+  state "SPN - Shortest Process Next" as SPN {
+    state SPN_Transiciones {
+      SPN_Transiciones : ✅ LISTO → CORRIENDO (menor tiempo CPU)
+      SPN_Transiciones : ✅ CORRIENDO → BLOQUEADO (ráfaga completa)
+      SPN_Transiciones : ✅ CORRIENDO → TERMINADO (proceso completo)
+      SPN_Transiciones : ❌ CORRIENDO → LISTO (NO expropiativo)
+      SPN_Transiciones : 
+      SPN_Transiciones : Características:
+      SPN_Transiciones : • No hay expropiación
+      SPN_Transiciones : • TCP solo en LISTO → CORRIENDO
+      SPN_Transiciones : • Selección por menor tiempo CPU total
+      SPN_Transiciones : • Mitiga efecto convoy vs FCFS
+    }
+  }
+  
+  state "SRTN - Shortest Remaining Time Next" as SRTN {
+    state SRTN_Transiciones {
+      SRTN_Transiciones : ✅ LISTO → CORRIENDO (menor tiempo restante)
+      SRTN_Transiciones : ✅ CORRIENDO → BLOQUEADO (ráfaga completa)
+      SRTN_Transiciones : ✅ CORRIENDO → TERMINADO (proceso completo)
+      SRTN_Transiciones : ✅ CORRIENDO → LISTO (proceso menor tiempo restante)
+      SRTN_Transiciones : 
+      SRTN_Transiciones : Características:
+      SRTN_Transiciones : • Expropiación por menor tiempo restante
+      SRTN_Transiciones : • TCP en LISTO → CORRIENDO
+      SRTN_Transiciones : • Recalcula tiempo restante continuamente
+      SRTN_Transiciones : • Óptimo para tiempo promedio respuesta
+    }
+  }
+}
+
+' === REGLAS CRÍTICAS DE TEMPORIZACIÓN ===
+
+note top of sistema
+**REGLAS CRÍTICAS DE TEMPORIZACIÓN (Según Consigna)**
+
+1. **Transiciones INSTANTÁNEAS (Δt=0):**
+   • NUEVO → LISTO (fin TIP)
+   • CORRIENDO → BLOQUEADO (fin ráfaga CPU)
+   • BLOQUEADO → LISTO (fin I/O)
+
+2. **TCP (Tiempo Cambio Contexto):**
+   • Se aplica ÚNICAMENTE en LISTO → CORRIENDO
+   • NUNCA en otras transiciones
+   • Incluye overhead del Sistema Operativo
+
+3. **Orden de Eventos Simultáneos:**
+   • 1° Corriendo → Terminado
+   • 2° Corriendo → Bloqueado  
+   • 3° Corriendo → Listo
+   • 4° Bloqueado → Listo
+   • 5° Nuevo → Listo
+   • 6° Listo → Corriendo
+end note
+
+note bottom of politicas
+**COMPORTAMIENTOS POR POLÍTICA**
+
+• **No Expropiativos:** FCFS, SPN
+  - Proceso ejecuta hasta completar ráfaga o requerir I/O
+  
+• **Expropiativos:** RR, PRIORITY, SRTN
+  - Pueden interrumpir proceso en ejecución
+  - Requieren manejo de TCP pendiente
+  
+• **Casos Especiales:**
+  - RR con proceso único: sigue usando quantum y TCP
+  - PRIORITY: evita starvation con aging opcional
+  - SRTN: recalcula tiempo restante en cada evento
+end note
+
+@enduml

@@ -1,0 +1,221 @@
+@startuml
+title Shortest Job First (SJF) - Secuencia Corregida con Terminología Académica
+participant "Motor" as Motor
+participant "P1" as P1
+participant "P2" as P2  
+participant "P3" as P3
+participant "CPU" as CPU
+participant "ReadyQueue" as RQ
+participant "EventLogger" as Log
+
+== Configuración SJF ==
+note over Motor
+**Parámetros:** TIP=1, TCP=1, TFP=1
+**Algoritmo:** Shortest Job First (NO expropiativo)
+**Política Ready:** Ordenada por duración de TRABAJO (job)
+**Tie-breaker:** Orden de llegada a READY
+**TCP:** Solo en L→C (DISPATCH)
+
+**Procesos (ordenados por duración de TRABAJO):**
+P2: arribo=1, **trabajo=2** (más corto)
+P3: arribo=2, **trabajo=5** (medio)
+P1: arribo=0, **trabajo=7** (más largo)
+
+**TERMINOLOGÍA ACADÉMICA:**
+- **JOB** = trabajo completo del proceso
+- **BURST** = ráfaga actual de CPU 
+- **SJF** = ordena por duración total de TRABAJO
+- **SRT** = ordena por tiempo RESTANTE de trabajo
+end note
+
+== Orden de Resolución de Eventos Simultáneos ==
+note over Motor
+**(1) C→T** (FIN_PROCESO)
+**(2) C→B** (FIN_RAFAGA_CPU → I/O)
+**(3) C→L** (no aplica en SJF no expropiativo)
+**(4) B→L** (FIN_IO)
+**(5) N→L** (FIN_TIP)
+**(6) L→C** (DISPATCH) - **con TCP**
+
+**SJF:** Solo expropie si explícitamente es SRTF
+**ReadyQueue:** Mantiene orden por trabajo total
+end note
+
+== Cronología SJF ==
+
+group t=0: Arribo P1
+    Motor -> P1: ARRIBO
+    P1 -> P1: estado = NUEVO
+    Motor -> Log: registrar(t=0, ARRIBO, P1, trabajo=7)
+    Motor -> Motor: programar(t=1, FIN_TIP, P1)
+end
+
+group t=1: P1 N→L, Arribo P2
+    Motor -> P1: FIN_TIP
+    P1 -> P1: estado = LISTO
+    Motor -> RQ: insertar P1 ordenado → [P1(trabajo=7)]
+    Motor -> Log: registrar(t=1, FIN_TIP, P1, "NUEVO→LISTO")
+    
+    Motor -> P2: ARRIBO
+    P2 -> P2: estado = NUEVO
+    Motor -> Log: registrar(t=1, ARRIBO, P2, trabajo=2)
+    Motor -> Motor: programar(t=2, FIN_TIP, P2)
+    
+    == SJF Dispatch (solo P1 disponible) ==
+    Motor -> RQ: seleccionar más corto
+    Motor -> RQ: remover P1 → [vacía]
+    Motor -> CPU: dispatch(P1)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P1: estado = CORRIENDO
+    Motor -> Log: registrar(t=1, DISPATCH, P1, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=9, FIN_RAFAGA_CPU, P1)
+    note right: **t=1+1(TCP)+7(trabajo)=9**
+end
+
+group t=2: P2 N→L, Arribo P3
+    Motor -> P2: FIN_TIP
+    P2 -> P2: estado = LISTO  
+    Motor -> RQ: insertar P2 ordenado → [P2(trabajo=2)]
+    Motor -> Log: registrar(t=2, FIN_TIP, P2, "NUEVO→LISTO")
+    
+    note right: **P2 trabajo=2 < P1 en ejecución**\n**SJF NO expropiativo → P1 continúa**
+    
+    Motor -> P3: ARRIBO
+    P3 -> P3: estado = NUEVO
+    Motor -> Log: registrar(t=2, ARRIBO, P3, trabajo=5)
+    Motor -> Motor: programar(t=3, FIN_TIP, P3)
+end
+
+group t=3: P3 N→L
+    Motor -> P3: FIN_TIP
+    P3 -> P3: estado = LISTO
+    Motor -> RQ: insertar P3 ordenado por trabajo
+    Motor -> RQ: reorganizar → [P2(trabajo=2), P3(trabajo=5)]
+    Motor -> Log: registrar(t=3, FIN_TIP, P3, "NUEVO→LISTO")
+    
+    note right: **ReadyQueue ordenada:**\n**P2(2) < P3(5)**\n**P1(7) sigue en CPU**
+end
+
+group t=9: P1 termina trabajo completo
+    Motor -> P1: FIN_RAFAGA_CPU
+    P1 -> P1: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=9, FIN_RAFAGA_CPU, P1, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=10, FIN_PROCESO, P1)
+    
+    == SJF Dispatch del trabajo más corto ==
+    Motor -> RQ: seleccionar más corto (SJF)
+    Motor -> RQ: remover P2 → [P3(trabajo=5)]
+    Motor -> CPU: dispatch(P2)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P2: estado = CORRIENDO
+    Motor -> Log: registrar(t=9, DISPATCH, P2, "LISTO→CORRIENDO", tcp=1, trabajo=2)
+    Motor -> Motor: programar(t=12, FIN_RAFAGA_CPU, P2)
+    note right: **t=9+1(TCP)+2(trabajo)=12**\n**SJF selecciona P2 por trabajo=2 < P3=5**
+end
+
+group t=10: P1 finalización
+    Motor -> P1: FIN_PROCESO
+    Motor -> Log: registrar(t=10, FIN_PROCESO, P1, "proceso completado")
+end
+
+group t=12: P2 termina trabajo completo  
+    Motor -> P2: FIN_RAFAGA_CPU
+    P2 -> P2: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=12, FIN_RAFAGA_CPU, P2, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=13, FIN_PROCESO, P2)
+    
+    == SJF Dispatch último trabajo ==
+    Motor -> RQ: seleccionar más corto (solo P3)
+    Motor -> RQ: remover P3 → [vacía]
+    Motor -> CPU: dispatch(P3)  
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P3: estado = CORRIENDO
+    Motor -> Log: registrar(t=12, DISPATCH, P3, "LISTO→CORRIENDO", tcp=1, trabajo=5)
+    Motor -> Motor: programar(t=18, FIN_RAFAGA_CPU, P3)
+    note right: **t=12+1(TCP)+5(trabajo)=18**
+end
+
+group t=13: P2 finalización
+    Motor -> P2: FIN_PROCESO  
+    Motor -> Log: registrar(t=13, FIN_PROCESO, P2, "proceso completado")
+end
+
+group t=18: P3 termina trabajo completo
+    Motor -> P3: FIN_RAFAGA_CPU
+    P3 -> P3: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=18, FIN_RAFAGA_CPU, P3, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=19, FIN_PROCESO, P3)
+    
+    note right: **Simulación completa**\n**ReadyQueue vacía → CPU idle**
+end
+
+group t=19: P3 finalización
+    Motor -> P3: FIN_PROCESO
+    Motor -> Log: registrar(t=19, FIN_PROCESO, P3, "proceso completado")
+end
+
+== Casos Especiales SJF ==
+group Tie-breaker por orden de llegada
+    note over Motor
+    **Ejemplo:** Dos procesos con mismo trabajo
+    - P4: arribo=5, trabajo=3
+    - P5: arribo=6, trabajo=3
+    
+    **SJF tie-breaker:** P4 seleccionado primero
+    **(llegó antes a READY)**
+    
+    **ReadyQueue:** [P4(trabajo=3, t_ready=5), P5(trabajo=3, t_ready=6)]
+    end note
+end
+
+group SJF vs SRTF - Diferencia Crítica
+    note over Motor
+    **SJF (Shortest Job First):**
+    - NO expropiativo
+    - Ordena por duración TOTAL del trabajo
+    - Una vez en CPU → ejecuta hasta completarse
+    
+    **SRTF (Shortest Remaining Time First):**  
+    - SÍ expropiativo
+    - Ordena by tiempo RESTANTE del trabajo
+    - Puede expropiar si llega trabajo con menos tiempo restante
+    
+    **TERMINOLOGÍA:** Job=trabajo, Burst=ráfaga, Remaining=restante
+    end note
+end
+
+group SJF con I/O (extensión del ejemplo)
+    note over Motor
+    **Si procesos tuvieran múltiples ráfagas:**
+    - SJF ordena por TRABAJO TOTAL (suma de todas las ráfagas)
+    - NO por ráfaga individual actual
+    - C→B: proceso va a I/O  
+    - B→L: regresa a ReadyQueue según trabajo total original
+    - Mantiene posición SJF original
+    end note
+end
+
+== Análisis Métricas SJF ==
+note over Log
+**Orden de ejecución SJF:**
+1. P1 (t=1-9): trabajo=7, llega primero
+2. P2 (t=9-12): trabajo=2, más corto  
+3. P3 (t=12-18): trabajo=5, último
+
+**Tiempo de Espera:**
+- P1: 0 (ejecuta inmediatamente)
+- P2: 9-2=7 (esperó desde t=2 hasta t=9)
+- P3: 12-3=9 (esperó desde t=3 hasta t=12)
+
+**Tiempo Promedio Espera:** (0+7+9)/3 = 5.33
+
+**TCP total = 3** (uno por cada DISPATCH)
+
+**SJF minimiza tiempo promedio de espera**
+**vs otros algoritmos no expropiativos**
+end note
+
+@enduml

@@ -1,0 +1,214 @@
+@startuml
+title FCFS (First Come First Served) - Secuencia Corregida con Eventos Explícitos
+participant "Motor" as Motor
+participant "P1" as P1
+participant "P2" as P2  
+participant "P3" as P3
+participant "CPU" as CPU
+participant "ReadyQueue" as RQ
+participant "EventLogger" as Log
+
+== Configuración FCFS ==
+note over Motor
+**Parámetros:** TIP=1, TCP=1, TFP=1
+**Algoritmo:** FCFS (First Come First Served)
+**Política Ready:** FIFO estricto
+**Tie-breaker:** Orden de llegada a READY (estable)
+**No expropiativo**
+
+**Procesos:**
+P1: arribo=0, ráfaga=5, I/O=3
+P2: arribo=1, ráfaga=3, I/O=2  
+P3: arribo=2, ráfaga=4, I/O=1
+end note
+
+== Orden de Resolución de Eventos Simultáneos ==
+note over Motor
+**(1) C→T** (FIN_PROCESO)
+**(2) C→B** (FIN_RAFAGA_CPU → I/O)
+**(3) C→L** (expropiación - N/A en FCFS)
+**(4) B→L** (FIN_IO) - instantáneo, sin TCP
+**(5) N→L** (FIN_TIP)
+**(6) L→C** (DISPATCH) - con TCP obligatorio
+end note
+
+== Cronología FCFS ==
+
+group t=0: Arribo P1
+    Motor -> P1: ARRIBO
+    P1 -> P1: estado = NUEVO
+    Motor -> Log: registrar(t=0, ARRIBO, P1)
+    Motor -> Motor: programar(t=1, FIN_TIP, P1)
+    note right: **TIP=1 como actividad SO visible**
+end
+
+group t=1: P1 N→L, Arribo P2
+    Motor -> P1: FIN_TIP
+    P1 -> P1: estado = LISTO
+    Motor -> RQ: agregar P1 → [P1]
+    Motor -> Log: registrar(t=1, FIN_TIP, P1, "NUEVO→LISTO")
+    
+    Motor -> P2: ARRIBO  
+    P2 -> P2: estado = NUEVO
+    Motor -> Log: registrar(t=1, ARRIBO, P2)
+    Motor -> Motor: programar(t=2, FIN_TIP, P2)
+    
+    == Evaluación Planificación ==
+    Motor -> Motor: CPU libre + RQ no vacía → DISPATCH
+    Motor -> RQ: seleccionar próximo (FCFS)
+    RQ -> RQ: P1 = primer elemento FIFO
+    Motor -> RQ: remover P1 → [vacía]
+    Motor -> CPU: dispatch(P1)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P1: estado = CORRIENDO
+    Motor -> Log: registrar(t=1, DISPATCH, P1, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=7, FIN_RAFAGA_CPU, P1) 
+    note right: **t=1+1(TCP)+5(ráfaga)=7**
+end
+
+group t=2: P2 N→L, Arribo P3
+    Motor -> P2: FIN_TIP
+    P2 -> P2: estado = LISTO  
+    Motor -> RQ: agregar P2 → [P2]
+    Motor -> Log: registrar(t=2, FIN_TIP, P2, "NUEVO→LISTO")
+    
+    Motor -> P3: ARRIBO
+    P3 -> P3: estado = NUEVO
+    Motor -> Log: registrar(t=2, ARRIBO, P3)
+    Motor -> Motor: programar(t=3, FIN_TIP, P3)
+    
+    note right: **CPU ocupada por P1, no hay DISPATCH**
+end
+
+group t=3: P3 N→L
+    Motor -> P3: FIN_TIP
+    P3 -> P3: estado = LISTO
+    Motor -> RQ: agregar P3 → [P2, P3]
+    Motor -> Log: registrar(t=3, FIN_TIP, P3, "NUEVO→LISTO")
+    
+    note right: **FCFS: P2 llegó antes que P3 a READY**\n**Orden estable preservado**
+end
+
+group t=7: P1 termina ráfaga
+    Motor -> P1: FIN_RAFAGA_CPU
+    P1 -> P1: estado = BLOQUEADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=7, FIN_RAFAGA_CPU, P1, "CORRIENDO→BLOQUEADO")
+    Motor -> Motor: programar(t=10, FIN_IO, P1)
+    
+    == Evaluación Planificación Inmediata ==
+    Motor -> Motor: CPU libre + RQ no vacía → DISPATCH
+    Motor -> RQ: seleccionar próximo (FCFS)
+    RQ -> RQ: P2 = primer elemento (llegó antes que P3)
+    Motor -> RQ: remover P2 → [P3]
+    Motor -> CPU: dispatch(P2)
+    CPU -> CPU: **cobrar TCP=1**  
+    Motor -> P2: estado = CORRIENDO
+    Motor -> Log: registrar(t=7, DISPATCH, P2, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=11, FIN_RAFAGA_CPU, P2)
+    note right: **t=7+1(TCP)+3(ráfaga)=11**
+end
+
+group t=10: P1 termina I/O (mientras P2 en CPU)
+    Motor -> P1: FIN_IO
+    P1 -> P1: estado = LISTO
+    Motor -> RQ: agregar P1 al FINAL → [P3, P1]
+    Motor -> Log: registrar(t=10, FIN_IO, P1, "BLOQUEADO→LISTO", tcp=0)
+    
+    note right: **B→L instantáneo y sin TCP**\n**FCFS: tras I/O va al final de cola**\n**No expropiación (no expropiativo)**
+end
+
+group t=11: P2 termina ráfaga
+    Motor -> P2: FIN_RAFAGA_CPU
+    P2 -> P2: estado = BLOQUEADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=11, FIN_RAFAGA_CPU, P2, "CORRIENDO→BLOQUEADO")
+    Motor -> Motor: programar(t=13, FIN_IO, P2)
+    
+    == Evaluación Planificación ==
+    Motor -> Motor: CPU libre + RQ no vacía → DISPATCH
+    Motor -> RQ: seleccionar próximo (FCFS)
+    RQ -> RQ: P3 = primer elemento
+    Motor -> RQ: remover P3 → [P1]
+    Motor -> CPU: dispatch(P3)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P3: estado = CORRIENDO
+    Motor -> Log: registrar(t=11, DISPATCH, P3, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=16, FIN_RAFAGA_CPU, P3)
+    note right: **t=11+1(TCP)+4(ráfaga)=16**
+end
+
+group t=13: P2 termina I/O (mientras P3 en CPU)
+    Motor -> P2: FIN_IO
+    P2 -> P2: estado = LISTO
+    Motor -> RQ: agregar P2 al FINAL → [P1, P2]
+    Motor -> Log: registrar(t=13, FIN_IO, P2, "BLOQUEADO→LISTO", tcp=0)
+    
+    note right: **FCFS no expropiativo:**\n**P2 espera aunque sea más corto**
+end
+
+group t=16: P3 termina completamente  
+    Motor -> P3: FIN_RAFAGA_CPU
+    P3 -> P3: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=16, FIN_RAFAGA_CPU, P3, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=17, FIN_PROCESO, P3)
+    note right: **TFP=1 como actividad SO**
+    
+    == Evaluación Planificación ==  
+    Motor -> Motor: CPU libre + RQ no vacía → DISPATCH
+    Motor -> RQ: seleccionar próximo (FCFS)
+    RQ -> RQ: P1 = primer elemento (reingresó primero)
+    Motor -> RQ: remover P1 → [P2]
+    Motor -> CPU: dispatch(P1)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P1: estado = CORRIENDO
+    Motor -> Log: registrar(t=16, DISPATCH, P1, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=22, FIN_RAFAGA_CPU, P1)
+    note right: **P1 segunda ráfaga (suponiendo 5u)**
+end
+
+group t=17: P3 finalización completa
+    Motor -> P3: FIN_PROCESO
+    Motor -> Log: registrar(t=17, FIN_PROCESO, P3, "proceso completado")
+    note right: **TFP completado**
+end
+
+== Casos Especiales FCFS ==
+group CPU Idle (si RQ vacía)
+    note over Motor
+    **Cuando ReadyQueue vacía:**
+    - CPU marcada como IDLE
+    - Espera próximo evento (FIN_IO o FIN_TIP)
+    - Impacta métricas de utilización
+    - Log registra período idle explícitamente
+    end note
+end
+
+group Efecto Convoy
+    note over Motor
+    **Problema FCFS típico:**
+    - Proceso largo (P1) bloquea procesos cortos
+    - P2, P3 esperan aunque sean más rápidos
+    - Tiempo respuesta promedio alto
+    - Orden de llegada determina todo
+    end note
+end
+
+== Métricas Calculadas desde Event Log ==
+note over Log
+**El EventLogger contiene la fuente única de verdad:**
+- Todos los DISPATCH con TCP registrados
+- Todas las transiciones de estado
+- Tiempos exactos de inicio/fin por actividad
+- B→L marcados como instantáneos (tcp=0)
+- Gantt se reconstruye SOLO desde estos eventos
+- Métricas calculadas SOLO desde estos eventos
+
+**Ejemplo métricas P1:**
+- TR = t_fin - t_arribo = 22 - 0 = 22
+- Tiempo LISTO = suma períodos en ReadyQueue
+- TCP total = suma de todos los tcp registrados
+end note
+
+@enduml

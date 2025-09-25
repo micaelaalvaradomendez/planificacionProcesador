@@ -1,0 +1,144 @@
+@startuml RR_Algoritmo_Unificado
+title RR - Algoritmo de Planificación - Versión Unificada
+
+title Round Robin - Algoritmo de Decisión de Scheduling
+
+start
+
+:Evento requiere selección de proceso;
+
+if (¿Ready Queue vacía?) then (SÍ)
+  :CPU permanece idle;
+  stop
+endif
+
+:Examinar Ready Queue;
+
+:proceso = primer elemento de Ready Queue (FIFO);
+note right: **RR:** Cola circular FIFO
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO → CORRIENDO;
+
+:Aplicar TCP;
+note right: TCP en despacho L→C
+
+:procesoActualCPU = proceso;
+
+:tiempoQuantumRestante = quantum;
+
+:Programar eventos concurrentes;
+note right
+  FIN_RAFAGA_CPU: tiempo + duracionCPU
+  QUANTUM_EXPIRADO: tiempo + quantum
+end note
+
+fork
+  :Esperar FIN_RAFAGA_CPU;
+  if (¿Ráfaga termina antes de quantum?) then (SÍ)
+    :Cancelar QUANTUM_EXPIRADO;
+    note right: **Fin natural:** NO hay TCP
+    if (¿Más ráfagas?) then (SÍ)
+      :estado = CORRIENDO → BLOQUEADO;
+      :Programar FIN_IO;
+    else (NO)
+      :estado = CORRIENDO → TERMINADO;
+      :Aplicar TFP;
+    endif
+  endif
+fork again
+  :Esperar QUANTUM_EXPIRADO;
+  if (¿Quantum expira primero?) then (SÍ)
+    :Cancelar FIN_RAFAGA_CPU;
+    note right: **Expropiación RR:** Aplicar TCP
+    :estado = CORRIENDO → LISTO;
+    :Aplicar TCP por expropiación;
+    :Agregar proceso al FINAL de Ready Queue;
+    :Actualizar tiempo restante ráfaga;
+  endif
+end fork
+
+:CPU queda libre;
+:procesoActualCPU = null;
+
+stop
+
+note left of start
+**Política Round Robin:**
+• Expropiativo por quantum
+• Time sharing justo
+• TCP SOLO por expiración quantum
+• NO TCP por fin natural
+• Overhead vs. responsiveness
+
+**Parámetros:**
+• Quantum típico: 4-20 unidades
+• Balance: pequeño=responsive, grande=throughput
+• Consigna TP: no interrumpir por retorno I/O
+
+**Casos TCP:**
+✓ Despacho L→C
+✓ Expiración quantum
+✗ Fin natural ráfaga
+✗ Retorno I/O
+end note
+
+
+' === VERSIÓN SIMPLIFICADA ===
+
+title Round Robin - Quantum Scheduling
+
+start
+
+:Evento requiere seleccion de proceso;
+
+if (Ready Queue vacia?) then (SI)
+  :CPU permanece idle;
+  stop
+endif
+
+:proceso = primer elemento Ready Queue;
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO -> CORRIENDO;
+
+:Aplicar TCP;
+
+:procesoActualCPU = proceso;
+
+:Iniciar quantum timer;
+
+:Programar FIN_RAFAGA_CPU y QUANTUM_EXPIRADO;
+
+if (Que evento ocurre primero?) then (FIN_RAFAGA_CPU)
+  :Rafaga termina naturalmente;
+  note right: NO hay TCP
+  if (Mas rafagas?) then (SI)
+    :estado = CORRIENDO -> BLOQUEADO;
+  else (NO)
+    :estado = CORRIENDO -> TERMINADO;
+  endif
+elseif (QUANTUM_EXPIRADO) then
+  :Quantum expira;
+  :estado = CORRIENDO -> LISTO;
+  :Aplicar TCP por expropiacion;
+  :Agregar proceso al final Ready Queue;
+endif
+
+:CPU queda libre;
+
+stop
+
+note right
+Round Robin:
+- Quantum fijo (ej: 4 unidades)
+- TCP SOLO por expiracion quantum
+- NO TCP por fin natural rafaga
+- Cola circular FIFO
+- Garantiza fairness
+end note
+
+
+@enduml

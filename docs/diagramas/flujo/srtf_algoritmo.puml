@@ -1,0 +1,152 @@
+@startuml SRTF_Algoritmo_Unificado
+title SRTF - Algoritmo de Planificación - Versión Unificada
+
+title Shortest Remaining Time First (SRTF) - Algoritmo de Decisión
+
+start
+
+:Evento requiere evaluación SRTF;
+
+note right
+  **Eventos disparadores:**
+  • CPU libre + Ready Queue no vacía
+  • Nuevo proceso arriba
+  • Proceso retorna de I/O
+  • Actualización tiempo restante
+end note
+
+
+if (¿Ready Queue vacía?) then (SÍ)
+  :CPU permanece idle;
+  stop
+endif
+
+:Ordenar Ready Queue por restanteTotalCPU;
+note right: 
+  **Tiempo Total Restante:**
+  • restanteTotalCPU = servicio total pendiente
+  • (incluye ráfaga actual + futuras)
+end note
+
+:proceso = primer elemento (shortest remaining);
+
+if (¿CPU ocupada?) then (SÍ)
+  :procesoActual = procesoEnCPU;
+  :Comparar tiempos restantes;
+  
+  if (¿proceso.restanteTotalCPU < procesoActual.restanteTotalCPU?) then (SÍ)
+    :Expropiar procesoActual inmediatamente;
+    note right: **SRTF Agresivo:** Expropiación inmediata
+    :procesoActual.estado = CORRIENDO → LISTO;
+    :Aplicar TCP por expropiación;
+    :Actualizar tiempo restante procesoActual;
+    :Insertar procesoActual en Ready Queue;
+  elseif (¿proceso.restanteTotalCPU == procesoActual.restanteTotalCPU?) then (EMPATE)
+    :Mantener procesoActual en CPU;
+    note right: **Política empate:** conservar proceso actual
+    stop
+  else (procesoActual tiene menor tiempo restante)
+    :Proceso espera en Ready Queue;
+    stop
+  endif
+endif
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO → CORRIENDO;
+
+:Aplicar TCP;
+note right: TCP en despacho L→C o expropiación
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+:Inicializar tracking tiempo restante;
+note right: **Tracking Dinámico:**
+Actualizar restanteTotalCPU cada unidad tiempo
+end note
+
+:Actualizar estadísticas;
+
+stop
+
+note left of start
+**Política SRTF:**
+• Expropiativo agresivo
+• Comparación continua remaining time
+• Minimiza response time promedio
+• Mayor overhead que SJF
+
+**Tiempo Restante Total:**
+• Incluye ráfaga actual + futuras
+• Se actualiza dinámicamente
+• Considera progreso actual de ráfaga
+
+**Expropiación Triggers:**  
+• Arribo proceso con menor remaining time
+• Retorno I/O con menor remaining time
+• Cualquier cambio en ready queue
+
+**Casos TCP:**
+✓ Despacho L→C
+✓ Expropiación por menor remaining time  
+✗ Empate de tiempos restantes
+✗ Proceso mayor remaining time arriba
+end note
+
+
+' === VERSIÓN SIMPLIFICADA ===
+
+title Shortest Remaining Time First (SRTF)
+
+start
+
+:Evento requiere evaluacion SRTF;
+
+if (Ready Queue vacia?) then (SI)
+  :CPU permanece idle;
+  stop
+endif
+
+:Ordenar Ready Queue por restanteTotalCPU;
+
+:proceso = proceso con menor tiempo restante;
+
+if (CPU ocupada?) then (SI)
+  :procesoActual = procesoEnCPU;
+  if (proceso.restanteTotalCPU < procesoActual.restanteTotalCPU?) then (SI)
+    :Expropiar procesoActual inmediatamente;
+    :procesoActual.estado = CORRIENDO -> LISTO;
+    :Aplicar TCP por expropiacion;
+    :Insertar procesoActual en Ready Queue;
+  else (NO)
+    :Proceso espera en Ready Queue;
+    stop
+  endif
+endif
+
+:Remover proceso de Ready Queue;
+
+:proceso.estado = LISTO -> CORRIENDO;
+
+:Aplicar TCP;
+
+:procesoActualCPU = proceso;
+
+:Programar FIN_RAFAGA_CPU;
+
+stop
+
+note right
+SRTF Caracteristicas:
+- Expropiativo agresivo
+- Comparacion continua remaining time
+- Expropiacion en cada arribo/retorno I/O
+- Minimiza response time promedio
+- Mayor overhead que SJF
+- TCP en despacho L->C y expropiaciones
+end note
+
+
+@enduml

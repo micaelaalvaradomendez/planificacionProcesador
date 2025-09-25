@@ -1,0 +1,129 @@
+@startuml
+title Ejecución FCFS - Tanda de 5 Procesos Ejemplo
+participant "Sistema" as Sys
+participant "P1" as P1
+participant "P2" as P2  
+participant "P3" as P3
+participant "P4" as P4
+participant "P5" as P5
+participant "CPU" as CPU
+participant "ReadyQueue" as RQ
+
+== Configuración Inicial ==
+note over Sys: TIP=1, TFP=1, TCP=1
+note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, prio=2
+note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, prio=1  
+note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, prio=3
+note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, prio=2
+note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, prio=1
+
+== Cronología de Ejecución FCFS ==
+
+group t=0: Arribo P1
+    Sys -> P1: JOB_LLEGA
+    P1 -> P1: estado = NUEVO
+    Sys -> Sys: TIP = 1u
+end
+
+group t=1: P1 entra al sistema, Arribo P2
+    Sys -> P1: estado = LISTO
+    Sys -> RQ: agregar P1
+    Sys -> P2: JOB_LLEGA
+    P2 -> P2: estado = NUEVO
+    RQ -> CPU: despachar P1 (FCFS: primero en llegar)
+    CPU -> P1: estado = CORRIENDO
+    P1 -> P1: ejecutar ráfaga 1 (5u)
+end
+
+group t=2: P2 entra al sistema
+    Sys -> P2: estado = LISTO  
+    Sys -> RQ: agregar P2 [P2] (P1 en CPU)
+end
+
+group t=3: Arribo P3
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra al sistema
+    Sys -> P3: estado = LISTO
+    Sys -> RQ: agregar P3 [P2, P3] (P1 en CPU)
+end
+
+group t=5: Arribo P4
+    Sys -> P4: JOB_LLEGA  
+    P4 -> P4: estado = NUEVO
+end
+
+group t=6: P1 termina ráfaga 1, P4 entra, Arribo P5
+    CPU -> P1: fin ráfaga CPU
+    P1 -> P1: estado = BLOQUEADO (I/O 4u)
+    P1 -> P1: iniciar I/O hasta t=10
+    
+    Sys -> P4: estado = LISTO
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    
+    RQ -> CPU: despachar P2 (FCFS: próximo en cola)
+    CPU -> P2: estado = CORRIENDO  
+    P2 -> P2: ejecutar ráfaga 1 (6u)
+    Sys -> RQ: [P3, P4] (P5 aún en TIP)
+end
+
+group t=7: P5 entra al sistema
+    Sys -> P5: estado = LISTO
+    Sys -> RQ: [P3, P4, P5] (P2 en CPU)
+end
+
+group t=10: P1 termina I/O
+    P1 -> P1: fin I/O, estado = LISTO
+    Sys -> RQ: [P3, P4, P5, P1] (P1 va al FINAL)
+    note right: FCFS: tras I/O va al final de cola
+end
+
+group t=12: P2 termina ráfaga 1
+    CPU -> P2: fin ráfaga CPU
+    P2 -> P2: estado = BLOQUEADO (I/O 3u hasta t=15)
+    
+    RQ -> CPU: despachar P3 (FCFS: próximo en cola)
+    CPU -> P3: estado = CORRIENDO
+    P3 -> P3: ejecutar ráfaga 1 (3u)
+    Sys -> RQ: [P4, P5, P1] (P2 en I/O)
+end
+
+group t=15: P3 termina ráfaga 1, P2 termina I/O
+    CPU -> P3: fin ráfaga CPU  
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=17)
+    P2 -> P2: fin I/O, estado = LISTO
+    
+    RQ -> CPU: despachar P4 (FCFS: próximo en cola)
+    CPU -> P4: estado = CORRIENDO
+    P4 -> P4: ejecutar ráfaga 1 (4u)
+    Sys -> RQ: [P5, P1, P2] (P3 en I/O)
+end
+
+group t=17: P3 termina I/O
+    P3 -> P3: fin I/O, estado = LISTO
+    Sys -> RQ: [P5, P1, P2, P3] (P3 al final)
+end
+
+group t=19: P4 termina ráfaga 1
+    CPU -> P4: fin ráfaga CPU
+    P4 -> P4: estado = BLOQUEADO (I/O 2u hasta t=21)
+    
+    RQ -> CPU: despachar P5 (FCFS: próximo en cola)
+    CPU -> P5: estado = CORRIENDO
+    P5 -> P5: ejecutar ráfaga 1 (7u)
+    Sys -> RQ: [P1, P2, P3] (P4 en I/O)
+end
+
+note right of RQ
+**Patrón FCFS:**
+- Orden estricto FIFO en Ready Queue
+- No hay expropiación por llegadas
+- Tras I/O: al final de la cola  
+- Efecto convoy posible con jobs largos
+- Predecible pero no óptimo
+end note
+
+@enduml

@@ -1,0 +1,155 @@
+@startuml
+title Shortest Job First (SJF) - Tanda de 5 Procesos Ejemplo  
+participant "Sistema" as Sys
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+participant "P4" as P4
+participant "P5" as P5
+participant "CPU" as CPU
+participant "SJFQueue" as SQ
+
+== Configuración Inicial ==
+note over Sys: TIP=1, TFP=1, TCP=1
+note over P1: P1: arribo=0, rafagas=3, **CPU=5**, IO=4, prio=2
+note over P2: P2: arribo=1, rafagas=2, **CPU=6**, IO=3, prio=1
+note over P3: P3: arribo=3, rafagas=4, **CPU=3** (SHORTEST), IO=2, prio=3
+note over P4: P4: arribo=5, rafagas=3, **CPU=4**, IO=2, prio=2
+note over P5: P5: arribo=6, rafagas=2, **CPU=7**, IO=5, prio=1
+
+== Cronología SJF Non-Preemptive ==
+
+group t=0: Arribo P1
+    Sys -> P1: JOB_LLEGA
+    P1 -> P1: estado = NUEVO
+    Sys -> Sys: TIP = 1u
+end
+
+group t=1: P1 entra al sistema, Arribo P2  
+    Sys -> P1: estado = LISTO
+    Sys -> SQ: insertar P1 (CPU=5)
+    
+    Sys -> P2: JOB_LLEGA
+    P2 -> P2: estado = NUEVO
+    
+    SQ -> CPU: despachar P1 (único disponible)
+    CPU -> P1: estado = CORRIENDO
+    P1 -> P1: ejecutar ráfaga 1 (5u COMPLETA)
+    note right: **SJF:** Non-preemptive, P1 no se interrumpe
+end
+
+group t=2: P2 entra - ESPERA  
+    Sys -> P2: estado = LISTO
+    Sys -> SQ: insertar P2 (CPU=6)
+    note right: **SJF:** P2 espera aunque CPU=6 > P1 ejecutando
+    Sys -> SQ: [P2(CPU=6)] ordenada por duración CPU
+end
+
+group t=3: Arribo P3
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra - JOB MÁS CORTO
+    Sys -> P3: estado = LISTO
+    Sys -> SQ: insertar P3 (CPU=3)
+    note right: **SJF:** P3(CPU=3) < P2(CPU=6) → reordenar cola
+    Sys -> SQ: [P3(CPU=3), P2(CPU=6)] ordenada por duración
+end
+
+group t=5: Arribo P4
+    Sys -> P4: JOB_LLEGA
+    P4 -> P4: estado = NUEVO
+end
+
+group t=6: P1 termina ráfaga 1, P4 entra, Arribo P5
+    CPU -> P1: fin ráfaga CPU
+    P1 -> P1: estado = BLOQUEADO (I/O 4u hasta t=10)
+    
+    Sys -> P4: estado = LISTO
+    Sys -> SQ: insertar P4 (CPU=4) 
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    
+    note right: **SJF:** Seleccionar job más corto disponible
+    note right: P3(CPU=3) < P4(CPU=4) < P2(CPU=6)
+    
+    SQ -> CPU: despachar P3 (shortest job)
+    CPU -> P3: estado = CORRIENDO
+    P3 -> P3: ejecutar ráfaga 1 (3u COMPLETA)
+    Sys -> SQ: [P4(CPU=4), P2(CPU=6)] (P1 en I/O)
+end
+
+group t=7: P5 entra al sistema
+    Sys -> P5: estado = LISTO  
+    Sys -> SQ: insertar P5 (CPU=7)
+    note right: **SJF:** P4(CPU=4) < P2(CPU=6) < P5(CPU=7)
+    Sys -> SQ: [P4(CPU=4), P2(CPU=6), P5(CPU=7)] ordenada
+end
+
+group t=9: P3 termina ráfaga 1
+    CPU -> P3: fin ráfaga CPU
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=11)
+    
+    SQ -> CPU: despachar P4 (shortest available)
+    CPU -> P4: estado = CORRIENDO
+    P4 -> P4: ejecutar ráfaga 1 (4u COMPLETA)
+    Sys -> SQ: [P2(CPU=6), P5(CPU=7)] (P1, P3 en I/O)
+end
+
+group t=10: P1 termina I/O
+    P1 -> P1: fin I/O, estado = LISTO
+    P1 -> P1: ráfaga 2 duración = 5u
+    Sys -> SQ: insertar P1 (CPU=5)
+    note right: **SJF:** P1(CPU=5) < P2(CPU=6) < P5(CPU=7)  
+    Sys -> SQ: [P1(CPU=5), P2(CPU=6), P5(CPU=7)] reordenada
+end
+
+group t=11: P3 termina I/O
+    P3 -> P3: fin I/O, estado = LISTO
+    P3 -> P3: ráfaga 2 duración = 3u (shortest)
+    Sys -> SQ: insertar P3 (CPU=3)
+    note right: **SJF:** P3(CPU=3) shortest again!
+    Sys -> SQ: [P3(CPU=3), P1(CPU=5), P2(CPU=6), P5(CPU=7)]
+end
+
+group t=13: P4 termina ráfaga 1  
+    CPU -> P4: fin ráfaga CPU
+    P4 -> P4: estado = BLOQUEADO (I/O 2u hasta t=15)
+    
+    SQ -> CPU: despachar P3 (shortest job)
+    CPU -> P3: estado = CORRIENDO
+    P3 -> P3: ejecutar ráfaga 2 (3u COMPLETA) 
+    Sys -> SQ: [P1(CPU=5), P2(CPU=6), P5(CPU=7)] (P4 en I/O)
+end
+
+group t=15: P4 termina I/O
+    P4 -> P4: fin I/O, estado = LISTO  
+    P4 -> P4: ráfaga 2 duración = 4u
+    Sys -> SQ: insertar P4 (CPU=4)
+    note right: **SJF:** P4(CPU=4) < P1(CPU=5) < P2(CPU=6) < P5(CPU=7)
+    Sys -> SQ: [P4(CPU=4), P1(CPU=5), P2(CPU=6), P5(CPU=7)]
+end
+
+group t=16: P3 termina ráfaga 2 - SIGUIENTE MÁS CORTO
+    CPU -> P3: fin ráfaga CPU
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=18)
+    
+    SQ -> CPU: despachar P4 (shortest available)
+    CPU -> P4: estado = CORRIENDO  
+    P4 -> P4: ejecutar ráfaga 2 (4u COMPLETA)
+    Sys -> SQ: [P1(CPU=5), P2(CPU=6), P5(CPU=7)] (P3 en I/O)
+end
+
+note right of SQ
+**Patrón SJF Non-Preemptive:**
+- Selección por duración CPU mínima
+- NO interrumpe jobs en ejecución  
+- Reordena cola en cada llegada/retorno I/O
+- Minimiza tiempo promedio respuesta
+- Puede causar starvation jobs largos
+- Predice duración próxima ráfaga
+- Optimal para minimizar waiting time
+end note
+
+@enduml

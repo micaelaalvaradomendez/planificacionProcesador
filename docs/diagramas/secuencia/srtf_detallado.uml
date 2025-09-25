@@ -1,0 +1,161 @@
+@startuml
+title Shortest Remaining Time First (SRTF) - Tanda de 5 Procesos Ejemplo
+participant "Sistema" as Sys  
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+participant "P4" as P4
+participant "P5" as P5
+participant "CPU" as CPU
+participant "SRTFQueue" as SQ
+
+== Configuración Inicial ==
+note over Sys: TIP=1, TFP=1, TCP=1
+note over P1: P1: arribo=0, rafagas=3, **CPU=5**, IO=4, prio=2
+note over P2: P2: arribo=1, rafagas=2, **CPU=6**, IO=3, prio=1  
+note over P3: P3: arribo=3, rafagas=4, **CPU=3**, IO=2, prio=3
+note over P4: P4: arribo=5, rafagas=3, **CPU=4**, IO=2, prio=2
+note over P5: P5: arribo=6, rafagas=2, **CPU=7**, IO=5, prio=1
+
+== Cronología SRTF Preemptive ==
+
+group t=0: Arribo P1
+    Sys -> P1: JOB_LLEGA
+    P1 -> P1: estado = NUEVO
+    Sys -> Sys: TIP = 1u
+end
+
+group t=1: P1 entra al sistema, Arribo P2
+    Sys -> P1: estado = LISTO
+    Sys -> SQ: insertar P1 (remaining=5)
+    
+    Sys -> P2: JOB_LLEGA
+    P2 -> P2: estado = NUEVO
+    
+    SQ -> CPU: despachar P1 (único disponible)
+    CPU -> P1: estado = CORRIENDO  
+    P1 -> P1: remaining=5, ejecutando...
+end
+
+group t=2: P2 entra - SIN EXPROPIACIÓN
+    Sys -> P2: estado = LISTO
+    Sys -> SQ: insertar P2 (remaining=6)
+    note right: **SRTF:** P1(remaining=4) < P2(remaining=6)
+    note right: P1 continúa (menor tiempo restante)
+    Sys -> SQ: [P2(remaining=6)] (P1 en CPU con remaining=4)
+end
+
+group t=3: Arribo P3 - EXPROPIACIÓN CRÍTICA
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra - SHORTEST REMAINING!
+    Sys -> P3: estado = LISTO
+    Sys -> SQ: insertar P3 (remaining=3)
+    note right: **SRTF:** P3(remaining=3) < P1(remaining=3) 
+    note right: EMPATE! Mantener P1 actual
+    
+    Sys -> SQ: [P3(remaining=3), P2(remaining=6)] (P1 remaining=3)
+end
+
+group t=5: Arribo P4, P1 remaining=2  
+    Sys -> P4: JOB_LLEGA
+    P4 -> P4: estado = NUEVO
+    note right: P1 ahora tiene remaining=2 (mínimo)
+end
+
+group t=6: P1 termina ráfaga, P4 entra, Arribo P5
+    CPU -> P1: fin ráfaga CPU (remaining=0)
+    P1 -> P1: estado = BLOQUEADO (I/O 4u hasta t=10)
+    
+    Sys -> P4: estado = LISTO
+    Sys -> SQ: insertar P4 (remaining=4)  
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    
+    note right: **SRTF:** Seleccionar menor remaining time
+    note right: P3(remaining=3) < P4(remaining=4) < P2(remaining=6)
+    
+    SQ -> CPU: despachar P3 (shortest remaining)
+    CPU -> P3: estado = CORRIENDO
+    P3 -> P3: remaining=3, ejecutando...
+    Sys -> SQ: [P4(remaining=4), P2(remaining=6)] (P1 en I/O)
+end
+
+group t=7: P5 entra al sistema
+    Sys -> P5: estado = LISTO
+    Sys -> SQ: insertar P5 (remaining=7)
+    note right: **SRTF:** P3(remaining=2) mínimo, continúa
+    Sys -> SQ: [P4(remaining=4), P2(remaining=6), P5(remaining=7)]
+end
+
+group t=9: P3 termina ráfaga 1
+    CPU -> P3: fin ráfaga CPU (remaining=0)  
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=11)
+    
+    SQ -> CPU: despachar P4 (shortest remaining available)
+    CPU -> P4: estado = CORRIENDO
+    P4 -> P4: remaining=4, ejecutando...
+    Sys -> SQ: [P2(remaining=6), P5(remaining=7)] (P1, P3 en I/O)
+end
+
+group t=10: P1 termina I/O - REINGRESO CON REMAINING=5
+    P1 -> P1: fin I/O, estado = LISTO
+    P1 -> P1: ráfaga 2 remaining=5
+    Sys -> SQ: insertar P1 (remaining=5)
+    note right: **SRTF:** P4(remaining=2) < P1(remaining=5) < P2(remaining=6)
+    note right: P4 continúa (menor remaining)
+    Sys -> SQ: [P1(remaining=5), P2(remaining=6), P5(remaining=7)]
+end
+
+group t=11: P3 termina I/O - EXPROPIACIÓN INMEDIATA!
+    P3 -> P3: fin I/O, estado = LISTO
+    P3 -> P3: ráfaga 2 remaining=3  
+    Sys -> SQ: insertar P3 (remaining=3)
+    note right: **SRTF CRÍTICO:** P4(remaining=2) vs P3(remaining=3)
+    note right: P4 sigue siendo shortest remaining
+    Sys -> SQ: [P3(remaining=3), P1(remaining=5), P2(remaining=6), P5(remaining=7)]
+end
+
+group t=13: P4 termina ráfaga 1 - CAMBIO DE LÍDER
+    CPU -> P4: fin ráfaga CPU (remaining=0)
+    P4 -> P4: estado = BLOQUEADO (I/O 2u hasta t=15)
+    
+    SQ -> CPU: despachar P3 (new shortest remaining)
+    CPU -> P3: estado = CORRIENDO  
+    P3 -> P3: remaining=3, ejecutando...
+    Sys -> SQ: [P1(remaining=5), P2(remaining=6), P5(remaining=7)] (P4 en I/O)
+end
+
+group t=15: P4 termina I/O
+    P4 -> P4: fin I/O, estado = LISTO
+    P4 -> P4: ráfaga 2 remaining=4
+    Sys -> SQ: insertar P4 (remaining=4)
+    note right: **SRTF:** P3(remaining=1) < P4(remaining=4)  
+    note right: P3 mantiene CPU (shortest)
+    Sys -> SQ: [P4(remaining=4), P1(remaining=5), P2(remaining=6), P5(remaining=7)]
+end
+
+group t=16: P3 termina ráfaga 2
+    CPU -> P3: fin ráfaga CPU (remaining=0)
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=18)
+    
+    SQ -> CPU: despachar P4 (shortest remaining available)
+    CPU -> P4: estado = CORRIENDO
+    P4 -> P4: remaining=4, ejecutando...  
+    Sys -> SQ: [P1(remaining=5), P2(remaining=6), P5(remaining=7)] (P3 en I/O)
+end
+
+note right of SQ
+**Patrón SRTF Preemptive:**
+- Expropiación en cada arribo/retorno I/O
+- Compara remaining time vs current job
+- Minimiza response time agresivamente  
+- Mayor overhead TCP que SJF
+- Tracking dinámico remaining times
+- Optimal para response time promedio
+- High context switch frequency
+end note
+
+@enduml

@@ -1,0 +1,236 @@
+@startuml
+title Shortest Remaining Time First (SRTF) - Secuencia Corregida con Expropiación
+participant "Motor" as Motor
+participant "P1" as P1
+participant "P2" as P2  
+participant "P3" as P3
+participant "CPU" as CPU
+participant "ReadyQueue" as RQ
+participant "EventLogger" as Log
+
+== Configuración SRTF ==
+note over Motor
+**Parámetros:** TIP=1, TCP=1, TFP=1
+**Algoritmo:** Shortest Remaining Time First (SÍ expropiativo)
+**Política Ready:** Ordenada por tiempo RESTANTE de trabajo
+**Tie-breaker:** Orden de llegada a READY
+**TCP:** L→C (DISPATCH) y **expropiación por llegada**
+
+**Procesos:**
+P1: arribo=0, trabajo=7, restante=7
+P2: arribo=1, trabajo=2, restante=2 
+P3: arribo=2, trabajo=5, restante=5
+
+**DIFERENCIA vs SJF:**
+- **SRTF:** Expropiativo por tiempo restante
+- **SJF:** No expropiativo por trabajo total
+end note
+
+== Orden de Resolución de Eventos Simultáneos ==
+note over Motor  
+**(1) C→T** (FIN_PROCESO)
+**(2) C→B** (FIN_RAFAGA_CPU → I/O)
+**(3) C→L** (PREEMPTION por llegada) - **con TCP**
+**(4) B→L** (FIN_IO)
+**(5) N→L** (FIN_TIP) + **evaluación expropiación**
+**(6) L→C** (DISPATCH) - **con TCP**
+
+**CRÍTICO SRTF:** Cada N→L puede causar expropiación
+**si tiempo restante del nuevo < tiempo restante del actual**
+end note
+
+== Cronología SRTF ==
+
+group t=0: Arribo P1
+    Motor -> P1: ARRIBO  
+    P1 -> P1: estado = NUEVO, tiempoRestante = 7
+    Motor -> Log: registrar(t=0, ARRIBO, P1, trabajo=7)
+    Motor -> Motor: programar(t=1, FIN_TIP, P1)
+end
+
+group t=1: P1 N→L, Arribo P2
+    Motor -> P1: FIN_TIP
+    P1 -> P1: estado = LISTO, tiempoRestante = 7
+    Motor -> RQ: insertar P1 → [P1(restante=7)]
+    Motor -> Log: registrar(t=1, FIN_TIP, P1, "NUEVO→LISTO")
+    
+    Motor -> P2: ARRIBO
+    P2 -> P2: estado = NUEVO, tiempoRestante = 2
+    Motor -> Log: registrar(t=1, ARRIBO, P2, trabajo=2)
+    Motor -> Motor: programar(t=2, FIN_TIP, P2)
+    
+    == SRTF Dispatch (solo P1 disponible) ==
+    Motor -> RQ: seleccionar menor tiempo restante
+    Motor -> RQ: remover P1 → [vacía]
+    Motor -> CPU: dispatch(P1)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P1: estado = CORRIENDO, tiempoRestante = 7
+    Motor -> Log: registrar(t=1, DISPATCH, P1, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=9, FIN_RAFAGA_CPU, P1)
+    note right: **t=1+1(TCP)+7(trabajo)=9**
+end
+
+group t=2: P2 N→L con EVALUACIÓN SRTF, Arribo P3
+    Motor -> P2: FIN_TIP
+    P2 -> P2: estado = LISTO, tiempoRestante = 2
+    Motor -> RQ: insertar P2 → [P2(restante=2)]
+    Motor -> Log: registrar(t=2, FIN_TIP, P2, "NUEVO→LISTO")
+    
+    == SRTF Evaluación de Expropiación ==
+    Motor -> Motor: evaluar expropiación
+    note right: **P1 en CPU:** tiempoRestante = 7-1 = 6\n**P2 nuevo:** tiempoRestante = 2\n**2 < 6 → EXPROPIAR P1**
+    
+    Motor -> CPU: expropiar P1
+    CPU -> CPU: **cobrar TCP=1** (expropiación)
+    Motor -> P1: estado = LISTO, tiempoRestante = 6
+    Motor -> RQ: insertar P1 ordenado → [P2(restante=2), P1(restante=6)]
+    Motor -> Log: registrar(t=2, PREEMPTION, P1, "CORRIENDO→LISTO", tcp=1, causa="P2 menor restante")
+    
+    Motor -> P3: ARRIBO
+    P3 -> P3: estado = NUEVO, tiempoRestante = 5
+    Motor -> Log: registrar(t=2, ARRIBO, P3, trabajo=5)
+    Motor -> Motor: programar(t=3, FIN_TIP, P3)
+    
+    == SRTF Dispatch del menor restante ==
+    Motor -> RQ: seleccionar menor tiempo restante (P2)
+    Motor -> RQ: remover P2 → [P1(restante=6)]
+    Motor -> CPU: dispatch(P2)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P2: estado = CORRIENDO, tiempoRestante = 2
+    Motor -> Log: registrar(t=2, DISPATCH, P2, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=5, FIN_RAFAGA_CPU, P2)
+    note right: **t=2+1(TCP)+2(trabajo)=5**
+end
+
+group t=3: P3 N→L con EVALUACIÓN SRTF
+    Motor -> P3: FIN_TIP
+    P3 -> P3: estado = LISTO, tiempoRestante = 5
+    Motor -> RQ: insertar P3 ordenado → [P1(restante=6), P3(restante=5)]
+    Motor -> Log: registrar(t=3, FIN_TIP, P3, "NUEVO→LISTO")
+    
+    == SRTF Evaluación de Expropiación ==
+    Motor -> Motor: evaluar expropiación
+    note right: **P2 en CPU:** tiempoRestante = 2-1 = 1\n**P3 nuevo:** tiempoRestante = 5\n**1 < 5 → NO expropiar**
+    
+    note right: **ReadyQueue SRTF:** [P3(5), P1(6)]
+end
+
+group t=5: P2 termina trabajo completo
+    Motor -> P2: FIN_RAFAGA_CPU
+    P2 -> P2: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=5, FIN_RAFAGA_CPU, P2, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=6, FIN_PROCESO, P2)
+    
+    == SRTF Dispatch del menor restante ==
+    Motor -> RQ: seleccionar menor tiempo restante
+    Motor -> RQ: comparar P3(5) vs P1(6)
+    Motor -> RQ: remover P3 → [P1(restante=6)]
+    Motor -> CPU: dispatch(P3)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P3: estado = CORRIENDO, tiempoRestante = 5  
+    Motor -> Log: registrar(t=5, DISPATCH, P3, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=11, FIN_RAFAGA_CPU, P3)
+    note right: **t=5+1(TCP)+5(trabajo)=11**
+end
+
+group t=6: P2 finalización
+    Motor -> P2: FIN_PROCESO
+    Motor -> Log: registrar(t=6, FIN_PROCESO, P2, "proceso completado")
+end
+
+group t=11: P3 termina trabajo completo
+    Motor -> P3: FIN_RAFAGA_CPU
+    P3 -> P3: estado = TERMINADO
+    Motor -> CPU: liberar()  
+    Motor -> Log: registrar(t=11, FIN_RAFAGA_CPU, P3, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=12, FIN_PROCESO, P3)
+    
+    == SRTF Dispatch último proceso ==
+    Motor -> RQ: seleccionar menor tiempo restante (solo P1)
+    Motor -> RQ: remover P1 → [vacía]
+    Motor -> CPU: dispatch(P1)
+    CPU -> CPU: **cobrar TCP=1**
+    Motor -> P1: estado = CORRIENDO, tiempoRestante = 6
+    Motor -> Log: registrar(t=11, DISPATCH, P1, "LISTO→CORRIENDO", tcp=1)
+    Motor -> Motor: programar(t=18, FIN_RAFAGA_CPU, P1)
+    note right: **t=11+1(TCP)+6(restante)=18**
+end
+
+group t=12: P3 finalización  
+    Motor -> P3: FIN_PROCESO
+    Motor -> Log: registrar(t=12, FIN_PROCESO, P3, "proceso completado")
+end
+
+group t=18: P1 termina trabajo completo
+    Motor -> P1: FIN_RAFAGA_CPU
+    P1 -> P1: estado = TERMINADO
+    Motor -> CPU: liberar()
+    Motor -> Log: registrar(t=18, FIN_RAFAGA_CPU, P1, "CORRIENDO→TERMINADO")
+    Motor -> Motor: programar(t=19, FIN_PROCESO, P1)
+    
+    note right: **Simulación completa**\n**ReadyQueue vacía → CPU idle**
+end
+
+group t=19: P1 finalización
+    Motor -> P1: FIN_PROCESO
+    Motor -> Log: registrar(t=19, FIN_PROCESO, P1, "proceso completado")
+end
+
+== Casos Especiales SRTF ==
+group Expropiación múltiple
+    note over Motor
+    **Ejemplo crítico:**
+    - P4: arribo=4, trabajo=1 (restante=1)
+    - P1 en CPU con restante=6
+    
+    **SRTF:** P4 expropiaría inmediatamente a P1
+    **TCP:** Se cobra por cada expropiación
+    **Efecto:** Proceso corto interrumpe proceso largo
+    end note
+end
+
+group SRTF con I/O
+    note over Motor
+    **Con múltiples ráfagas:**  
+    - C→B: proceso mantiene tiempo restante de CPU
+    - B→L: tiempo restante puede haber cambiado
+    - Reevaluación SRTF en cada B→L
+    - Posible nueva expropiación del actual proceso en CPU
+    end note
+end
+
+group Tie-breaker tiempo restante igual
+    note over Motor
+    **Ejemplo:** P5 y P6 con restante=3
+    - P5: llegó a READY en t=10
+    - P6: llegó a READY en t=12
+    
+    **SRTF tie-breaker:** P5 seleccionado
+    **(menor tiempo de llegada a READY)**
+    end note
+end
+
+== Análisis SRTF vs Otros Algoritmos ==
+note over Log
+**Orden de ejecución SRTF:**
+1. P1 (t=1-2): 1 unidad, luego expropiado
+2. P2 (t=2-5): trabajo=2, menor restante  
+3. P3 (t=5-11): trabajo=5, siguiente menor
+4. P1 (t=11-18): restante=6, completar
+
+**Tiempo de Espera:**
+- P1: (2-1) + (11-2) = 10 (fragmentado)
+- P2: (2-2) = 0 (ejecutó inmediatamente)  
+- P3: (5-3) = 2 (esperó poco)
+
+**Tiempo Promedio Espera:** (10+0+2)/3 = 4.0
+
+**TCP total = 5** (vs SJF=3, más expropación)
+- 3 DISPATCH normales + 1 expropiación por P2
+
+**SRTF:** Mejor tiempo promedio pero más TCP
+**por expropiaciones frecuentes**
+end note
+
+@enduml

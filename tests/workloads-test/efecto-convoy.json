@@ -1,0 +1,26 @@
+[
+  {
+    "name": "ProcesoCortísimo",
+    "tiempoArribo": 0,
+    "rafagasCPU": 1,
+    "duracionRafagaCPU": 1,
+    "duracionRafagaES": 0,
+    "prioridad": 50
+  },
+  {
+    "name": "ProcesoLargo",
+    "tiempoArribo": 0,
+    "rafagasCPU": 1,
+    "duracionRafagaCPU": 10,
+    "duracionRafagaES": 0,
+    "prioridad": 50
+  },
+  {
+    "name": "ProcesoMedio", 
+    "tiempoArribo": 2,
+    "rafagasCPU": 1,
+    "duracionRafagaCPU": 5,
+    "duracionRafagaES": 0,
+    "prioridad": 50
+  }
+]

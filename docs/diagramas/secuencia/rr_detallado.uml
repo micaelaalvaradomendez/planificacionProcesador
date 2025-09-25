@@ -1,0 +1,166 @@
+@startuml  
+title Round Robin (RR) - Q=4 - Tanda de 5 Procesos Ejemplo
+participant "Sistema" as Sys
+participant "P1" as P1
+participant "P2" as P2
+participant "P3" as P3
+participant "P4" as P4 
+participant "P5" as P5
+participant "CPU" as CPU
+participant "ReadyQueue" as RQ
+participant "Timer" as T
+
+== Configuración Inicial ==
+note over Sys: TIP=1, TFP=1, TCP=1, Quantum=4
+note over P1: P1: arribo=0, rafagas=3, CPU=5, IO=4, prio=2
+note over P2: P2: arribo=1, rafagas=2, CPU=6, IO=3, prio=1
+note over P3: P3: arribo=3, rafagas=4, CPU=3, IO=2, prio=3
+note over P4: P4: arribo=5, rafagas=3, CPU=4, IO=2, prio=2
+note over P5: P5: arribo=6, rafagas=2, CPU=7, IO=5, prio=1
+
+== Cronología Round Robin ==
+
+group t=0: Arribo P1
+    Sys -> P1: JOB_LLEGA
+    P1 -> P1: estado = NUEVO
+    Sys -> Sys: TIP = 1u
+end
+
+group t=1: P1 entra, Arribo P2
+    Sys -> P1: estado = LISTO
+    Sys -> RQ: agregar P1  
+    Sys -> P2: JOB_LLEGA
+    P2 -> P2: estado = NUEVO
+    
+    RQ -> CPU: despachar P1
+    CPU -> P1: estado = CORRIENDO
+    T -> T: iniciar quantum=4, fin en t=5
+    P1 -> P1: ejecutar CPU (min(5, 4) = 4u)
+end
+
+group t=2: P2 entra al sistema
+    Sys -> P2: estado = LISTO
+    Sys -> RQ: agregar P2 [P2] (P1 en CPU con Q=3 restante)
+end
+
+group t=3: Arribo P3
+    Sys -> P3: JOB_LLEGA
+    P3 -> P3: estado = NUEVO
+end
+
+group t=4: P3 entra al sistema
+    Sys -> P3: estado = LISTO
+    Sys -> RQ: agregar P3 [P2, P3] (P1 con Q=2 restante)
+end
+
+group t=5: EXPIRA QUANTUM P1, Arribo P4
+    T -> CPU: QUANTUM_EXPIRADO
+    CPU -> P1: expropiación, estado = LISTO
+    P1 -> P1: ráfaga parcial ejecutada (4u), quedan 1u
+    Sys -> Sys: **TCP = 1u** (cambio de contexto)
+    Sys -> P4: JOB_LLEGA
+    P4 -> P4: estado = NUEVO
+    
+    note right: **RR Critical:** TCP por expiración quantum
+    Sys -> RQ: agregar P1 al final [P2, P3, P1]
+end
+
+group t=6: Despacho P2, P4 entra, Arribo P5  
+    RQ -> CPU: despachar P2 (próximo en cola RR)
+    CPU -> P2: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=10
+    P2 -> P2: ejecutar CPU (min(6, 4) = 4u)
+    
+    Sys -> P4: estado = LISTO
+    Sys -> P5: JOB_LLEGA
+    P5 -> P5: estado = NUEVO
+    Sys -> RQ: [P3, P1, P4] (P2 en CPU)
+end
+
+group t=7: P5 entra al sistema
+    Sys -> P5: estado = LISTO
+    Sys -> RQ: [P3, P1, P4, P5] (P2 con Q=3 restante)
+end
+
+group t=10: EXPIRA QUANTUM P2
+    T -> CPU: QUANTUM_EXPIRADO  
+    CPU -> P2: expropiación, estado = LISTO
+    P2 -> P2: ráfaga parcial (4u), quedan 2u
+    Sys -> Sys: **TCP = 1u**
+    Sys -> RQ: agregar P2 al final [P3, P1, P4, P5, P2]
+end
+
+group t=11: Despacho P3
+    RQ -> CPU: despachar P3
+    CPU -> P3: estado = CORRIENDO  
+    T -> T: quantum=4, fin en t=15
+    P3 -> P3: ejecutar CPU (min(3, 4) = 3u completos)
+    Sys -> RQ: [P1, P4, P5, P2] (P3 en CPU)
+end
+
+group t=14: P3 TERMINA RÁFAGA (antes de quantum)
+    CPU -> P3: fin ráfaga natural
+    P3 -> P3: estado = BLOQUEADO (I/O 2u hasta t=16)
+    note right: **RR:** Fin natural, NO hay TCP
+    
+    RQ -> CPU: despachar P1 (próximo en cola)
+    CPU -> P1: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=18  
+    P1 -> P1: ejecutar CPU restante (1u completo)
+    Sys -> RQ: [P4, P5, P2] (P3 en I/O)
+end
+
+group t=15: P1 TERMINA RÁFAGA
+    CPU -> P1: fin ráfaga natural
+    P1 -> P1: estado = BLOQUEADO (I/O 4u hasta t=19)
+    note right: **RR:** Fin natural, NO hay TCP
+    
+    RQ -> CPU: despachar P4
+    CPU -> P4: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=19
+    P4 -> P4: ejecutar CPU (min(4, 4) = 4u completos)
+    Sys -> RQ: [P5, P2] (P1 y P3 en I/O)
+end
+
+group t=16: P3 termina I/O
+    P3 -> P3: fin I/O, estado = LISTO
+    Sys -> RQ: [P5, P2, P3] (P3 al final cola RR)
+end
+
+group t=19: P4 TERMINA + EXPIRA Q, P1 termina I/O
+    CPU -> P4: fin ráfaga natural (justo en quantum)
+    P4 -> P4: estado = BLOQUEADO (I/O 2u hasta t=21)
+    P1 -> P1: fin I/O, estado = LISTO
+    note right: **RR:** Fin natural en quantum, NO TCP
+    
+    RQ -> CPU: despachar P5
+    CPU -> P5: estado = CORRIENDO
+    T -> T: quantum=4, fin en t=23
+    P5 -> P5: ejecutar CPU (min(7, 4) = 4u)
+    Sys -> RQ: [P2, P3, P1] (P4 en I/O)
+end
+
+group t=21: P4 termina I/O
+    P4 -> P4: fin I/O, estado = LISTO  
+    Sys -> RQ: [P2, P3, P1, P4] (P4 al final)
+end
+
+group t=23: EXPIRA QUANTUM P5
+    T -> CPU: QUANTUM_EXPIRADO
+    CPU -> P5: expropiación, estado = LISTO
+    P5 -> P5: ráfaga parcial (4u), quedan 3u  
+    Sys -> Sys: **TCP = 1u**
+    Sys -> RQ: agregar P5 al final [P2, P3, P1, P4, P5]
+end
+
+note right of RQ
+**Patrón Round Robin:**
+- Quantum fijo Q=4 con timer
+- TCP SOLO por expiración quantum  
+- NO TCP por fin natural de ráfaga
+- Cola circular: expropado → final
+- Fairness garantizado
+- Overhead TCP vs throughput
+end note
+
+@enduml
