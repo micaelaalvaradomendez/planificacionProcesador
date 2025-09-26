@@ -97,10 +97,14 @@ package "src" as SRC {
         end note
 
         note right of engine_ts
-          **⏳ Pendiente**
-          • Bucle principal de simulación (run)
-          • Manejo de reloj, despacho, E/S y costos
-          • Construcción de la traza
+          **✓ Implementado** <<mod - Paso 5>>
+          • runFCFSSandbox() - motor FCFS completo
+          • Guard anti-doble-dispatch por tick
+          • Estado runtime por proceso (idxRafaga, restante)
+          • Costos TIP/TCP/TFP: gatillo release+despacho
+          • TFP no bloquea CPU (liberación en tFinCPU)
+          • Bloqueos E/S: B→L @ t+bloqueoES (default 25ms)
+          • Construcción de traza (slices + events)
         end note
       }
 
@@ -121,21 +125,25 @@ package "src" as SRC {
         srtn_ts -[hidden]down-> priority_ts
 
         note right of scheduler_ts
-          **⏳ Pendiente**
-          • Interfaz/contrato de planificadores (IScheduler)
-          • Enum/Tipo de políticas soportadas
+          **✓ Implementado**
+          • IScheduler - interfaz completa de planificadores
+          • BaseScheduler - clase base abstracta
+          • Métodos: onAdmit, onReady, onBlock, onFinish, next()
         end note
 
         note right of ready_queue_ts
-          **⏳ Pendiente**
-          • Implementaciones de colas de listos
-          • FIFO y utilidades base (min-queue opcional)
+          **✓ Implementado**
+          • ReadyQueue - cola FIFO simple
+          • Métodos: enqueue, dequeue, isEmpty, clear, toArray
+          • Manejo de PIDs en orden de llegada
         end note
 
         note right of fcfs_ts
-          **⏳ Pendiente**
-          • Planificador FCFS
-          • Integración con cola FIFO
+          **✓ Implementado**
+          • SchedulerFCFS - First Come First Served
+          • Extiende BaseScheduler
+          • Política no expropiativa (FIFO puro)
+          • Integrado con motor sandbox
         end note
 
         note right of rr_ts
@@ -223,8 +231,20 @@ package "src" as SRC {
     package "test" as TEST {
       rectangle "test-paso1-modelo.ts" as test_paso1_ts
       rectangle "test-paso2-engine.ts" as test_paso2_ts
+      rectangle "test-fcfs-sandbox.ts" as test_fcfs_sandbox_ts
+      rectangle "debug-golden-b.ts" as debug_golden_b_ts
+      rectangle "test-motor-completo.ts" as test_motor_completo_ts
+      rectangle "test-paso4-bloqueos.ts" as test_paso4_bloqueos_ts
+      rectangle "test-paso5-costos.ts" as test_paso5_costos_ts
+      rectangle "test-paso5-complejo.ts" as test_paso5_complejo_ts
       
       test_paso1_ts -[hidden]down-> test_paso2_ts
+      test_paso2_ts -[hidden]down-> test_fcfs_sandbox_ts
+      test_fcfs_sandbox_ts -[hidden]down-> debug_golden_b_ts
+      debug_golden_b_ts -[hidden]down-> test_motor_completo_ts
+      test_motor_completo_ts -[hidden]down-> test_paso4_bloqueos_ts
+      test_paso4_bloqueos_ts -[hidden]down-> test_paso5_costos_ts
+      test_paso5_costos_ts -[hidden]down-> test_paso5_complejo_ts
 
       note right of test_paso1_ts
         **✓ Implementado**
@@ -238,6 +258,51 @@ package "src" as SRC {
         • Tests de aceptación del Paso 2
         • Validación de cola de eventos
         • Verificación de tipos del motor
+      end note
+
+      note right of test_fcfs_sandbox_ts
+        **✓ Implementado**
+        • Validación de Golden Cases A y B
+        • Test de motor FCFS sandbox básico
+        • Verificación de slices esperados
+      end note
+
+      note right of debug_golden_b_ts
+        **✓ Implementado**
+        • Debug detallado del Golden B
+        • Análisis de eventos paso a paso
+        • Verificación de anti-doble-dispatch
+      end note
+
+      note right of test_motor_completo_ts
+        **✓ Implementado**
+        • Test comprensivo del motor FCFS
+        • Validación de múltiples casos de prueba
+        • Documentación de comportamiento esperado
+      end note
+
+      note right of test_paso4_bloqueos_ts
+        **✓ Implementado** <<Paso 4>>
+        • Gate test con bloqueoES=25ms
+        • Validación de latencia E/S correcta
+        • Verificación "B→L no consume CPU"
+        • Confirmación de tiempos de bloqueo
+      end note
+
+      note right of test_paso5_costos_ts
+        **✓ Implementado** <<Paso 5>>
+        • Gate test TIP=1, TCP=1, TFP=1
+        • Validación modelo estricto: P1: 2–7, P2: 8–12
+        • Verificación duraciones inalteradas
+        • Confirmación TFP no bloquea CPU
+      end note
+
+      note right of test_paso5_complejo_ts
+        **✓ Implementado** <<Paso 5>>
+        • Caso complejo: costos + E/S combinados
+        • Múltiples slices con TIP/TCP/TFP
+        • Validación orden temporal correcto
+        • Verificación liberación CPU en tFinCPU
       end note
     }
   }
@@ -303,16 +368,23 @@ TEST -[hidden]down-> ROUTES
 ' Motor y tipos
 engine_ts --> engine_types_ts : usa tipos
 engine_ts --> queue_ts : utiliza cola
-engine_ts --> scheduler_ts : orquesta
+engine_ts --> fcfs_ts : usa SchedulerFCFS
 engine_ts --> proceso_ts : lee modelo
-engine_ts --> costos_ts : aplica TIP/TCP/TFP
+engine_ts --> costos_ts : aplica costos
 
 ' Planificadores y cola
-fcfs_ts --> ready_queue_ts
+scheduler_ts --> ready_queue_ts : usa ReadyQueue
+fcfs_ts --> scheduler_ts : extiende BaseScheduler
+fcfs_ts --> ready_queue_ts : hereda uso
 rr_ts --> ready_queue_ts
 spn_ts --> ready_queue_ts
 srtn_ts --> ready_queue_ts
 priority_ts --> ready_queue_ts
+
+' Tests y motor
+test_fcfs_sandbox_ts --> engine_ts : prueba runFCFSSandbox
+debug_golden_b_ts --> engine_ts : debug motor
+test_motor_completo_ts --> engine_ts : test comprensivo
 
 ' Gantt y esquemas
 builder_ts --> schema_ts
@@ -335,8 +407,16 @@ legend bottom
 • Las flechas muestran dependencias principales (informativas)
 
 **Estados de implementación:**
-• **✓ Implementado** - Código completo y testeado
+• **✓ Implementado** - Código completo y testeado (Golden Cases validados)
 • **⏳ Pendiente** - Archivos creados, pendiente implementación
+
+**Cambios (Paso 5):**
+• TIP: N→L @ arribo + TIP
+• TCP: slice inicia en (L→C.t + TCP); no descuenta ráfaga/quantum
+• TFP: C→T @ fin + TFP (no CPU)
+• Fin total: gatillo L→C @ tFinCPU (release+despacho), C→T administrativo
+• **Corrección crítica**: CPU se libera en tFinCPU, no en tFinCPU+TFP
+• Eventos C→T son administrativos y no bloquean despacho del siguiente proceso
 
 **Colores por Módulo:**
 • **model** - Tipos y entidades base

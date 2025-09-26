@@ -1,0 +1,20 @@
+@startuml 03-actividad-despacho
+title Actividad: Despacho mínimo (FCFS sin costos)
+
+start
+:Evento (arribo o tick del motor);
+
+if (CPU libre?) then (Sí)
+  :pid = Scheduler.elegirSiguiente();
+  :pid = ReadyQueue.popHead();
+  if (pid existe?) then (Sí)
+    :dispatch(pid);  ## L→C
+  else (No)
+    :no hay trabajo; 
+  endif
+else (No)
+  :continuar (no expropiar);
+endif
+
+stop
+@enduml

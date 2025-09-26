@@ -1,0 +1,54 @@
+@startuml 04-secuencia-io
+title Secuencia de E/S – fin de ráfaga intermedia ⇒ C→B@t ⇒ B→L@(t+bloqueoES)
+
+actor "Motor" as ENG
+participant "EventQueue\n(t, prioridad, _seq)" as EQ
+participant "Scheduler\n(FCFS u otro)" as SCH
+participant "CPU" as CPU
+participant "Proceso(pid)" as P
+participant "E/S" as IO
+
+== Despacho y ejecución de ráfaga CPU ==
+ENG -> EQ : push( L→C @ t0, pid )
+EQ -> ENG : pop() = L→C @ t0
+ENG -> SCH : next() // elige pid
+ENG -> CPU : asignar(pid)\nabrir slice [t0, …]
+note over CPU,P
+  Ejecuta la ráfaga actual de CPU del proceso pid.
+  Política: no expropiativa en este paso (FCFS sandbox).
+end note
+
+== Fin de ráfaga intermedia ==
+ENG -> EQ : push( C→B @ t, pid )  ' fin de ráfaga CPU
+EQ -> ENG : pop() = C→B @ t
+ENG -> CPU : liberar(pid)\ncerrar slice [t0, t]
+ENG -> P : estado = B   ' BLOQUEADO (espera E/S)
+ENG -> EQ : push( B→L @ (t + bloqueoES), pid )
+note right
+  Programación del fin de E/S:
+  • Si bloqueoES = 0 ⇒ B→L @ t (mismo tick).
+  • B→L NO consume CPU.
+end note
+
+== Fin de E/S, reingreso a Ready ==
+EQ -> ENG : pop() = B→L @ (t + bloqueoES)
+ENG -> P : estado = L   ' vuelve a READY
+ENG -> SCH : onReady(pid)\nenqueue(pid)
+ENG -> CPU : ¿CPU libre?
+alt CPU libre
+  ENG -> EQ : push( L→C @ (t + bloqueoES), pid )
+else CPU ocupada
+  note over SCH
+    El proceso queda en la ready queue hasta que el motor
+    despache L→C en su turno.
+  end note
+end
+
+== Observaciones ==
+note over IO
+  B→L (fin de E/S) es un evento de “notificación”:
+  • NO usa CPU.
+  • Sólo cambia B→L y habilita futuro L→C.
+end note
+
+@enduml

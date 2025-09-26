@@ -9,6 +9,11 @@ note right
   • Primero por tiempo t ascendente
   • Luego por prioridad ascendente (1 mejor)
   • A igualdad de (t, prioridad) mantener orden de inserción
+  
+  **Guard por tick:**
+  • A lo sumo un L→C por tiempo t
+  • Comparador: (t asc, prioridad asc) + orden estable
+  • Con bloqueoES=0, C→B y B→L coinciden en t; evita doble L→C@t
 end note
 
 repeat
@@ -16,11 +21,11 @@ repeat
 
   if (¿evento válido?) then (sí)
     if (tipo == "C→T") then (sí)
-      :Aplicar transición C→T (finalización)\n• validar legalidad\n• actualizar estado=F\n• contabilizar TFP;
+      :Aplicar transición C→T (finalización)\n• validar legalidad\n• actualizar estado=F\n• Evento **C→T @ t_fin + TFP** (no CPU). La CPU queda libre desde t_fin;
       :Liberar CPU / recursos;
       :Reevaluar despacho (si hay procesos en L, planificador puede generar L→C);
     elseif (tipo == "C→B") then (sí)
-      :Aplicar transición C→B (bloqueo por E/S)\n• validar legalidad\n• estado=B\n• programar fin de E/S => (t + bloqueoES, B→L);
+      :Aplicar transición C→B (bloqueo por E/S)\n• validar legalidad\n• estado=B\n• **Programar B→L @(t + bloqueoES)** (si bloqueoES=0 coincide con t);
       :Liberar CPU;
       :Reevaluar despacho (posible L→C);
     elseif (tipo == "C→L") then (sí)
@@ -35,6 +40,13 @@ repeat
       :Opcional: evaluar despacho inmediato (L→C) si CPU libre;
     elseif (tipo == "L→C") then (sí)
       :Aplicar transición L→C (despacho a CPU)\n• validar legalidad\n• estado=C;
+      note right
+        FCFS (sandbox): programa fin de ráfaga actual a t + restante.
+        Si era la última → C→T; si no → C→B.
+        Con bloqueoES=0, se agenda B→L al mismo t del C→B (por cola estable).
+        **TCP**: tStart = t + TCP → los slices comienzan en tStart 
+        (no contaminar ráfaga/quantum).
+      end note
       :Programar siguiente evento de CPU según ráfaga:\n– Si era última ráfaga: programar C→T\n– Si quedan ráfagas: programar C→B\n– Si política expropiativa: también programar C→L al expirar quantum;
     else (desconocido)
       :Descartar / loggear evento inválido;

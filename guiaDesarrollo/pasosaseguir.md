@@ -58,7 +58,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 3) FCFS “sandbox” sin costos (sched/fcfs.ts + engine/engine.ts)
+# 3) FCFS “sandbox” sin costos (sched/fcfs.ts + engine/engine.ts) IMPLEMENTADO
 
 ## Qué implementás
 
@@ -93,7 +93,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 4) Bloqueos de E/S correctos (engine/engine.ts)
+# 4) Bloqueos de E/S correctos (engine/engine.ts) IMPLEMENTADO
 
 ## Qué implementás
 
@@ -120,7 +120,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 5) Costos TIP / TCP / TFP (engine/engine.ts)
+# 5) Costos TIP / TCP / TFP (engine/engine.ts) IMPLEMENTADO
 
 ## Qué implementás
 

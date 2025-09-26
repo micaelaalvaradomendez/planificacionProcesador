@@ -2,42 +2,8 @@
 
 ---
 
-# 3) FCFS “sandbox” (sin costos)
 
-**Diagramas:**
 
-* **Diagrama de Secuencia (FCFS)** — `03-secuencia-FCFS.puml`
-  Objetivo: interacción `Engine ↔ Scheduler ↔ ReadyQueue ↔ CPU`.
-  Debe incluir: arribos, `onArribo`, `elegirSiguiente`, comienzo y fin de ráfaga, `C→T`.
-* **Diagrama de Actividad (Despacho mínimo)** — `03-actividad-despacho.puml`
-  Objetivo: decisión “CPU libre → L→C; si no, continuar”.
-
----
-
-# 4) Bloqueos de E/S
-
-**Diagramas:**
-
-* **Diagrama de Secuencia (E/S)** — `04-secuencia-io.puml`
-  Objetivo: fin de ráfaga intermedia → `C→B@t` → `B→L@t+bloqueoES`.
-  Debe incluir: confirmación de que B→L **no** consume CPU.
-* **Diagrama de Estados (con B)** — `04-estados-proceso-con-io.puml`
-  Objetivo: destacar que **solo** si quedan ráfagas se pasa a B; si no, C→T.
-
----
-
-# 5) Costos TIP / TCP / TFP
-
-**Diagramas:**
-
-* **Diagrama de Secuencia (Costos en tiempo)** — `05-secuencia-costos.puml`
-  Objetivo: mostrar desplazamientos temporales:
-  TIP desplaza N→L; TCP desplaza el **inicio del slice** (L→C); TFP desplaza C→T.
-  Debe incluir: notas “TIP/TCP/TFP no son CPU”.
-* **Diagrama de Actividad (Aplicación de costos)** — `05-actividad-costos.puml`
-  Objetivo: puntos exactos donde se aplican costos, sin contaminar ráfaga/quantum.
-
----
 
 # 6) Round Robin (quantum)
 
