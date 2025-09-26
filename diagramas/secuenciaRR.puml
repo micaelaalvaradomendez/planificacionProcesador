@@ -14,10 +14,11 @@ EQ  -> ENG : pop() = L→C @ t_d
 ENG -> CPU : reservar CPU (TCP)
 ENG -> CPU : abrir slice en t_s = t_d + TCP
 note right of CPU
-  RR: t_s = t_d + TCP
-  ráfagaRestante = r
-  quantum = q
-  runFor = min(r, q)
+  t_s = t_d + TCP
+  Se programan en paralelo:
+    • C→B @ (t_s + r)   (o C→T si última)
+    • C→L @ (t_s + q)   (timer RR)
+  Si coinciden: C→B/C→T (prio 2/1) gana a C→L (prio 3).
 end note
 
 == Programación de fin de rebanada ==

@@ -9,7 +9,7 @@ function cmp(a: InternalEvent, b: InternalEvent): number {
   if (a.t !== b.t) return a.t - b.t;
   const pa = EVENT_PRIORITY[a.type];
   const pb = EVENT_PRIORITY[b.type];
-  if (pa !== pb) return pa - pb;
+  if (pa !== pb) return pa - pb; // menor número = mayor prioridad
   return a._seq - b._seq; // estabilidad por orden de llegada
 }
 

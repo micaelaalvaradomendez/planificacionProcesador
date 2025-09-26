@@ -410,13 +410,10 @@ legend bottom
 • **✓ Implementado** - Código completo y testeado (Golden Cases validados)
 • **⏳ Pendiente** - Archivos creados, pendiente implementación
 
-**Cambios (Paso 5):**
-• TIP: N→L @ arribo + TIP
-• TCP: slice inicia en (L→C.t + TCP); no descuenta ráfaga/quantum
-• TFP: C→T @ fin + TFP (no CPU)
-• Fin total: gatillo L→C @ tFinCPU (release+despacho), C→T administrativo
-• **Corrección crítica**: CPU se libera en tFinCPU, no en tFinCPU+TFP
-• Eventos C→T son administrativos y no bloquean despacho del siguiente proceso
+**Cambios (Paso 6):**
+• scheduler/rr.ts <<nuevo>>: RR con quantum, re-encolado en desalojo
+• engine.ts <<mod>>: programar C→L @ t_s+q; empates fin ráfaga > timer;
+                     handler C→L actualiza r.restante y re-encola
 
 **Colores por Módulo:**
 • **model** - Tipos y entidades base

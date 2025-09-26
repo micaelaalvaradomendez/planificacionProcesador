@@ -46,6 +46,8 @@ repeat
         Con bloqueoES=0, se agenda B→L al mismo t del C→B (por cola estable).
         **TCP**: tStart = t + TCP → los slices comienzan en tStart 
         (no contaminar ráfaga/quantum).
+        
+        En RR: programar C→L @ t_s+q (timer) en paralelo con fin de ráfaga.
       end note
       :Programar siguiente evento de CPU según ráfaga:\n– Si era última ráfaga: programar C→T\n– Si quedan ráfagas: programar C→B\n– Si política expropiativa: también programar C→L al expirar quantum;
     else (desconocido)

@@ -20,8 +20,9 @@ elseif (tipo == "C→T") then (sí)
   :cerrar slice si correspondía en tFinCPU;\nSCH.onFinish(pid);
   note right : C→T es administrativo; no despachar aquí
 elseif (tipo == "C→L") then (sí)
-  :cerrar slice [t_s, t];\nliberar CPU;
-  :rafagaRestante := rafagaRestante - runFor;
+  :Si cpu.pid ≠ pid → ignorar C→L (stale);
+  :rafagaRestante := rafagaRestante – (t – t_s)  // sólo CPU;
+  :onDesalojoActual(pid) → re‑encolar al final;
   if (rafagaRestante > 0) then (sí)
     :SCH.onDesalojoActual(pid);\nREADY.enqueue(pid);
   else (no)
