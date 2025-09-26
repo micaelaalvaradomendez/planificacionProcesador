@@ -20,15 +20,11 @@ elseif (tipo == "C→T") then (sí)
   :cerrar slice si correspondía en tFinCPU;\nSCH.onFinish(pid);
   note right : C→T es administrativo; no despachar aquí
 elseif (tipo == "C→L") then (sí)
-  :Si cpu.pid ≠ pid → ignorar C→L (stale);
-  :rafagaRestante := rafagaRestante – (t – t_s)  // sólo CPU;
-  :onDesalojoActual(pid) → re‑encolar al final;
-  if (rafagaRestante > 0) then (sí)
-    :SCH.onDesalojoActual(pid);\nREADY.enqueue(pid);
-  else (no)
-    :(raro) si justo llegó a 0\ndebería haberse tratado como fin de ráfaga;
-  endif
-  :despacharSiLibre(t);\n' puede o no reingresar el mismo pid
+  :Si cpu.pid ≠ pid → ignorar (stale);
+  :runFor = t - t_s;
+  :rafagaRestante -= runFor;
+  :onDesalojoActual(pid) → READY.enqueue(pid);
+  :despacharSiLibre(t);
 elseif (tipo == "B→L") then (sí)
   :avanzar a próxima ráfaga;\nREADY.enqueue(pid);
   :despacharSiLibre(t);

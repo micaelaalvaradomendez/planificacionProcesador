@@ -97,14 +97,19 @@ package "src" as SRC {
         end note
 
         note right of engine_ts
-          **✓ Implementado** <<mod - Paso 5>>
+          **✓ Implementado** <<mod - Paso 7>>
           • runFCFSSandbox() - motor FCFS completo
+          • runRR() - motor Round Robin con quantum
+          • runSPN() - motor SPN (no expropiativo) <<nuevo>>
+          • runSRTN() - motor SRTN con expropiación <<nuevo>>
+          • getNextBurst() / getRemainingNow() helpers
+          • tryPreemptIfNeeded() - hook expropiación SRTN
           • Guard anti-doble-dispatch por tick
           • Estado runtime por proceso (idxRafaga, restante)
-          • Costos TIP/TCP/TFP: gatillo release+despacho
-          • TFP no bloquea CPU (liberación en tFinCPU)
-          • Bloqueos E/S: B→L @ t+bloqueoES (default 25ms)
-          • Construcción de traza (slices + events)
+          • Costos TIP/TCP/TFP integrados
+          • Bloqueos E/S: B→L @ t+bloqueoES
+          • Validación C→T stale por expectedSliceStart
+          • NOW timer para SRTN
         end note
       }
 
@@ -125,10 +130,12 @@ package "src" as SRC {
         srtn_ts -[hidden]down-> priority_ts
 
         note right of scheduler_ts
-          **✓ Implementado**
+          **✓ Implementado** <<mod>>
           • IScheduler - interfaz completa de planificadores
           • BaseScheduler - clase base abstracta
           • Métodos: onAdmit, onReady, onBlock, onFinish, next()
+          • onDesalojoActual?() - re-encolado opcional
+          • compareForPreemption?() - hook expropiación opcional
         end note
 
         note right of ready_queue_ts
@@ -147,21 +154,27 @@ package "src" as SRC {
         end note
 
         note right of rr_ts
-          **⏳ Pendiente**
-          • Planificador Round Robin
-          • Manejo de quantum y reencolado
+          **✓ Implementado**
+          • SchedulerRR - Round Robin con quantum
+          • onDesalojoActual() - re-encolado al final
+          • getQuantum() - reinicio en cada L→C
         end note
 
         note right of spn_ts
-          **⏳ Pendiente**
-          • Planificador SPN (no expropiativo)
-          • Selección por ráfaga más corta siguiente
+          **✓ Implementado** <<nuevo>>
+          • SchedulerSPN (no expropiativo)
+          • Selección por ráfaga próxima más corta
+          • Orden estable con seq para empates
+          • compareForPreemption() → false (nunca expropia)
         end note
 
         note right of srtn_ts
-          **⏳ Pendiente**
-          • Planificador SRTN (expropiativo)
-          • Selección por menor tiempo restante
+          **✓ Implementado** <<nuevo>>
+          • SchedulerSRTN (expropiativo)
+          • Selección por menor restante (dinámico)
+          • Expropia en N→L/B→L si nuevo < actual
+          • getRemaining() y getNow() para tiempo dinámico
+          • compareForPreemption() → lógica de expropiación
         end note
 
         note right of priority_ts
@@ -237,6 +250,9 @@ package "src" as SRC {
       rectangle "test-paso4-bloqueos.ts" as test_paso4_bloqueos_ts
       rectangle "test-paso5-costos.ts" as test_paso5_costos_ts
       rectangle "test-paso5-complejo.ts" as test_paso5_complejo_ts
+      rectangle "test-rr-gate.ts" as test_rr_gate_ts
+      rectangle "test-spn-basic.ts" as test_spn_basic_ts
+      rectangle "test-srtn-gate.ts" as test_srtn_gate_ts
       
       test_paso1_ts -[hidden]down-> test_paso2_ts
       test_paso2_ts -[hidden]down-> test_fcfs_sandbox_ts
@@ -245,6 +261,9 @@ package "src" as SRC {
       test_motor_completo_ts -[hidden]down-> test_paso4_bloqueos_ts
       test_paso4_bloqueos_ts -[hidden]down-> test_paso5_costos_ts
       test_paso5_costos_ts -[hidden]down-> test_paso5_complejo_ts
+      test_paso5_complejo_ts -[hidden]down-> test_rr_gate_ts
+      test_rr_gate_ts -[hidden]down-> test_spn_basic_ts
+      test_spn_basic_ts -[hidden]down-> test_srtn_gate_ts
 
       note right of test_paso1_ts
         **✓ Implementado**
@@ -303,6 +322,31 @@ package "src" as SRC {
         • Múltiples slices con TIP/TCP/TFP
         • Validación orden temporal correcto
         • Verificación liberación CPU en tFinCPU
+      end note
+
+      note right of test_rr_gate_ts
+        **✅ Implementado** <<Paso 6>>
+        • Gate test Round Robin q=2
+        • P1:0–2, P2:2–4, P1:4–6, P2:6–8, P1:8–9, P2:9–10
+        • Validación con TCP=1 (desplazamiento +1)
+        • Bug C→T prematuro corregido
+      end note
+
+      note right of test_spn_basic_ts
+        **⏳ Recomendado** <<Paso 7>>
+        • Test básico de SPN (no expropiativo)
+        • Validación selección por ráfaga más corta
+        • Verificación orden estable en empates
+        • Confirmación no expropiación durante ejecución
+      end note
+
+      note right of test_srtn_gate_ts
+        **⏳ Recomendado** <<Paso 7>>
+        • Gate test SRTN (clásico)
+        • P1:arr=0[8], P2:arr=2[3] → [P1:0-2, P2:2-5, P1:5-11]
+        • Validación expropiación en t=2
+        • Confirmación restante(P1)=6 > restante(P2)=3
+        • TCP aplica en L→C post-expropiación
       end note
     }
   }
@@ -410,10 +454,21 @@ legend bottom
 • **✓ Implementado** - Código completo y testeado (Golden Cases validados)
 • **⏳ Pendiente** - Archivos creados, pendiente implementación
 
-**Cambios (Paso 6):**
-• scheduler/rr.ts <<nuevo>>: RR con quantum, re-encolado en desalojo
-• engine.ts <<mod>>: programar C→L @ t_s+q; empates fin ráfaga > timer;
-                     handler C→L actualiza r.restante y re-encola
+**Cambios (Paso 7):**
+• scheduler/spn.ts <<nuevo>>: SPN no expropiativo, selección por ráfaga próxima
+• scheduler/srtn.ts <<nuevo>>: SRTN expropiativo, restante dinámico + expropiación
+• scheduler/scheduler.ts <<mod>>: añadido compareForPreemption() opcional
+• engine.ts <<mod>>: runSPN()/runSRTN(), helpers getNextBurst/getRemainingNow
+                     tryPreemptIfNeeded() hook en N→L/B→L para SRTN
+                     NOW timer para schedulers dinámicos
+
+**Anti-errores clave (SPN/SRTN):**
+❌ **No recalcular** fin ráfaga con min(r,q) - usar r.restante directo
+❌ **No medir restante(actual)** sin descontar ejecutado: rest - (t - sliceStart)
+❌ **No despachar desde C→T** - administrativo, CPU se libera en fin real
+✅ **TCP** desplaza inicio slice (tStart = t + TCP), no cuenta en ráfaga/quantum
+✅ **Empates**: C→T/C→B (prio 1/2) gana a C→L (prio 3); C→L queda stale
+✅ **Orden estable**: usar seq para desempatar en SPN/SRTN con misma clave
 
 **Colores por Módulo:**
 • **model** - Tipos y entidades base

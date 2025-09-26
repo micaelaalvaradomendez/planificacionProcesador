@@ -1,4 +1,9 @@
-Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típicos** a evitar, alineados con la **teoría de planificación** y la **consigna del integrador** (TIP/TCP/TFP, bloqueos de E/S, prioridades de eventos, preempciones, métricas y Gantt).
+Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típicos** a evitar, alineados con la **teoría de planificación** y la **consigna del integrador** (TIP## Errores típicos
+
+* Contar TCP adentro del quantum.
+* No reencolar al desalojado.
+* No distinguir empate "termina ráfaga vs vence quantum".
+* **❌ Bug C→T prematuro**: Usar `min(r,q)` para programar fin de ráfaga o eventos C→T obsoletos de slices anteriores → **✅ CORREGIDO**: Programar siempre `tFinCPU = t_s + rRestante` completo y validar que C→T corresponda al slice actual mediante `expectedSliceStart`.TFP, bloqueos de E/S, prioridades de eventos, preempciones, métricas y Gantt).
 
 ---
 
@@ -148,7 +153,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 6) Round Robin (sched/rr.ts + engine/engine.ts)
+# 6) Round Robin (sched/rr.ts + engine/engine.ts) ✅ IMPLEMENTADO
 
 ## Qué implementás
 

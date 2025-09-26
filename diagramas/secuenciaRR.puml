@@ -15,10 +15,11 @@ ENG -> CPU : reservar CPU (TCP)
 ENG -> CPU : abrir slice en t_s = t_d + TCP
 note right of CPU
   t_s = t_d + TCP
-  Se programan en paralelo:
-    • C→B @ (t_s + r)   (o C→T si última)
-    • C→L @ (t_s + q)   (timer RR)
-  Si coinciden: C→B/C→T (prio 2/1) gana a C→L (prio 3).
+  Programar:
+    • C→B/C→T @ t_s + rRestante  (fin natural de ráfaga)
+    • C→L      @ t_s + q         (timer RR)
+  El quantum se REINICIA en cada L→C.
+  Empate en mismo t: C→T/C→B (prio 1/2) > C→L (prio 3).
 end note
 
 == Programación de fin de rebanada ==

@@ -4,19 +4,6 @@
 
 
 
-
-# 6) Round Robin (quantum)
-
-**Diagramas:**
-
-* **Diagrama de Secuencia (RR con Timer)** — `06-secuencia-rr.puml`
-  Objetivo: `Timer` provoca desalojo → `C→L`, `onDesalojoActual`, re-encolar, `L→C` (+TCP).
-  Debe incluir: empate “vence quantum vs fin ráfaga” (gana **fin ráfaga**).
-* **Diagrama de Actividad (Decisión de corte)** — `06-actividad-rr.puml`
-  Objetivo: reglas de corte del slice por `quantumRestante==0`.
-
----
-
 # 7) SPN (no exprop.) y SRTN (exprop.)
 
 **Diagramas:**
