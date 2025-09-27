@@ -1,0 +1,69 @@
+@startuml 08-clases-metricas
+title Clases — Métricas de Simulación
+
+class Proceso {
+  +pid: string
+  +arribo: number
+  +servicioCPU: number  ' suma de rafagas CPU
+}
+
+class Trace {
+  +slices: List<TraceSlice>
+  +eventos: List<Evento>
+}
+
+class TraceSlice {
+  +pid: string
+  +tInicio: number
+  +tFin: number
+  +tipo: SliceTipo  ' CPU, TCP, TIP, TFP, IO, etc.
+}
+
+enum SliceTipo { 
+    CPU
+    TCP 
+    TIP
+    TFP
+    IO 
+}
+
+class MetricaProceso {
+  +pid: string
+  +tiempoRetorno: number    ' TRp = fin_ultima_actividad - arribo
+  +tiempoEspera: number     ' TE = TRp - servicioCPU
+  +retornoNormalizado: number ' TRn = TRp / servicioCPU
+  +finUltimaActividad: number
+}
+
+class MetricaGlobal {
+  +promedioRetorno: number
+  +promedioEspera: number
+  +promedioRetornoNorm: number
+  +cambiosDeContexto: number
+  +expropiaciones: number
+}
+
+class MetricsBuilder {
+  +fromTrace(trace: Trace, procesos: List<Proceso>): {porProceso: List<MetricaProceso>, global: MetricaGlobal}
+  -calcFinUltimaActividad(pid): number
+  -sumarCPU(pid): number
+  -contarCambiosContexto(trace): number
+  -contarExpropiaciones(trace): number
+}
+
+Trace "1" o-- "*" TraceSlice
+TraceSlice --> SliceTipo
+MetricsBuilder ..> Trace
+MetricsBuilder ..> Proceso
+MetricsBuilder ..> MetricaProceso
+MetricsBuilder ..> MetricaGlobal
+
+note bottom
+Convenciones:
+- Gantt/CPU: solo slices tipo CPU cuentan como "ejecución".
+- Overheads (TIP/TCP/TFP) y IO NO suman a servicioCPU ni a espera.
+- TRp = fin_ultima_actividad - arribo.
+- TE = TRp - servicioCPU.
+- TRn = TRp / servicioCPU.
+end note
+@enduml

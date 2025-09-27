@@ -1,0 +1,83 @@
+@startuml 08-secuencia-priority-aging
+title Secuencia — Prioridad con Envejecimiento (expropiativa)
+
+actor "Timer" as T
+participant "Engine" as E
+participant "SchedulerPriority" as S <<scheduler>>
+participant "ReadyQueue" as RQ
+participant "CPU" as CPU
+participant "Proc A (p=2)" as A
+participant "Proc B (p=5)" as B
+
+' --- Convención ---
+' Menor número = mayor prioridad (p=1 > p=2 > p=5)
+' Envejecimiento: cada AGE_TICK de espera en LISTO reduce prioridad efectiva en AGE_STEP (con mínimo p=1)
+' Desempate: (priorityEff ASC, seq ASC, pid ASC)
+
+== Arribo Inicial ==
+A -> E: Arribo A @t0 (pBase=2)
+E -> S: onAdmit(A)
+S -> RQ: push(A, prioEff=2, seq=1)
+E -> S: nextIfCpuFree(t0)
+S -> RQ: pop() = A
+S -> E: elegir = A
+E -> CPU: L→C(A) @t0 + TCP
+
+== Arribo de B con menor prioridad base ==
+B -> E: Arribo B @t2 (pBase=5)
+E -> S: onAdmit(B)
+S -> RQ: push(B, prioEff=5, seq=2)
+E -> S: tryPreemptIfNeeded(t2, B)
+S -> CPU: getCurrent() = A (pEff(A)=2 dinámico; no envejece en CPU)
+S -> S: ¿pEff(B) < pEff(A)? → 5 < 2 NO
+S -> E: no expropiar
+
+== Envejecimiento por Ticks (opcional) ==
+T -> E: AGE_TICK @t3
+E -> S: onAgeTick(t3)
+S -> RQ: forEach listo: dec pEff = max(1, pEff-AGE_STEP)
+note right: B estaba esperando → pEff(B)=4\n(A no envejece: está en CPU)
+
+T -> E: AGE_TICK @t4
+E -> S: onAgeTick(t4)
+S -> RQ: pEff(B)=3
+
+== Expropiación al superar prioridad efectiva ==
+T -> E: AGE_TICK @t5
+E -> S: onAgeTick(t5)
+S -> RQ: pEff(B)=2
+note right: Empate (2 vs 2) → NO expropia por regla estricta (<)\nSi tu política permite <=, documentalo claro.
+
+T -> E: AGE_TICK @t6
+E -> S: onAgeTick(t6)
+S -> RQ: pEff(B)=1
+S -> CPU: getCurrent() = A(pEff=2)
+S -> E: expropiar (1 < 2) ✔
+E -> CPU: C→L(A) @t6  (cerrarSlice; desc. ejecutado)
+E -> S: onDesalojoActual(A); push(A, pEff=2, seq=1)
+E -> S: elegirSiguiente(t6)
+S -> RQ: pop() = B (pEff=1)
+S -> E: elegido = B
+E -> CPU: L→C(B) @t6 + TCP
+
+== Terminación de B ==
+CPU -> E: C→T(B) @tT
+E -> S: onFinish(B)
+E -> S: nextIfCpuFree(tT)
+S -> RQ: pop() = A
+E -> CPU: L→C(A) @tT + TCP
+
+' --- Variante sin Timer (Lazy Aging) ---
+' En lugar de onAgeTick, el scheduler puede recalcular pEff usando:
+' pEff(t) = max(1, pBase - floor( (t - tReady) / AGE_QUANTUM ) * AGE_STEP )
+' Se evalúa en onAdmit/onReady/compareForPreemption/next()
+
+legend left
+Reglas:
+- Prioridad expropiativa con menor número = mayor prioridad.
+- Envejecimiento SOLO en LISTO (no en CPU).
+- Expropiación si pEff(nuevo) < pEff(actual) (no <= para evitar thrashing).
+- Desempates: priorityEff ASC, luego seq, luego pid (estable).
+- Implementación sugerida: Lazy Aging (sin Timer real) recalculando pEff al consultar.
+endlegend
+@enduml

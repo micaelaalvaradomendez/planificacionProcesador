@@ -2,7 +2,43 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 * Contar TCP adentro del quantum.
 * No reencolar al desalojado.
-* No distinguir empate "termina ráfaga vs vence quantum".
+* No distinguir empate "termina ráfag## 🎉 **ESTADO ACTUAL: PASOS 1-7 COMPLETADOS Y BLINDADOS**
+
+### ✅ **Implementado y Validado:**
+- **Paso 1-3**: Modelo, cola de eventos, FCFS sandbox ✅
+- **Paso 4**: Bloqueos E/S (B→L automático con bloqueoES) ✅  
+- **Paso 5**: Costos TIP/TCP/TFP (con release+dispatch fix) ✅
+- **Paso 6**: Round Robin con quantum (no expropiativo por llegadas) ✅
+- **Paso 7**: SPN (no expropiativo) + SRTN (expropiativo) ✅
+
+### 🛡️ **Blindajes Implementados:**
+- **Purga multicapa**: onFinish() + guards en push() + filtro en next()
+- **Expropiación estricta**: SRTN usa `<` (no `<=`) para evitar thrashing  
+- **Orden total de eventos**: Prioridades 1:C→T, 2:C→B, 3:C→L, 4:B→L, 5:N→L, 6:L→C
+- **Telemetría de desarrollo**: Invariants y guards para detectar regresiones
+- **Tests de casos edge**: Empates, quantum puro, expropiación E/S, no expropiación SPN
+
+### 📊 **Gates Pasando:**
+- **FCFS**: P1[5]@0, P2[4]@2 → slices P1:0-5, P2:5-9 ✅
+- **RR**: Quantum respetado, TCP/TFP no consumen quantum ✅
+- **SPN**: Orden por ráfaga más corta, sin expropiación ✅  
+- **SRTN**: Gate clásico [P1:0-2, P2:2-5, P1:5-11] ✅
+- **Edge cases**: 4/4 tests pasando ✅
+
+### 🚀 **Próximos Pasos (Opcionales):**
+- **Paso 8**: Métricas (tiempo de retorno, espera, turnaround normalizado)
+- **Paso 9**: Gantt interactivo (visualización de slices y eventos)
+- **Paso 10**: UI/UX (carga de procesos, selección de algoritmo, exportación)
+
+---
+
+## Consejitos anti-bug aprendidos
+
+* **Purga en origen**: onFinish() remueve de ready antes que next() filtre
+* **Guard por tick**: `pendingDispatchAt` previene doble despacho
+* **Expropiación estricta**: Solo con ventaja clara (`<`, no `<=`)
+* **Order total**: Procesar todos los arribos/retornos antes de despachar
+* **Contratos explícitos**: ORDEN_EVENTOS.md documenta invariantes críticos quantum".
 * **❌ Bug C→T prematuro**: Usar `min(r,q)` para programar fin de ráfaga o eventos C→T obsoletos de slices anteriores → **✅ CORREGIDO**: Programar siempre `tFinCPU = t_s + rRestante` completo y validar que C→T corresponda al slice actual mediante `expectedSliceStart`.TFP, bloqueos de E/S, prioridades de eventos, preempciones, métricas y Gantt).
 
 ---
@@ -186,7 +222,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 7) SPN (no exprop.) y SRTN (exprop.) (sched/spn.ts, sched/srtn.ts)
+# 7) SPN (no exprop.) y SRTN (exprop.) (sched/spn.ts, sched/srtn.ts) IMPLEMENTADO
 
 ## Qué implementás
 

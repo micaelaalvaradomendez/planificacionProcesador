@@ -1,5 +1,6 @@
 // src/lib/scheduler/srtn.ts
 import { BaseScheduler } from './scheduler';
+import { TelemetryGuards } from '../engine/telemetry';
 
 /**
  * SRTN (Shortest Remaining Time Next, expropiativo)
@@ -20,18 +21,36 @@ export class SchedulerSRTN extends BaseScheduler {
   override onAdmit(pid: number): void { this.push(pid); }
   override onReady(pid: number): void { this.push(pid); }
   override onDesalojoActual(pid: number): void { this.push(pid); }
+  
+  override onFinish(pid: number): void {
+    // Purgar proceso terminado de la cola ready (purga en origen)
+    this.ready = this.ready.filter(item => item.pid !== pid);
+  }
 
   private push(pid: number) {
     const now = this.getNow();
     const key = this.getRemaining(pid, now);
+    
+    // Guard: no encolar procesos terminados (purga en origen)
+    if (key <= 0) {
+      TelemetryGuards.assertValidEnqueue(pid, key, 'SRTN.push');
+      return; // No encolar si restante <= 0
+    }
+    
     this.ready.push({ pid, key, seq: this.seq++ });
   }
 
   next(): number | undefined {
     if (this.ready.length === 0) return undefined;
-    // Antes de elegir, refrescamos keys (opc.: los listos no cambian, pero es seguro)
+    // Antes de elegir, refrescamos keys y filtramos procesos terminados
     const now = this.getNow();
-    for (const item of this.ready) item.key = this.getRemaining(item.pid, now);
+    this.ready = this.ready.filter(item => {
+      item.key = this.getRemaining(item.pid, now);
+      return item.key > 0; // Solo mantener procesos con tiempo restante
+    });
+    
+    if (this.ready.length === 0) return undefined;
+    
     let best = 0;
     for (let i = 1; i < this.ready.length; i++) {
       const a = this.ready[i], b = this.ready[best];

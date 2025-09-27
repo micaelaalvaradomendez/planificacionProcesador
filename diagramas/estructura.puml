@@ -78,10 +78,14 @@ package "src" as SRC {
       package "engine" as ENGINE {
         rectangle "types.ts" as engine_types_ts
         rectangle "queue.ts" as queue_ts
+        rectangle "invariants.ts" as invariants_ts
+        rectangle "telemetry.ts" as telemetry_ts
         rectangle "engine.ts" as engine_ts
         
         engine_types_ts -[hidden]down-> queue_ts
-        queue_ts -[hidden]down-> engine_ts
+        queue_ts -[hidden]down-> invariants_ts
+        invariants_ts -[hidden]down-> telemetry_ts
+        telemetry_ts -[hidden]down-> engine_ts
 
         note right of engine_types_ts
           **✓ Implementado**
@@ -94,6 +98,23 @@ package "src" as SRC {
           **✓ Implementado**
           • Cola de eventos
           • Orden por timestamp + prioridad de evento
+        end note
+
+        note right of invariants_ts
+          **✓ Implementado** <<nuevo>>
+          • Invariantes críticos del motor
+          • assertSingleCPU() - un solo proceso en CPU
+          • assertNoNegativeRestante() - restante >= 0
+          • assertValidEnqueue() - no encolar restante <= 0
+          • logSliceEvent() - debug estructurado de slices
+        end note
+
+        note right of telemetry_ts
+          **✓ Implementado** <<nuevo>>
+          • Wrapper condicional para telemetría
+          • TELEMETRY_CONFIG - habilitar en desarrollo
+          • TelemetryGuards - invariants condicionales
+          • Configuración por NODE_ENV y DEBUG_SLICES
         end note
 
         note right of engine_ts
@@ -241,116 +262,6 @@ package "src" as SRC {
       end note
     }
 
-    package "test" as TEST {
-      rectangle "test-paso1-modelo.ts" as test_paso1_ts
-      rectangle "test-paso2-engine.ts" as test_paso2_ts
-      rectangle "test-fcfs-sandbox.ts" as test_fcfs_sandbox_ts
-      rectangle "debug-golden-b.ts" as debug_golden_b_ts
-      rectangle "test-motor-completo.ts" as test_motor_completo_ts
-      rectangle "test-paso4-bloqueos.ts" as test_paso4_bloqueos_ts
-      rectangle "test-paso5-costos.ts" as test_paso5_costos_ts
-      rectangle "test-paso5-complejo.ts" as test_paso5_complejo_ts
-      rectangle "test-rr-gate.ts" as test_rr_gate_ts
-      rectangle "test-spn-basic.ts" as test_spn_basic_ts
-      rectangle "test-srtn-gate.ts" as test_srtn_gate_ts
-      
-      test_paso1_ts -[hidden]down-> test_paso2_ts
-      test_paso2_ts -[hidden]down-> test_fcfs_sandbox_ts
-      test_fcfs_sandbox_ts -[hidden]down-> debug_golden_b_ts
-      debug_golden_b_ts -[hidden]down-> test_motor_completo_ts
-      test_motor_completo_ts -[hidden]down-> test_paso4_bloqueos_ts
-      test_paso4_bloqueos_ts -[hidden]down-> test_paso5_costos_ts
-      test_paso5_costos_ts -[hidden]down-> test_paso5_complejo_ts
-      test_paso5_complejo_ts -[hidden]down-> test_rr_gate_ts
-      test_rr_gate_ts -[hidden]down-> test_spn_basic_ts
-      test_spn_basic_ts -[hidden]down-> test_srtn_gate_ts
-
-      note right of test_paso1_ts
-        **✓ Implementado**
-        • Tests de aceptación del Paso 1
-        • Validación de servicioTotal, transiciones
-        • Verificación de costos y validaciones
-      end note
-
-      note right of test_paso2_ts
-        **✓ Implementado**
-        • Tests de aceptación del Paso 2
-        • Validación de cola de eventos
-        • Verificación de tipos del motor
-      end note
-
-      note right of test_fcfs_sandbox_ts
-        **✓ Implementado**
-        • Validación de Golden Cases A y B
-        • Test de motor FCFS sandbox básico
-        • Verificación de slices esperados
-      end note
-
-      note right of debug_golden_b_ts
-        **✓ Implementado**
-        • Debug detallado del Golden B
-        • Análisis de eventos paso a paso
-        • Verificación de anti-doble-dispatch
-      end note
-
-      note right of test_motor_completo_ts
-        **✓ Implementado**
-        • Test comprensivo del motor FCFS
-        • Validación de múltiples casos de prueba
-        • Documentación de comportamiento esperado
-      end note
-
-      note right of test_paso4_bloqueos_ts
-        **✓ Implementado** <<Paso 4>>
-        • Gate test con bloqueoES=25ms
-        • Validación de latencia E/S correcta
-        • Verificación "B→L no consume CPU"
-        • Confirmación de tiempos de bloqueo
-      end note
-
-      note right of test_paso5_costos_ts
-        **✓ Implementado** <<Paso 5>>
-        • Gate test TIP=1, TCP=1, TFP=1
-        • Validación modelo estricto: P1: 2–7, P2: 8–12
-        • Verificación duraciones inalteradas
-        • Confirmación TFP no bloquea CPU
-      end note
-
-      note right of test_paso5_complejo_ts
-        **✓ Implementado** <<Paso 5>>
-        • Caso complejo: costos + E/S combinados
-        • Múltiples slices con TIP/TCP/TFP
-        • Validación orden temporal correcto
-        • Verificación liberación CPU en tFinCPU
-      end note
-
-      note right of test_rr_gate_ts
-        **✅ Implementado** <<Paso 6>>
-        • Gate test Round Robin q=2
-        • P1:0–2, P2:2–4, P1:4–6, P2:6–8, P1:8–9, P2:9–10
-        • Validación con TCP=1 (desplazamiento +1)
-        • Bug C→T prematuro corregido
-      end note
-
-      note right of test_spn_basic_ts
-        **⏳ Recomendado** <<Paso 7>>
-        • Test básico de SPN (no expropiativo)
-        • Validación selección por ráfaga más corta
-        • Verificación orden estable en empates
-        • Confirmación no expropiación durante ejecución
-      end note
-
-      note right of test_srtn_gate_ts
-        **⏳ Recomendado** <<Paso 7>>
-        • Gate test SRTN (clásico)
-        • P1:arr=0[8], P2:arr=2[3] → [P1:0-2, P2:2-5, P1:5-11]
-        • Validación expropiación en t=2
-        • Confirmación restante(P1)=6 > restante(P2)=3
-        • TCP aplica en L→C post-expropiación
-      end note
-    }
-  }
-
   package "routes" as ROUTES {
     rectangle "+layout.svelte" as layout_svelte
     rectangle "+page.svelte" as main_page
@@ -406,29 +317,29 @@ SCHED -[hidden]down-> IO
 IO -[hidden]down-> METRICS
 METRICS -[hidden]down-> GANTT
 GANTT -[hidden]down-> STORES
-STORES -[hidden]down-> TEST
-TEST -[hidden]down-> ROUTES
+STORES -[hidden]down-> ROUTES
 
 ' Motor y tipos
-engine_ts --> engine_types_ts : usa tipos
-engine_ts --> queue_ts : utiliza cola
-engine_ts --> fcfs_ts : usa SchedulerFCFS
-engine_ts --> proceso_ts : lee modelo
-engine_ts --> costos_ts : aplica costos
+    engine_ts --> engine_types_ts : usa tipos
+    engine_ts --> queue_ts : utiliza cola
+    engine_ts --> fcfs_ts : usa SchedulerFCFS
+    engine_ts --> proceso_ts : lee modelo
+    engine_ts --> costos_ts : aplica costos
+    engine_ts --> telemetry_ts : guards runtime
+    telemetry_ts --> invariants_ts : checks condicionales
 
 ' Planificadores y cola
 scheduler_ts --> ready_queue_ts : usa ReadyQueue
 fcfs_ts --> scheduler_ts : extiende BaseScheduler
 fcfs_ts --> ready_queue_ts : hereda uso
 rr_ts --> ready_queue_ts
-spn_ts --> ready_queue_ts
-srtn_ts --> ready_queue_ts
+    spn_ts --> ready_queue_ts
+    spn_ts --> telemetry_ts : guards anti-errores
+    srtn_ts --> ready_queue_ts
+    srtn_ts --> telemetry_ts : guards anti-errores
 priority_ts --> ready_queue_ts
 
-' Tests y motor
-test_fcfs_sandbox_ts --> engine_ts : prueba runFCFSSandbox
-debug_golden_b_ts --> engine_ts : debug motor
-test_motor_completo_ts --> engine_ts : test comprensivo
+
 
 ' Gantt y esquemas
 builder_ts --> schema_ts
@@ -454,21 +365,41 @@ legend bottom
 • **✓ Implementado** - Código completo y testeado (Golden Cases validados)
 • **⏳ Pendiente** - Archivos creados, pendiente implementación
 
-**Cambios (Paso 7):**
+**Cambios (Paso 7 - A prueba de balas):**
 • scheduler/spn.ts <<nuevo>>: SPN no expropiativo, selección por ráfaga próxima
-• scheduler/srtn.ts <<nuevo>>: SRTN expropiativo, restante dinámico + expropiación
+• scheduler/srtn.ts <<nuevo>>: SRTN expropiativo, restante dinámico + expropiación  
 • scheduler/scheduler.ts <<mod>>: añadido compareForPreemption() opcional
 • engine.ts <<mod>>: runSPN()/runSRTN(), helpers getNextBurst/getRemainingNow
                      tryPreemptIfNeeded() hook en N→L/B→L para SRTN
                      NOW timer para schedulers dinámicos
+• engine/invariants.ts <<nuevo>>: Guards y asserts para desarrollo
+• engine/telemetry.ts <<nuevo>>: Wrapper condicional para telemetría
+• ORDEN_EVENTOS.md <<nuevo>>: Contratos de ordenamiento y anti-patrones
+
+rectangle "ORDEN_EVENTOS.md" as orden_eventos_md
+
+note right of orden_eventos_md
+  **✓ Implementado** <<nuevo>>
+  • Documentación de event ordering
+  • Prioridades de eventos (1:C→T, 2:C→B, etc.)
+  • Anti-patterns y pitfalls
+  • Guía de prevención de bugs
+end note
+
+invariants_ts --> orden_eventos_md : "implementa reglas"
 
 **Anti-errores clave (SPN/SRTN):**
 ❌ **No recalcular** fin ráfaga con min(r,q) - usar r.restante directo
 ❌ **No medir restante(actual)** sin descontar ejecutado: rest - (t - sliceStart)
 ❌ **No despachar desde C→T** - administrativo, CPU se libera en fin real
+❌ **No mantener procesos terminados** en cola ready - filtrar restante <= 0
+❌ **No encolar con restante <= 0** - guard en push() con warning/assert
 ✅ **TCP** desplaza inicio slice (tStart = t + TCP), no cuenta en ráfaga/quantum
 ✅ **Empates**: C→T/C→B (prio 1/2) gana a C→L (prio 3); C→L queda stale
 ✅ **Orden estable**: usar seq para desempatar en SPN/SRTN con misma clave
+✅ **SRTN filtrado**: next() elimina procesos con restante <= 0 antes de elegir
+✅ **Purga en origen**: onFinish() remueve PID terminado de cola ready
+✅ **Expropiación estricta**: SRTN usa < (no <=) para evitar thrashing
 
 **Colores por Módulo:**
 • **model** - Tipos y entidades base
@@ -479,7 +410,6 @@ legend bottom
 • **gantt** - Generación de diagramas
 • **stores** - Estado de aplicación
 • **routes** - Páginas de la aplicación
-• **test** - Tests de aceptación
 endlegend
 
 @enduml

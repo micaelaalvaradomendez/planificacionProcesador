@@ -1,8 +1,9 @@
 // src/lib/engine/engine.ts
+import { EventQueue } from './queue';
+import { EVENT_PRIORITY, type EventType, type SimEvent, type Trace, type TraceSlice } from './types';
+import { EngineInvariants } from './invariants';
 import type { Proceso } from '../model/proceso';
 import type { Costos } from '../model/costos';
-import type { EventType, SimEvent, Trace } from './types';
-import { EventQueue } from './queue';
 import { SchedulerFCFS } from '../scheduler/fcfs';
 import { SchedulerRR } from '../scheduler/rr';
 import { SchedulerSPN } from '../scheduler/spn';

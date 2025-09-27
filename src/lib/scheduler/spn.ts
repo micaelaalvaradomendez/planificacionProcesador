@@ -21,9 +21,21 @@ export class SchedulerSPN extends BaseScheduler {
   override onAdmit(pid: number): void { this.push(pid); }
   override onReady(pid: number): void { this.push(pid); }
   override onDesalojoActual(pid: number): void { /* SPN no expropia, pero si llegara: */ this.push(pid); }
+  
+  override onFinish(pid: number): void {
+    // Purgar proceso terminado de la cola ready (purga en origen)
+    this.ready = this.ready.filter(item => item.pid !== pid);
+  }
 
   private push(pid: number) {
     const key = this.getNextBurst(pid);
+    
+    // Guard: no encolar procesos sin ráfagas (consistencia con SRTN)
+    if (key <= 0) {
+      console.warn(`⚠️ SPN: Intentando encolar P${pid} con nextBurst=${key}, ignorando`);
+      return;
+    }
+    
     this.ready.push({ pid, key, seq: this.seq++ });
   }
 
