@@ -1,0 +1,76 @@
+@startuml secuencia-priority-aging-detalle
+title Secuencia — Priority Aging (Detalle de Implementación)
+
+participant "Motor" as M
+participant "SchedulerPriority" as SP  
+participant "ReadyQueue" as RQ
+participant "ProcessState" as PS
+
+note over M, PS
+**Implementación de Aging**
+• factorAging = 10 (configurable)
+• aging se incrementa solo en LISTO
+• pEfectiva = max(1, pBase - aging/factorAging)
+end note
+
+== Inicialización ==
+M -> SP: constructor(factorAging=10)
+SP -> SP: this.agingMap = new Map()
+SP -> SP: this.basepriorities = new Map()
+
+== Proceso Nuevo ==
+M -> SP: onAdmit(pid="P1", prioridadBase=5)
+SP -> SP: basepriorities.set("P1", 5)
+SP -> SP: agingMap.set("P1", 0)
+SP -> SP: pEfectiva = calcPriorityEffective("P1")
+note right: pEfectiva = max(1, 5 - 0/10) = 5
+SP -> RQ: enqueue("P1", pEfectiva=5)
+
+== Aging por Tick (solo en LISTO) ==
+loop cada tick
+  M -> SP: onTick(t, deltaTime=1)
+  SP -> RQ: getAllInReady()
+  RQ --> SP: ["P1", "P2"] // solo en LISTO
+  
+  loop para cada pid en LISTO
+    SP -> PS: getEstado(pid)
+    PS --> SP: "L" // verificar que está en LISTO
+    
+    SP -> SP: aging = agingMap.get(pid) + deltaTime
+    SP -> SP: agingMap.set(pid, aging)
+    SP -> SP: nuevaPEfectiva = calcPriorityEffective(pid)
+    note right
+    Ejemplo P1: pBase=5, aging=3
+    pEfectiva = max(1, 5-3/10) = max(1, 4.7) = 4.7 ≈ 4
+    end note
+    
+    alt prioridad cambió
+      SP -> RQ: updatePriority(pid, nuevaPEfectiva)
+    end
+  end
+end
+
+== Reset de Aging al Ejecutar ==
+M -> SP: onReady(pid="P1") // L→C
+SP -> SP: agingMap.set("P1", 0) // reset aging
+SP -> SP: pEfectiva = calcPriorityEffective("P1") 
+note right: Vuelve a prioridad base al ejecutar
+
+== Expropiación con Prioridad Efectiva ==
+M -> SP: compareForPreemption(actual="P2", nuevo="P1")
+SP -> SP: pEff_actual = calcPriorityEffective("P2")
+SP -> SP: pEff_nuevo = calcPriorityEffective("P1") 
+note right
+Ejemplo:
+P2: pBase=3, aging=0 → pEff=3
+P1: pBase=5, aging=20 → pEff=max(1,5-2)=3
+Empate → no expropia (FIFO)
+end note
+
+alt pEff_nuevo < pEff_actual
+  SP --> M: true // expropia
+else pEff_nuevo >= pEff_actual  
+  SP --> M: false // no expropia
+end
+
+@enduml

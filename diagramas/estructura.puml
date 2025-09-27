@@ -199,9 +199,12 @@ package "src" as SRC {
         end note
 
         note right of priority_ts
-          **⏳ Pendiente**
-          • Planificador por prioridades
-          • (Opcional) Envejecimiento/ajuste de prioridad
+          **✓ Implementado** <<nuevo>>
+          • SchedulerPriority con aging lazy
+          • Preemption con compareForPreemption()
+          • Guards y telemetría integrada
+          • Convención: menor número = mayor prioridad
+          • Aging: pEff = pBase - floor((t-tReady)/ageQuantum)*ageStep
         end note
       }
 
@@ -212,24 +215,33 @@ package "src" as SRC {
         parser_ts -[hidden]down-> export_ts
 
         note right of parser_ts
-          **⏳ Pendiente**
-          • Validación y normalización de entrada (JSON/CSV)
-          • Conversión a estructuras de Proceso
+          **✓ Implementado**
+          • Parser de tandas JSON (procesos_tanda_*.json)
+          • Mapeo: nombre→pid, tiempo_arribo→arribo, etc.
+          • Validación de entrada y conversión a Proceso
+          • extractBloqueoESGlobal() para costos
+          • parseTandaJSON() - función principal
         end note
 
         note right of export_ts
-          **⏳ Pendiente**
-          • Exportación de trazas/métricas (JSON/CSV)
-          • Helpers para descarga/serialización
+          **✓ Implementado**
+          • Exportación de resultados a JSON/CSV
+          • exportToJSON() - simulación completa
+          • exportMetricsToCSV() - métricas por proceso
+          • exportTraceToCSV() - eventos y slices
+          • Helpers de descarga para browser
         end note
       }
 
       package "metrics" as METRICS {
         rectangle "metricas.ts" as metricas_ts
         note right of metricas_ts
-          **⏳ Pendiente**
-          • Cálculo de métricas por proceso y globales
-          • TRp, TE, TRn, promedios y agregados
+          **✓ Implementado** <<nuevo>>
+          • MetricsBuilder con build() y buildGlobal()
+          • ProcessMetrics: TRp, TE, TRn por proceso
+          • GlobalMetrics: promedios, throughput, contadores
+          • Tiempo simulación desde trace (eventos/slices)
+          • Contadores refinados: cambios contexto, expropiaciones
         end note
       }
 
@@ -240,25 +252,53 @@ package "src" as SRC {
         schema_ts -[hidden]down-> builder_ts
 
         note right of schema_ts
-          **⏳ Pendiente**
-          • Tipos para el modelo de Gantt de UI
-          • Items, inicio/fin y normalizaciones
+          **✓ Implementado** <<nuevo>>
+          • GanttSeg - segmento individual de ejecución
+          • GanttTrack - track por proceso (pid, segments)
+          • GanttModel - modelo completo con tMin/tMax
+          • Tipos para renderizado de diagramas Gantt
         end note
 
         note right of builder_ts
-          **⏳ Pendiente**
-          • Conversión de trace.slices a modelo de Gantt
-          • Agrupación y orden cronológico para pintar
+          **✓ Implementado** <<nuevo>>
+          • GanttBuilder.build() - conversión trace→gantt
+          • Solo slices CPU (filtra TIP/TCP/TFP/IO)
+          • Tracks agrupados por pid
+          • Cálculo correcto tMin/tMax para rango temporal
         end note
       }
     
 
     package "stores" as STORES {
       rectangle "simulacion.ts" as simulacion_store_ts
+      rectangle "costosFactory.ts" as costos_factory_ts  
+      rectangle "schedulerFactory.ts" as scheduler_factory_ts
+      
+      simulacion_store_ts -[hidden]down-> costos_factory_ts
+      costos_factory_ts -[hidden]down-> scheduler_factory_ts
+      
       note right of simulacion_store_ts
-        **⏳ Pendiente**
-        • Svelte stores para política seleccionada
-        • Resultados (trace/fin) y costos en UI
+        **✓ Implementado** <<integración Paso 9>>
+        • Svelte stores: simulationConfig, procesos, simulationResult
+        • Funciones puras: runSimulation(), runSimulationFromTanda()
+        • Acciones: loadFromTanda(), executeSimulation()
+        • Derived stores: hasProcesses, canExecute, metricas, gantt
+        • Estado completo de la aplicación centralizado
+      end note
+      
+      note right of costos_factory_ts
+        **✓ Implementado** <<movido desde application>>
+        • costosFromUI() - factory con defaults y validaciones
+        • Centraliza normalización de costos desde UI
+        • Protege de valores negativos/undefined
+      end note
+      
+      note right of scheduler_factory_ts
+        **✓ Implementado** <<movido desde application>>
+        • getRunner() - selecciona engine según política
+        • Soporte: FCFS, RR, SPN, SRTN, PRIORITY
+        • Validaciones específicas (quantum>0, prioridades)
+        • Encapsula lógica de selección de algoritmo
       end note
     }
 
@@ -279,27 +319,29 @@ package "src" as SRC {
     R_SIM -[hidden]down-> R_RES
 
     note right of layout_svelte
-      **⏳ Pendiente**
+      **⏳ Pendiente UI**
       • Layout general, estilos, navigation shell
     end note
 
     note right of main_page
-      **⏳ Pendiente**
+      **⏳ Pendiente UI**
       • Página principal del simulador
       • Landing page y navegación
     end note
 
     note right of simulacion_page
-      **⏳ Pendiente**
+      **⏳ Pendiente UI**
       • Pantalla para cargar tanda y ejecutar simulación
+      • Consume simulacion.ts stores
       • UI de selección de política y parámetros
-      • Vista de métricas y Gantt básicos
+      • Vista de métricas y Gantt usando export.ts
     end note
 
     note right of resultados_page
-      **⏳ Pendiente**
+      **⏳ Pendiente UI**
       • Visualización de resultados finales
-      • Botones de exportación (JSON/CSV)
+      • Usa export.ts para descargas JSON/CSV
+      • Renderiza gantt y métricas desde stores
     end note
   }
 
@@ -344,15 +386,21 @@ priority_ts --> ready_queue_ts
 ' Gantt y esquemas
 builder_ts --> schema_ts
 
-' UI y lógica
-simulacion_page --> simulacion_store_ts
-simulacion_page --> engine_ts
-simulacion_page --> builder_ts
-simulacion_page --> metricas_ts
-resultados_page --> export_ts
+' Stores y factories
+simulacion_store_ts --> costos_factory_ts : usa costosFromUI
+simulacion_store_ts --> scheduler_factory_ts : usa getRunner
+costos_factory_ts --> costos_ts : usa makeCostos
+scheduler_factory_ts --> engine_ts : usa runRR, runSPN, etc.
 
-' Parser y modelo
-parser_ts --> proceso_ts
+' IO y modelo
+parser_ts --> proceso_ts : convierte a Proceso
+export_ts --> engine_types_ts : exporta Trace
+export_ts --> metricas_ts : exporta métricas
+export_ts --> schema_ts : exporta GanttModel
+
+' UI y stores
+simulacion_page --> simulacion_store_ts : consume stores
+resultados_page --> export_ts : usa helpers descarga
 
 ' ----------------------------------------------------------
 legend bottom
@@ -361,20 +409,33 @@ legend bottom
 • Las notas indican "qué contiene" y estado actual
 • Las flechas muestran dependencias principales (informativas)
 
+**Convención del Proyecto**: menor número ⇒ mayor prioridad
+• Priority Scheduling: p=1 > p=2 > p=3... (1 es máxima prioridad)
+• Event Ordering: 1:C→T > 2:C→B > 3:C→L > 4:B→L > 5:N→L > 6:L→C
+
 **Estados de implementación:**
 • **✓ Implementado** - Código completo y testeado (Golden Cases validados)
 • **⏳ Pendiente** - Archivos creados, pendiente implementación
 
-**Cambios (Paso 7 - A prueba de balas):**
-• scheduler/spn.ts <<nuevo>>: SPN no expropiativo, selección por ráfaga próxima
-• scheduler/srtn.ts <<nuevo>>: SRTN expropiativo, restante dinámico + expropiación  
-• scheduler/scheduler.ts <<mod>>: añadido compareForPreemption() opcional
-• engine.ts <<mod>>: runSPN()/runSRTN(), helpers getNextBurst/getRemainingNow
-                     tryPreemptIfNeeded() hook en N→L/B→L para SRTN
-                     NOW timer para schedulers dinámicos
-• engine/invariants.ts <<nuevo>>: Guards y asserts para desarrollo
-• engine/telemetry.ts <<nuevo>>: Wrapper condicional para telemetría
-• ORDEN_EVENTOS.md <<nuevo>>: Contratos de ordenamiento y anti-patrones
+**Cambios (Pasos 8-9 - Completos):**
+**Paso 8 - Priority + Aging, Métricas, Gantt:**
+• scheduler/priority.ts: Priority + aging lazy, guards, preemption
+• metrics/metricas.ts: TRp, TE, TRn, throughput, contadores eventos  
+• gantt/builder.ts + schema.ts: Solo CPU slices, tracks por pid, tMin/tMax
+• engine.ts: runPriority() con event loop completo + preemption
+
+**Paso 9 - Fachada y Reorganización:**
+• io/parser.ts: Importador tandas JSON (antes ui/services/importers/)
+• io/export.ts: Exportación JSON/CSV para resultados
+• stores/simulacion.ts: Store principal + funciones puras (fusión application/)
+• stores/costosFactory.ts + schedulerFactory.ts: Factories integrados
+• Eliminadas: application/, ui/ (reorganización según README.md original)
+
+**Convenciones del Core:**
+• Priority: p=0 > p=1 > p=2... (0 es máxima prioridad)  
+• Aging: pEff = pBase - floor((t - tReady) / ageQuantum) * ageStep
+• Event Order: 1:C→T > 2:C→B > 3:C→L > 4:B→L > 5:N→L > 6:L→C
+• Telemetría: Expropiaciones solo C→L con reason='preempt'
 
 rectangle "ORDEN_EVENTOS.md" as orden_eventos_md
 

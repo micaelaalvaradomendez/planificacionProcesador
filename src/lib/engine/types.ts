@@ -36,6 +36,7 @@ export interface TraceEvent {
   t: number;
   type: EventType;
   pid?: number;
+  data?: Record<string, unknown>;
 }
 
 export interface Trace {

@@ -7,12 +7,13 @@ import type { Runtime } from './invariants';
 /**
  * Configuración de telemetría - habilitar durante desarrollo
  */
+// Usar variables de entorno de Vite que son seguras para el cliente
 export const TELEMETRY_CONFIG = {
   // Habilitar invariants en puntos críticos (desarrollo)
-  enableInvariants: process.env.NODE_ENV === 'development',
+  enableInvariants: import.meta.env.DEV ?? false,
   
   // Habilitar logs detallados de slices
-  enableSliceLogs: process.env.DEBUG_SLICES === 'true',
+  enableSliceLogs: import.meta.env.VITE_DEBUG_SLICES === 'true',
   
   // Habilitar warnings de enqueue
   enableEnqueueWarnings: true

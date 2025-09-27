@@ -45,7 +45,7 @@ export class EngineInvariants {
     if (restante <= 0) {
       console.warn(`⚠️ ${context}: Intentando encolar P${pid} con restante=${restante}`);
       // En desarrollo, throw error. En producción, solo warn.
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         throw new Error(`${context}: No se debe encolar P${pid} con restante <= 0`);
       }
     }
@@ -62,7 +62,7 @@ export class EngineInvariants {
     restanteDespues: number | null, 
     cpuLibre: boolean
   ): void {
-    if (process.env.DEBUG_SLICES === 'true') {
+    if (import.meta.env.VITE_DEBUG_SLICES === 'true') {
       console.log(`🔍 [${t}] ${event} P${pid}: ${restanteAntes}→${restanteDespues}, CPU libre: ${cpuLibre}`);
     }
   }

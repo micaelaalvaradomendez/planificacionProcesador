@@ -8,6 +8,7 @@ import { SchedulerFCFS } from '../scheduler/fcfs';
 import { SchedulerRR } from '../scheduler/rr';
 import { SchedulerSPN } from '../scheduler/spn';
 import { SchedulerSRTN } from '../scheduler/srtn';
+import { SchedulerPriority } from '../scheduler/priority';
 
 // ---- Tipos runtime (no forman parte del dominio estático) ----
 type Runtime = {
@@ -730,6 +731,199 @@ export function runSRTN(
         sched.onFinish(e.pid);
         break;
       }
+    }
+  }
+
+  return trace;
+}
+/**
+ * Planificador con prioridades y envejecimiento (Priority + Aging)
+ * 
+ * CONVENCIÓN EXPLÍCITA:
+ * - Prioridad numérica menor = mayor prioridad (0 es la más alta)
+ * - Aging: cada tick reduce la prioridad efectiva en 0.01 (mejora)
+ * - Preemption: proceso de mayor prioridad puede expropiar al CPU
+ * - Event loop: N→L/B→L → tryPreemptIfNeeded → despacharSiLibre
+ * - Guards: TelemetryGuards + invariants + defensive ready queue
+ */
+export function runPriority(
+  procesos: Proceso[],
+  prioridades: Record<number, number>, // pid -> prioridad base
+  costos: Partial<Costos> = {}
+): Trace {
+  const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
+  const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
+  const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
+  const bloqueoES = Number.isFinite(costos.bloqueoES as number) ? (costos.bloqueoES as number) : 25;
+
+  const q = new EventQueue();
+  const trace: Trace = { slices: [], events: [] };
+  const rt = new Map<number, Runtime>();
+  const cpu: CPUState = { pid: null, sliceStart: null };
+
+  let currentTick = Number.NEGATIVE_INFINITY;
+  let pendingDispatchAt: number | null = null;
+
+  // Funciones auxiliares para SchedulerPriority
+  const getPriorityBase = (pid: number): number => prioridades[pid] ?? 10;
+  const getRemaining = (pid: number, now: number): number => rt.get(pid)?.restante ?? 0;
+  const getNow = (): number => currentTick;
+  
+  const sched = new SchedulerPriority(getPriorityBase, getRemaining, getNow);
+
+  // admisiones con TIP
+  for (const p of procesos) {
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0) });
+    q.push({ t: p.arribo + TIP, type: EVT.ADMIT, pid: p.pid });
+  }
+
+  const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
+    q.push({ t, type, pid, data });
+
+  const traceEvent = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) => {
+    trace.events.push({ t, type, pid, data });
+  };
+
+  const traceSlice = (pid: number, start: number, end: number) => {
+    if (end > start) {
+      trace.slices.push({ pid, start, end });
+    }
+  };
+
+  const tryPreemptIfNeeded = (t: number): void => {
+    if (cpu.pid === null || pendingDispatchAt !== null) return;
+
+    const runningPid = cpu.pid;
+    
+    // Obtener lista de procesos en ready sin sacarlos
+    const readyPids = sched.getReadyQueue?.() || [];
+    if (readyPids.length === 0) return;
+    
+    // Buscar el de mayor prioridad y verificar si debe expropiar
+    for (const candidatePid of readyPids) {
+      if (candidatePid !== runningPid && sched.compareForPreemption) {
+        const shouldPreempt = sched.compareForPreemption(t, candidatePid, getRemaining, runningPid);
+        
+        if (shouldPreempt) {
+          // Expropiar proceso actual
+          traceSlice(runningPid, cpu.sliceStart!, t);
+          traceEvent(t, 'C→L', runningPid, { reason: 'preempt' });
+          sched.onDesalojoActual?.(runningPid);
+          cpu.pid = null;
+          cpu.sliceStart = null;
+          
+          // Programar despacho con TCP
+          pendingDispatchAt = t + TCP;
+          if (TCP > 0) {
+            programar(pendingDispatchAt, EVT.DISPATCH);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(t);
+          }
+          return; // Solo un proceso puede expropiar
+        }
+      }
+    }
+  };
+
+  const despacharSiLibre = (t: number): void => {
+    if (cpu.pid !== null) return;
+
+    const nextPid = sched.next();
+    if (nextPid === undefined) return;
+
+    cpu.pid = nextPid;
+    cpu.sliceStart = t;
+    traceEvent(t, 'L→C', nextPid);
+
+    const proceso = procesos.find(p => p.pid === nextPid);
+    const runtimeState = rt.get(nextPid);
+    
+    if (!proceso || !runtimeState) return;
+
+    const rafagaCPU = runtimeState.restante;
+    
+    // Programar fin de ráfaga
+    programar(t + rafagaCPU, EVT.CPU_DONE, nextPid);
+  };
+
+  const finalizarProceso = (t: number, pid: number): void => {
+    const tfpFinal = t + TFP;
+    traceEvent(tfpFinal, 'C→T', pid, { TFP });
+    sched.onFinish(pid);
+  };
+
+  const procesarBloqueoES = (t: number, pid: number): void => {
+    const rt_state = rt.get(pid);
+    if (!rt_state) return;
+
+    const proceso = procesos.find(p => p.pid === pid);
+    if (!proceso) return;
+
+    rt_state.idxRafaga++;
+    
+    if (rt_state.idxRafaga < proceso.rafagasCPU.length) {
+      // Hay más ráfagas → bloqueo ES
+      programar(t + bloqueoES, EVT.IO_DONE, pid);
+      traceEvent(t, 'C→B', pid, { bloqueoES });
+      sched.onBlock(pid);
+    } else {
+      // No hay más ráfagas → terminar
+      finalizarProceso(t, pid);
+    }
+  };
+
+  // Event loop principal
+  while (!q.isEmpty()) {
+    const event = q.pop()!;
+    currentTick = event.t;
+
+    // Aging se maneja automáticamente en SchedulerPriority
+
+    switch (event.type) {
+      case EVT.ADMIT:
+        if (typeof event.pid === 'number') {
+          traceEvent(currentTick, 'N→L', event.pid);
+          sched.onAdmit(event.pid);
+          tryPreemptIfNeeded(currentTick);
+          if (pendingDispatchAt === null) {
+            despacharSiLibre(currentTick);
+          }
+        }
+        break;
+
+      case EVT.DISPATCH:
+        pendingDispatchAt = null;
+        despacharSiLibre(currentTick);
+        break;
+
+      case EVT.CPU_DONE:
+        if (typeof event.pid === 'number' && cpu.pid === event.pid) {
+          traceSlice(event.pid, cpu.sliceStart!, currentTick);
+          cpu.pid = null;
+          cpu.sliceStart = null;
+          procesarBloqueoES(currentTick, event.pid);
+          
+          if (pendingDispatchAt === null) {
+            despacharSiLibre(currentTick);
+          }
+        }
+        break;
+
+      case EVT.IO_DONE:
+        if (typeof event.pid === 'number') {
+          const rt_state = rt.get(event.pid);
+          if (rt_state && rt_state.idxRafaga < procesos.find(p => p.pid === event.pid)!.rafagasCPU.length) {
+            rt_state.restante = procesos.find(p => p.pid === event.pid)!.rafagasCPU[rt_state.idxRafaga];
+            traceEvent(currentTick, 'B→L', event.pid);
+            sched.onReady(event.pid);
+            tryPreemptIfNeeded(currentTick);
+            if (pendingDispatchAt === null) {
+              despacharSiLibre(currentTick);
+            }
+          }
+        }
+        break;
     }
   }
 

@@ -250,7 +250,7 @@ Acá tenés los **8 pasos** con lo que hacer, qué validar, y los **errores típ
 
 ---
 
-# 8) Prioridad (+ envejecimiento), Métricas y Gantt
+# 8) Prioridad (+ envejecimiento), Métricas y Gantt IMPLEMENTADO
 
 (sched/priority.ts, metrics/metricas.ts, gantt/*)
 
@@ -337,6 +337,382 @@ P2: arr 2 [3]
 * En el engine, **no decidas** la política; limitate a: “¿Quién va ahora?” (`elegirSiguiente`).
 * Si algo inexplicable pasa, **volvé a los 4 fixtures** y compará `trace.slices` con tus goldens.
 
+¡Bien, Mica! Con el **Paso 8** (Prioridad+aging, Métricas y Gantt) ya definido, te paso una **ruta de cierre** para terminar la migración sin arrastrar errores del proyecto viejo. La idea es ir de adentro hacia afuera: **fachada del core → casos de uso → UI → exportes → pruebas E2E → documentación**.
+
+
+## Paso 9 — Fachada del Core (API estable para la UI) IMPLEMENTADO
+
+**Objetivo:** que el front **no toque** directamente el engine ni los schedulers.
+
+**Qué crear (src/lib/application/):**
+
+* `usecases/runSimulation.ts`
+
+  * `runSimulation(cfg: SimulationConfig, procesos: Proceso[]): { trace, metricas, gantt }`
+  * Internamente:
+
+    1. Selecciona **scheduler** (FCFS/RR/SPN/SRTN/PRIORITY).
+    2. Ejecuta engine con `Costos`.
+    3. Construye **Metrics** con `MetricsBuilder`.
+    4. Construye **GanttModel** con `GanttBuilder`.
+* `adapters/schedulerFactory.ts`
+
+  * Devuelve la instancia según `cfg.politica`.
+* `adapters/costosFactory.ts`
+
+  * Aglutina TIP/TCP/TFP/bloqueoES desde la UI.
+
+**Definición de “hecho”:**
+
+* `runSimulation` es **pura** (sin efectos en DOM).
+* Solo retorna **POJOs**: `trace`, `metricas`, `gantt`.
+* Unit tests: inyectar 4 fixtures y comparar contra goldens.
+
+**Antibugs (lecciones del viejo.zip):**
+
+* La UI **nunca** calcula métricas; solo muestra lo que viene de `MetricsBuilder`.
+* La UI **nunca** recalcula Gantt; usa `GanttModel` intacto.
+
 ---
 
-Si querés, te dejo en un próximo mensaje los **stubs exactos** (TypeScript) para `IScheduler`, `FCFS`, `EventQueue`, `run()` y una `RR` mínima con `quantum`, de modo que puedas compilar y empezar a validar los **Gate 1–6** sin escribir todo desde cero.
+## reorganizacion IMPLEMENTADO
+
+REORGANIZACIÓN COMPLETADA EXITOSAMENTE
+🔄 Cambios Realizados:
+
+1. Movido importador a io
+✅ parser.ts: Importador de tandas JSON (antes ui/services/importers/legacyTanda.ts)
+Renombrado: importLegacyTanda → parseTandaJSON
+Renombrado: ProcesoLegacy → ProcesoTanda
+Funciones: parseTandaJSON(), extractBloqueoESGlobal()
+
+2. Creado export.ts
+✅ Exportación completa: JSON/CSV para resultados, métricas, trace
+✅ Funciones: exportToJSON(), exportMetricsToCSV(), exportTraceToCSV()
+✅ Helpers browser: Descarga automática de archivos
+
+3. Reorganizado simulacion.ts
+✅ Stores principales: simulationConfig, procesos, simulationResult
+✅ Derived stores: hasProcesses, canExecute, metricas, gantt
+✅ Funciones puras: runSimulation(), runSimulationFromTanda()
+✅ Acciones: loadFromTanda(), executeSimulation(), clearSimulation()
+
+4. Movido factories a stores
+✅ stores/costosFactory.ts: Factory de costos con validaciones
+✅ stores/schedulerFactory.ts: Factory de runners por política
+
+5. Eliminado directorios vacíos
+✅ Eliminados: src/lib/application/, src/lib/ui/
+✅ Limpieza: Referencias actualizadas en todos los tests
+📋 Estructura Final (según README.md original):
+src/lib/
+├── model/          ✅ Tipos base (Proceso, Costos, Estados)
+├── engine/         ✅ Motor de simulación (types, queue, engine)  
+├── scheduler/      ✅ Algoritmos (FCFS, RR, SPN, SRTN, PRIORITY)
+├── io/             ✅ Parser tandas + Export resultados  
+├── metrics/        ✅ Cálculo métricas (TRp, TE, TRn, globales)
+├── gantt/          ✅ Schema + Builder para diagramas
+└── stores/         ✅ Simulación + factories (lógica UI)
+
+🧪 Validación Completa:
+✅ test-import-legacy.ts: Parser funcionando
+✅ test-runSimulation.ts: Stores y funciones puras OK
+✅ test-integration-tanda5p.ts: Todas las políticas funcionando
+
+📊 Estructura.puml Actualizado:
+✅ Reflejan realidad: Todos los archivos implementados marcados como ✅
+✅ io/: Parser + Export documentados correctamente
+✅ stores/: Simulación + factories integrados
+✅ Dependencias: Actualizadas según nueva estructura
+✅ Leyenda: Paso 9 completado + reorganización explicada
+El proyecto ahora sigue fielmente la estructura original del README.md, con toda la lógica de entrada/salida en io/ y la coordinación de la UI centralizada en simulacion.ts. ¡Todo funciona perfectamente! 🎯
+
+
+## Paso 10 — Casos de uso y stores (UI-side) IMPLEMENTADO
+
+**Objetivo:** orquestar interacciones de la UI sin lógica de negocio.
+
+**Qué crear (src/lib/ui/):**
+
+* `stores/simStore.ts` (Svelte store)
+
+  * `{ cfg, procesos, resultado? }`
+* `services/importExport.ts`
+
+  * `fromJSON`, `fromCSV`, `toJSON`, `toCSV`
+* `services/fixtures.ts`
+
+  * Carga rápida de **A_sinES_FCFS**, **B_conES_25**, **RR_q2**, **SRTN_preempt**.
+
+**Definición de “hecho”:**
+
+* Cambiar `cfg` o `procesos` **no** ejecuta automáticamente; el usuario dispara **Simular**.
+* Import/Export **no muta** estructuras internas (clonado defensivo).
+
+**Antibugs:**
+
+* Validar entrada: `arribo >= 0`, ráfagas **> 0** (permitir 0 solo si lo trataste explícitamente), PIDs únicos.
+* Si `politica='RR'`, exigir `quantum > 0`.
+* `PRIORITY`: documentar convención “menor número = mayor prioridad”.
+
+---
+
+¡perfecto, Mica! Ajusté tus **Pasos 11–15** a la **estructura real** de tu repo (con `io/`, `stores/`, `engine/`, `scheduler/`, `metrics/`, `gantt/` y **sin** `application/` ni `ui/`). Abajo tenés **qué va en cada carpeta, nombres de archivos, responsabilidades y antibugs**, más **stubs mínimos** para conectar rápido.
+
+---
+
+# Paso 11 — UI: pantallas y componentes
+
+## Rutas (SvelteKit)
+
+* `src/routes/simulacion/+page.svelte` → Entrada de datos, configuración y botón **Simular**.
+* `src/routes/resultados/+page.svelte` → **Gantt + Métricas + Trace** (o podés hacerlo como tabs en una sola página; a elección).
+
+> Estado compartido: usás tus stores en `src/lib/stores/simulacion.ts`. No metas lógica de negocio en componentes; solo orquestá acciones del store.
+
+## Componentes (colocalos en `src/lib/components/`)
+
+* `ProcessTableEditor.svelte` — ABM + paste desde CSV/Excel (usa `procesos` store).
+* `PolicySelector.svelte` — `politica`, `quantum`, y (cuando uses) `aging.step/aging.quantum`.
+* `CostConfigForm.svelte` — `TIP/TCP/TFP/bloqueoES` (ligado a `simulationConfig`).
+* `RunButton.svelte` — dispara `executeSimulation()` del store.
+* `GanttView.svelte` — pinta **solo CPU** a partir de tu `GanttModel`.
+* `MetricsTable.svelte` — `TRp`, `TE`, `TRn` por PID + promedios globales.
+* `TraceViewer.svelte` (opcional) — tabla simple de eventos `{t, type, pid}`.
+
+## Conexión desde la página
+
+```svelte
+<!-- src/routes/simulacion/+page.svelte -->
+<script lang="ts">
+  import ProcessTableEditor from '$lib/components/ProcessTableEditor.svelte';
+  import PolicySelector from '$lib/components/PolicySelector.svelte';
+  import CostConfigForm from '$lib/components/CostConfigForm.svelte';
+  import RunButton from '$lib/components/RunButton.svelte';
+  import { loadFixture, loadFromTanda, canExecute, executeSimulation } from '$lib/stores/simulacion';
+  import { parseTandaJSON } from '$lib/io/parser';
+
+  function onImportJson(evt: Event) {
+    const input = evt.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    const file = input.files[0];
+    file.text().then(txt => {
+      const json = JSON.parse(txt);
+      // soporte doble: tanda legacy {nombre, tiempo_arribo,...} o escenario {cfg, procesos}
+      if (Array.isArray(json)) {
+        loadFromTanda(json); // usa parseTandaJSON adentro
+      } else if (json.cfg && json.procesos) {
+        // escenario completo
+        // setear cfg + procesos pero NO ejecutar
+      }
+    });
+  }
+</script>
+
+<h1>Simulación</h1>
+<PolicySelector/>
+<CostConfigForm/>
+<ProcessTableEditor/>
+
+<div class="actions">
+  <button on:click={() => loadFixture('A_sinES_FCFS')}>Cargar Fixture A</button>
+  <input type="file" accept="application/json" on:change={onImportJson}/>
+  <RunButton on:click={() => executeSimulation()} disabled={!$canExecute}/>
+</div>
+```
+
+```svelte
+<!-- src/routes/resultados/+page.svelte -->
+<script lang="ts">
+  import GanttView from '$lib/components/GanttView.svelte';
+  import MetricsTable from '$lib/components/MetricsTable.svelte';
+  import TraceViewer from '$lib/components/TraceViewer.svelte';
+  import { simulationResult } from '$lib/stores/simulacion';
+</script>
+
+{#if $simulationResult}
+  <GanttView { $simulationResult }/>
+  <MetricsTable metricas={$simulationResult.metricas}/>
+  <details><summary>Ver Trace</summary>
+    <TraceViewer trace={$simulationResult.trace}/>
+  </details>
+{:else}
+  <p>No hay resultados. Corré una simulación en /simulacion.</p>
+{/if}
+```
+
+### Antibugs (UI)
+
+* **Gantt:** dibuja **solo** segmentos `tipo=CPU` del `GanttModel`. TIP/TCP/TFP/IO solo como hitos/tooltip si querés, **no barras**.
+* **Sin side-effects en derived**: ningún `derived` debe ejecutar `executeSimulation()`.
+* **Clonado defensivo**: import/export **no** deben mutar arrays originales (ya lo resolviste moviendo a `io/`).
+* **RR**: deshabilitá el botón si `quantum<=0`.
+* **PRIORITY**: la UI muestra claramente “menor número = mayor prioridad”.
+
+**Definición de hecho (P11)**
+
+* [ ] `/simulacion` con validaciones y botón **Simular**.
+* [ ] `/resultados` muestra **Gantt** y **Métricas** coherentes con tus goldens.
+* [ ] No se pintan TIP/TCP/TFP como CPU.
+
+---
+
+# Paso 12 — Exportes y reproducibilidad (usando tu `io/export.ts`)
+
+## Acciones UI (agregalas en `simulacion.ts` si no están)
+
+* `exportResultadoJSON()` → `{ cfg, procesos, trace, metricas, gantt }`.
+* `exportMetricasCSV()` y `exportTraceCSV()` (ya los tenés, conectalos a botones en `/resultados`).
+
+## Importar escenario/resultados
+
+* **Escenario**: `{ cfg, procesos }` → setear stores y **no** ejecutar (el usuario decide).
+* **Resultado completo**: si importás `{ cfg, procesos, trace, metricas, gantt }`, tratá esto **solo para visualizar**; si querés *reproducir*, re-ejecutá con `cfg+procesos` y compará con los goldens.
+
+### Botones en `/resultados` (ejemplo)
+
+```svelte
+<button on:click={exportResultadoJSON}>Exportar Resultado (JSON)</button>
+<button on:click={exportMetricasCSV}>Exportar Métricas (CSV)</button>
+<button on:click={exportTraceCSV}>Exportar Trace (CSV)</button>
+```
+
+**Definición de hecho (P12)**
+
+* [ ] Exportar `{ cfg, procesos, trace, metricas, gantt }`.
+* [ ] Re-importar **escenario** (cfg+procesos) reproduce **exacto** Gantt y métricas.
+
+---
+
+# Paso 13 — Pruebas E2E y goldens (respetando tu layout)
+
+## Goldens
+
+* Carpeta `tests/goldens/`:
+
+  * `A_sinES_FCFS.trace.json`, `A_sinES_FCFS.metricas.json`, `A_sinES_FCFS.gantt.json`
+  * Idem `B_conES_25`, `RR_q2`, `SRTN_preempt`.
+
+## Tests
+
+* **Unit**
+
+  * `metrics/metricas.test.ts` → `buildMetricsFromTrace` (TRp, TE, TRn, promedios)
+  * `gantt/builder.test.ts` → solo segmentos CPU.
+* **Integration**
+
+  * `stores/simulacion.integration.ts` → `loadFixture → executeSimulation → comparar con goldens`.
+* **E2E liviano** (opcional Playwright/Cypress)
+
+  * Abrir `/simulacion` → cargar fixture → simular → navegar a `/resultados` → verificar valores esperados en tabla de métricas.
+
+### Antibugs
+
+* Ejecutar los **4 fixtures** ante cualquier cambio en engine/scheduler.
+* Diff legible (pretty-assert) para comparar JSON.
+
+**Definición de hecho (P13)**
+
+* [ ] Goldens guardados.
+* [ ] Unit + Integration + (opcional) E2E verde.
+
+---
+
+# Paso 14 — Documentación y diagramas finales (nombres ajustados)
+
+Actualizá `diagramas/` con tu nomenclatura nueva (sin `/application/` ni `/ui/`):
+
+* **08-secuencia-priority-aging.puml**
+* **08-clases-metricas.puml**
+* **08-componentes-gantt.puml**
+* **11-componentes-ui.puml** → `stores/simulacion ↔ io/parser/export ↔ components ↔ routes`
+* **11-secuencia-ui-run.puml** → click **Simular** → `stores/executeSimulation` → **runner** → `metricas/gantt` → UI
+
+`README.md`:
+
+* Cómo correr / testear / reproducir goldens.
+* Convenciones:
+
+  * **Prioridad**: menor número = mayor prioridad.
+  * **Envejecimiento**: solo en **LISTO**; expropia con `<` (no `<=`).
+  * **Métricas**: TRp = `finUltima - arribo`; TE = `TRp - servicioCPU`; TRn = `TRp/servicioCPU`.
+  * **Gantt**: solo CPU.
+
+**Definición de hecho (P14)**
+
+* [ ] Docs y diagramas reflejan **io/** y **stores/** (no hay `/application/`).
+* [ ] Convenciones explícitas.
+
+
+## Mini-checklist (ya adaptado)
+
+**P11 — UI**
+
+* [ ] `/simulacion` con validaciones y `Simular`.
+* [ ] `/resultados` con Gantt (solo CPU) + Métricas correctas.
+* [ ] Sin side-effects en derived/stores.
+
+**P12 — Exportes**
+
+* [ ] Exporta `{ cfg, procesos, trace, metricas, gantt }`.
+* [ ] Re-importar escenario reproduce 1:1.
+
+**P13 — Pruebas**
+
+* [ ] Goldens por fixture.
+* [ ] Unit + Integration (+ E2E) verde.
+
+**P14 — Docs/Diagramas**
+
+* [ ] Diagramas `11-*` con `io/` y `stores/`.
+* [ ] Convenciones claras.
+
+---
+
+Si querés, te paso en otro mensaje un **`GanttView.svelte` mínimo** (canvas/SVG) que consuma tu `GanttModel` y respete “solo CPU”.
+
+
+# Mini-checklist por paso (copiá/pegá)
+
+**P9 — Fachada Core**
+
+* [ ] `runSimulation(cfg, procesos)` retorna `{trace, metricas, gantt}`.
+* [ ] Tests con 4 fixtures → verde.
+
+**P10 — Usecases/Stores**
+
+* [ ] Store `simStore` centraliza estado.
+* [ ] Import/Export de procesos con validaciones.
+
+**P11 — UI**
+
+* [ ] `/simulacion` funciona con validaciones y `Simular`.
+* [ ] `/resultados` muestra Gantt y métricas correctos.
+* [ ] Gantt no dibuja TIP/TCP/TFP.
+
+**P12 — Exportes**
+
+* [ ] Exporta e importa resultados completos.
+* [ ] Reproducibilidad 1:1.
+
+**P13 — Pruebas**
+
+* [ ] Goldens guardados.
+* [ ] Unit+Integration+E2E básico → verde.
+
+**P14 — Docs/Diagramas**
+
+* [ ] Diagrama de componentes UI y secuencia UI actualizados.
+* [ ] Convenciones explícitas.
+
+---
+
+## Errores del viejo.zip que este plan previene
+
+* **Métricas inconsistentes**: ahora solo salen de `MetricsBuilder`.
+* **Gantt “creativo”**: UI solo pinta **CPU** del `GanttModel`.
+* **Expropiaciones erráticas**: prioridad/aging con regla estricta `<` y desempates estables.
+* **Doble despacho / eventos fuera de orden**: orden total en el engine + goldens obligatorios.
+* **Regresiones invisibles**: E2E y goldens de resultados exportados.
+
+---

@@ -5,6 +5,8 @@ export interface Proceso {
   arribo: number;           // tiempo de arribo (ms o ticks)
   rafagasCPU: number[];     // solo duraciones de ráfagas de CPU
   estado: Estado;           // 'N'|'L'|'C'|'B'|'F'
+  label?: string;           // nombre descriptivo (ej: "P1", "P2")
+  prioridadBase?: number;   // prioridad para PRIORITY (menor número = mayor prioridad)
 }
 
 /**

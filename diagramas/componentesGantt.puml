@@ -58,11 +58,19 @@ GanttTrack "1" o-- "*" GanttSeg
 GanttView ..> GanttModel : renders
 
 note right of GanttBuilder
-Reglas de dibujo:
-- Solo se dibujan slices CPU (tipo=CPU).
-- TIP/TCP/TFP/IO NO se muestran como CPU;
-  si se desea, se marcan como hito/tooltip.
-- Los segmentos por PID se ordenan por tiempo.
-- No se rellenan huecos "imaginarios".
+**GanttBuilder.build(trace)**
+Mapea SOLO slices de CPU a segmentos (pid, start, end).
+
+**Reglas de dibujo:**
+• Solo se dibujan slices donde tipo == CPU
+• TIP/TCP/TFP/IO NO son barras CPU
+• Opcional: mostrar como marcas/tooltips
+• Segmentos por PID ordenados por tiempo
+• No rellenar huecos "imaginarios"
+
+**Filtrado:**
+1. filtrarCPU(slices) → solo SliceType.CPU
+2. agruparPorPID() → Map<pid, List<TraceSlice>>
+3. normalizarHuecos() → detectar gaps reales
 end note
 @enduml
