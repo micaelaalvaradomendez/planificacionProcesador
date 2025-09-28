@@ -455,12 +455,12 @@ invariants_ts --> orden_eventos_md : "implementa reglas"
 ❌ **No despachar desde C→T** - administrativo, CPU se libera en fin real
 ❌ **No mantener procesos terminados** en cola ready - filtrar restante <= 0
 ❌ **No encolar con restante <= 0** - guard en push() con warning/assert
-✅ **TCP** desplaza inicio slice (tStart = t + TCP), no cuenta en ráfaga/quantum
-✅ **Empates**: C→T/C→B (prio 1/2) gana a C→L (prio 3); C→L queda stale
-✅ **Orden estable**: usar seq para desempatar en SPN/SRTN con misma clave
-✅ **SRTN filtrado**: next() elimina procesos con restante <= 0 antes de elegir
-✅ **Purga en origen**: onFinish() remueve PID terminado de cola ready
-✅ **Expropiación estricta**: SRTN usa < (no <=) para evitar thrashing
+ **TCP** desplaza inicio slice (tStart = t + TCP), no cuenta en ráfaga/quantum
+ **Empates**: C→T/C→B (prio 1/2) gana a C→L (prio 3); C→L queda stale
+ **Orden estable**: usar seq para desempatar en SPN/SRTN con misma clave
+ **SRTN filtrado**: next() elimina procesos con restante <= 0 antes de elegir
+ **Purga en origen**: onFinish() remueve PID terminado de cola ready
+ **Expropiación estricta**: SRTN usa < (no <=) para evitar thrashing
 
 **Colores por Módulo:**
 • **model** - Tipos y entidades base
