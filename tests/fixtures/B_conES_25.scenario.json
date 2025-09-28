@@ -1,0 +1,10 @@
+{
+  "cfg": {
+    "politica": "FCFS",
+    "costos": { "TIP": 1, "TCP": 1, "TFP": 1, "bloqueoES": 25 }
+  },
+  "procesos": [
+    { "pid": 1, "arribo": 0, "rafagasCPU": [3,2], "estado": "N" },
+    { "pid": 2, "arribo": 1, "rafagasCPU": [4], "estado": "N" }
+  ]
+}

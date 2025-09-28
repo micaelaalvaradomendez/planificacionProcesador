@@ -27,7 +27,7 @@
 </script>
 
 <div class="gantt-container">
-  <h3>📊 Diagrama de Gantt (Solo CPU)</h3>
+  <h3> Diagrama de Gantt (Solo CPU)</h3>
   
   {#if !model}
     <div class="empty-state">

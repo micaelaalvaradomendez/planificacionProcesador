@@ -35,6 +35,8 @@
   function handleExportTraceCSV() {
     exportTraceCSV();
   }
+
+
 </script>
 
 <svelte:head>
@@ -45,7 +47,7 @@
 <div class="container">
   <header class="header">
     <div class="header-content">
-      <h1>📊 Resultados de Simulación</h1>
+      <h1> Resultados de Simulación</h1>
       <div class="header-actions">
         <button on:click={backToSimulation} class="back-btn">
           ⬅️ Volver a Simulación
@@ -89,13 +91,15 @@
             📄 Exportar JSON Completo
           </button>
           <button on:click={handleExportMetricsCSV} class="export-btn">
-            📊 Exportar Métricas CSV
+             Exportar Métricas CSV
           </button>
           <button on:click={handleExportTraceCSV} class="export-btn">
-            🔍 Exportar Trace CSV
+             Exportar Trace CSV
           </button>
         </div>
       </section>
+
+
 
       <!-- Gantt Chart -->
       <section class="section">
@@ -114,7 +118,7 @@
 
       <!-- Resumen de configuración -->
       <section class="section config-summary">
-        <h3>⚙️ Configuración Utilizada</h3>
+        <h3>   Configuración Utilizada</h3>
         <div class="config-grid">
           <div class="config-item">
             <strong>Política:</strong> {config.politica}
@@ -142,7 +146,7 @@
             <strong>TFP:</strong> {config.costos?.TFP ?? 0}
           </div>
           <div class="config-item">
-            <strong>Bloqueo E/S:</strong> {config.costos?.bloqueoES ?? 0}
+            <strong>E/S (Fallback):</strong> {config.costos?.bloqueoES ?? 0}
           </div>
         </div>
       </section>
@@ -158,6 +162,7 @@
                 <th>Nombre</th>
                 <th>Arribo</th>
                 <th>Ráfagas CPU</th>
+                <th>E/S</th>
                 <th>Prioridad</th>
               </tr>
             </thead>
@@ -168,6 +173,13 @@
                   <td>{proceso.label}</td>
                   <td>{proceso.arribo}</td>
                   <td class="rafagas-cell">[{proceso.rafagasCPU.join(', ')}]</td>
+                  <td class="io-cell">
+                    {#if proceso.rafagasES}
+                      [{proceso.rafagasES.join(', ')}]
+                    {:else}
+                      <span class="fallback">({config.costos?.bloqueoES ?? 0})</span>
+                    {/if}
+                  </td>
                   <td>{proceso.prioridadBase || '-'}</td>
                 </tr>
               {/each}
@@ -364,6 +376,18 @@
     font-family: monospace;
     font-size: 0.875rem;
   }
+
+  .io-cell {
+    font-family: monospace;
+    font-size: 0.875rem;
+  }
+
+  .io-cell .fallback {
+    color: #666;
+    font-style: italic;
+  }
+
+
 
   @media (max-width: 768px) {
     .container {

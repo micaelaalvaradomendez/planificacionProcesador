@@ -18,7 +18,7 @@
   
   <div class="nav-links">
     <a href="/simulacion" class="nav-btn">▶️ Ir a Simulación</a>
-    <a href="/resultados" class="nav-btn">📊 Ver Resultados</a>
+    <a href="/resultados" class="nav-btn"> Ver Resultados</a>
   </div>
 </div>
 

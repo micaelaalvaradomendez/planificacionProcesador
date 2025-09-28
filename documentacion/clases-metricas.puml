@@ -1,0 +1,121 @@
+@startuml clases-metricas
+title Clases — Métricas y Análisis
+
+package "Metrics" {
+  class MetricsBuilder {
+    +build(trace: Trace): ProcessMetrics[]
+    +buildGlobal(processMetrics: ProcessMetrics[]): GlobalMetrics
+    -finUltimaActividad(pid: string, trace: Trace): number
+    -servicioCPU(pid: string, trace: Trace): number
+    -contarCambiosContexto(trace: Trace): number
+    -contarExpropiaciones(trace: Trace): number
+  }
+  
+  class ProcessMetrics {
+    +pid: string
+    +arribo: number
+    +fin: number
+    +servicioCPU: number
+    +TRp: number // Tiempo Respuesta = fin - arribo
+    +TE: number  // Tiempo Espera = TRp - servicioCPU
+    +TRn: number // Tiempo Respuesta Normalizado = TRp/servicioCPU
+  }
+  
+  class GlobalMetrics {
+    +TRpPromedio: number
+    +TEPromedio: number
+    +TRnPromedio: number
+    +throughput: number
+    +cambiosDeContexto: number
+    +expropiaciones: number
+    +tiempoTotalSimulacion: number
+  }
+  
+  class Trace {
+    +slices: TraceSlice[]
+    +eventos: SimEvent[]
+  }
+  
+  class TraceSlice {
+    +pid: string
+    +tipo: SliceType
+    +start: number
+    +end: number
+  }
+  
+  enum SliceType {
+    CPU
+    TCP
+    TIP
+    TFP
+    IO
+  }
+}
+
+MetricsBuilder ..> Trace : analiza
+MetricsBuilder ..> ProcessMetrics : genera
+MetricsBuilder ..> GlobalMetrics : genera
+Trace "1" o-- "*" TraceSlice
+TraceSlice --> SliceType
+
+note right of MetricsBuilder::finUltimaActividad
+**finUltimaActividad(pid)**
+= t del evento C→T final
+= incluye TFP del último tramo CPU
+end note
+
+note right of MetricsBuilder::servicioCPU
+**servicioCPU(pid)**
+= suma de (end - start) de slices
+donde tipo == SliceType.CPU
+**NO cuenta TCP/TIP/TFP/IO**
+end note
+
+note right of MetricsBuilder::contarCambiosContexto
+**cambiosDeContexto**
+= # de eventos L→C en trace
+= cada dispatch cuenta como cambio
+end note
+
+note right of MetricsBuilder::contarExpropiaciones
+**expropiaciones**
+= # de eventos C→L en trace
+= solo cuenta preempciones
+**NO cuenta C→B (bloqueos) ni C→T (finales)**
+  end note
+
+note bottom of ProcessMetrics
+**Cálculos por Proceso:**
+• TRp = fin - arribo
+• TE = TRp - servicioCPU  
+• TRn = TRp / servicioCPU
+
+**Validaciones:**
+• servicioCPU > 0 (debe haber ejecutado)
+• TRn >= 1.0 (tiempo respuesta ≥ servicio)
+end note
+
+note bottom of GlobalMetrics
+**Cálculos Globales:**
+• TRpPromedio = avg(TRp de todos los procesos)
+• TEPromedio = avg(TE de todos los procesos)
+• TRnPromedio = avg(TRn de todos los procesos)
+• throughput = #procesos / tiempoTotalSimulacion
+end note
+
+Trace "1" o-- "*" TraceSlice
+TraceSlice --> SliceTipo
+MetricsBuilder ..> Trace
+MetricsBuilder ..> Proceso
+MetricsBuilder ..> MetricaProceso
+MetricsBuilder ..> MetricaGlobal
+
+note bottom
+Convenciones:
+- Gantt/CPU: solo slices tipo CPU cuentan como "ejecución".
+- Overheads (TIP/TCP/TFP) y IO NO suman a servicioCPU ni a espera.
+- TRp = fin_ultima_actividad - arribo.
+- TE = TRp - servicioCPU.
+- TRn = TRp / servicioCPU.
+end note
+@enduml

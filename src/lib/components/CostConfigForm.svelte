@@ -55,7 +55,7 @@
     </div>
 
     <div class="form-group">
-      <label for="bloqueoES">Bloqueo E/S (Global):</label>
+      <label for="bloqueoES">Bloqueo E/S (Fallback):</label>
       <input 
         id="bloqueoES"
         type="number" 
@@ -63,12 +63,12 @@
         value={costos.bloqueoES}
         on:input={(e) => setCost('bloqueoES', +e.currentTarget.value)}
       />
-      <small>Tiempo de bloqueo entre ráfagas (aplica a todos los procesos)</small>
+      <small>Fallback cuando el proceso no especifica su propio tiempo de E/S</small>
     </div>
   </div>
 
   <div class="info-panel">
-    <p><strong>Nota:</strong> El bloqueo E/S es global y se aplica automáticamente entre ráfagas de CPU cuando un proceso tiene múltiples ráfagas.</p>
+    <p><strong>Nota:</strong> Cada proceso puede especificar su propio tiempo de E/S en el JSON (campo 'duracion_rafaga_es'). Este valor se usa como fallback cuando no se especifica.</p>
   </div>
 </div>
 

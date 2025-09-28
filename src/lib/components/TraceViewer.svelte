@@ -21,10 +21,10 @@
       'L→E': '▶️ Listo → Ejecutando',
       'E→L': '⏸️ Ejecutando → Listo',
       'E→B': '⏹️ Ejecutando → Bloqueado',
-      'B→L': '🔄 Bloqueado → Listo',
-      'E→T': '✅ Ejecutando → Terminado',
+      'B→L': '    Bloqueado → Listo',
+      'E→T': ' Ejecutando → Terminado',
       'TIP': '💰 Costo Ingreso',
-      'TCP': '🔄 Costo Cambio',
+      'TCP': '    Costo Cambio',
       'TFP': '💰 Costo Fin'
     };
     return typeMap[type] || type;
@@ -60,12 +60,12 @@
 
 <div class="trace-container">
   <div class="trace-header">
-    <h3>🔍 Trace de Ejecución</h3>
+    <h3> Trace de Ejecución</h3>
     <button 
       on:click={() => showTrace = !showTrace}
       class="toggle-btn"
     >
-      {showTrace ? '📁 Ocultar' : '📂 Mostrar'} Trace ({eventos.length} eventos)
+      {showTrace ? '  Ocultar' : '📂 Mostrar'} Trace ({eventos.length} eventos)
     </button>
   </div>
   
@@ -164,7 +164,7 @@
       
       <!-- Resumen del trace -->
       <div class="trace-summary">
-        <h4>📊 Resumen del Trace</h4>
+        <h4> Resumen del Trace</h4>
         <div class="summary-grid">
           <div class="summary-item">
             <strong>Total eventos:</strong> {eventos.length}

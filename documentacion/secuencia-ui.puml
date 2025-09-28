@@ -1,0 +1,44 @@
+@startuml secuencia-ui
+title Secuencia UI — Simular y Exportar
+
+actor Usuario
+participant "routes/simulacion" as Sim
+participant "stores/simulacion" as Store
+participant "io/export" as Export
+participant "routes/resultados" as Res
+
+== Configurar y Simular ==
+Usuario -> Sim : Configurar políticas, costos, procesos
+Usuario -> Sim : Click "Ejecutar Simulación"
+Sim -> Store : executeSimulation()
+Store -> Store : runSimulation(cfg, procesos)\n→ {trace, metricas, gantt}
+Store -> Res : set simulationResult
+Sim -> Res : goto('/resultados')
+
+== Visualizar Resultados ==
+Usuario -> Res : Ver Gantt, métricas y trace
+note over Res
+  Componentes:
+  - GanttView
+  - MetricsTable 
+  - TraceViewer
+end note
+
+== Exportar Resultados ==
+Usuario -> Res : Click "Exportar JSON Completo"
+Res -> Store : exportResultadoJSON()
+Store -> Export : buildResultadoJSON(cfg, procesos, trace, metricas, gantt)
+Export -> Export : downloadJSON('resultado-simulacion', payload)
+
+Usuario -> Res : Click "Exportar Métricas CSV"
+Res -> Store : exportMetricasCSV()
+Store -> Export : exportMetricsToCSV(metricas.porProceso, 'metricas.csv')
+
+Usuario -> Res : Click "Exportar Trace CSV"
+Res -> Store : exportTraceCSV()
+Store -> Export : exportTraceToCSV(trace, 'trace.csv')
+
+== Volver a Simular ==
+Usuario -> Res : Click "← Volver a Simulación"
+Res -> Sim : goto('/simulacion')
+@enduml

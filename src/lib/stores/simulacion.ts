@@ -288,26 +288,23 @@ export function loadFromTandaJSON(json: unknown): void {
 // ===== EXPORTS DE CONVENIENCIA =====
 
 /**
- * Exportar resultado completo como JSON
+ * Exportar resultado completo como JSON (Paso 12)
  */
 export function exportResultadoJSON(): void {
-  const res = get(simulationResult);
   const cfg = get(simulationConfig);
-  if (!res) return;
-  
-  // Crear formato de exportación completo
-  const exportData = {
-    metadata: {
-      timestamp: new Date().toISOString(),
-      politica: cfg.politica,
-      configuracion: cfg as unknown as Record<string, unknown>
-    },
-    trace: res.trace,
-    metricas: res.metricas,
-    gantt: res.gantt
+  const procs = get(procesos);
+  const res = get(simulationResult);
+  if (!cfg || !procs?.length || !res) return;
+
+  // Convertir configuración al formato de export
+  const exportCfg = {
+    algoritmo: cfg.politica,
+    costos: cfg.costos || {},
+    quantum: cfg.quantum
   };
-  
-  exportToJSON(exportData, 'resultado-simulacion.json');
+
+  const payload = buildResultadoJSON(exportCfg, procs, res.trace, res.metricas, res.gantt);
+  downloadJSON('resultado-simulacion', payload);
 }
 
 /**
@@ -326,4 +323,157 @@ export function exportTraceCSV(): void {
   const res = get(simulationResult);
   if (!res) return;
   exportTraceToCSV(res.trace, 'trace.csv');
+}
+
+// ==================== PASO 12: NUEVAS FUNCIONES DE EXPORT/IMPORT ====================
+
+import { 
+  buildResultadoJSON, 
+  downloadJSON, 
+  downloadMetricasCSV, 
+  downloadTraceCSV,
+  type ResultadoExport,
+  type ExportSimulationConfig
+} from '../io/export';
+
+// Aliases para stores existentes (compatibilidad con tu spec)
+export const cfgStore = simulationConfig;
+export const procesosStore = procesos;  
+export const resultadoStore = simulationResult;
+
+/**
+ * Exportar métricas como CSV (nueva versión)
+ */
+export function exportMetricasCSVNew(): void {
+  const r = get(simulationResult);
+  if (!r) return;
+  downloadMetricasCSV('resultado-simulacion', r.metricas);
+}
+
+/**
+ * Exportar trace como CSV (nueva versión)
+ */
+export function exportTraceCSVNew(): void {
+  const r = get(simulationResult);
+  if (!r) return;
+  downloadTraceCSV('resultado-simulacion', r.trace);
+}
+
+// ===== Importar =====
+type EscenarioImport = { cfg: ExportSimulationConfig; procesos: Proceso[] };
+type ResultadoImport = { 
+  kind?: string; 
+  cfg: ExportSimulationConfig; 
+  procesos: Proceso[]; 
+  trace: any; 
+  metricas: any; 
+  gantt: any 
+};
+
+/**
+ * Importar un escenario (cfg + procesos) sin ejecutar
+ */
+export async function importEscenario(file: File): Promise<void> {
+  const data = JSON.parse(await file.text()) as EscenarioImport;
+  if (!data?.cfg || !Array.isArray(data?.procesos)) {
+    throw new Error('Archivo inválido: requiere { cfg, procesos }');
+  }
+
+  // Convertir cfg de export a formato interno
+  const internalCfg: SimulationConfig = {
+    politica: data.cfg.algoritmo as Politica,
+    costos: data.cfg.costos,
+    quantum: data.cfg.quantum
+  };
+
+  // Setear stores y NO ejecutar (el usuario decide)
+  simulationConfig.set(internalCfg);
+  procesos.set(data.procesos);
+  simulationResult.set(null);
+}
+
+/**
+ * Importar un resultado completo (solo para visualizar)
+ */
+export async function importResultado(file: File): Promise<void> {
+  const data = JSON.parse(await file.text()) as ResultadoImport;
+  if (!data?.cfg || !Array.isArray(data?.procesos) || !data.trace || !data.metricas || !data.gantt) {
+    throw new Error('Archivo inválido: requiere { cfg, procesos, trace, metricas, gantt }');
+  }
+
+  // Convertir cfg de export a formato interno
+  const internalCfg: SimulationConfig = {
+    politica: data.cfg.algoritmo as Politica,
+    costos: data.cfg.costos,
+    quantum: data.cfg.quantum
+  };
+
+  // Setear stores solo para visualizar (no alterar core)
+  simulationConfig.set(internalCfg);
+  procesos.set(data.procesos);
+  simulationResult.set({ 
+    trace: data.trace, 
+    metricas: data.metricas, 
+    gantt: data.gantt 
+  });
+}
+
+/**
+ * Reproducir simulación desde escenario actual
+ */
+export function reproducirEscenario(): void {
+  const cfg = get(simulationConfig);
+  const procs = get(procesos);
+  if (!cfg || !procs?.length) return;
+
+  // Usar la función runSimulation existente
+  const result = runSimulation(cfg, procs);
+  simulationResult.set(result);
+}
+
+/**
+ * Comparador sencillo para verificar reproducibilidad
+ */
+export function compararContraImportado(): { ok: boolean; difs: string[] } {
+  const cfg = get(simulationConfig);
+  const procs = get(procesos);
+  const importado = get(simulationResult);
+  if (!cfg || !procs?.length || !importado) {
+    return { ok: false, difs: ['Faltan datos para comparar'] };
+  }
+
+  // Ejecutar simulación temporalmente para comparar
+  const originalResult = importado;
+  
+  // Crear simulación temporal
+  const tempRunner = getRunner(cfg);
+  const tempCostos = costosFromUI(cfg.costos || {});
+  const tempTrace = tempRunner(procs, tempCostos, cfg);
+  const tempMetricas = MetricsBuilder.build(tempTrace, procs);
+  const tempGantt = GanttBuilder.build(tempTrace);
+
+  const difs: string[] = [];
+  
+  // Comparar longitudes básicas
+  const evImp = importado.trace?.events?.length ?? -1;
+  const evRep = tempTrace?.events?.length ?? -2;
+  if (evImp !== evRep) {
+    difs.push(`Trace length difiere: import=${evImp} vs repro=${evRep}`);
+  }
+
+  const slImp = importado.gantt?.tracks?.length ?? -1;
+  const slRep = tempGantt?.tracks?.length ?? -2;
+  if (slImp !== slRep) {
+    difs.push(`Gantt tracks difieren: import=${slImp} vs repro=${slRep}`);
+  }
+
+  // Comparar métricas básicas
+  const metImp = importado.metricas?.porProceso?.length ?? -1;
+  const metRep = tempMetricas?.length ?? -2;
+  if (metImp !== metRep) {
+    difs.push(`Métricas length difiere: import=${metImp} vs repro=${metRep}`);
+  }
+
+  const ok = difs.length === 0;
+  return { ok, difs };
 }

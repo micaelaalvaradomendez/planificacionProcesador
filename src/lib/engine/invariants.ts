@@ -63,7 +63,7 @@ export class EngineInvariants {
     cpuLibre: boolean
   ): void {
     if (import.meta.env.VITE_DEBUG_SLICES === 'true') {
-      console.log(`🔍 [${t}] ${event} P${pid}: ${restanteAntes}→${restanteDespues}, CPU libre: ${cpuLibre}`);
+      console.log(` [${t}] ${event} P${pid}: ${restanteAntes}→${restanteDespues}, CPU libre: ${cpuLibre}`);
     }
   }
 }

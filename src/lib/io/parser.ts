@@ -9,7 +9,7 @@ export interface ProcesoTanda {
   tiempo_arribo: number;         // 0,1,2...
   cantidad_rafagas_cpu: number;  // N
   duracion_rafaga_cpu: number;   // k
-  duracion_rafaga_es?: number;   // IGNORAR en Paso 9 (usamos costos.bloqueoES global)
+  duracion_rafaga_es?: number;   // Si viene, se replica en rafagasES (N-1); si no, fallback a bloqueoES global
   prioridad_externa?: number;    // menor = mayor prioridad
 }
 
@@ -66,11 +66,21 @@ export function parseTandaJSON(items: ProcesoTanda[]): Proceso[] {
         () => it.duracion_rafaga_cpu
       );
 
+      // Construir array de ráfagas E/S si hay duracion_rafaga_es
+      // Solo se necesitan N-1 bloques de E/S (entre ráfagas CPU)
+      const rafagasES = it.duracion_rafaga_es !== undefined && it.cantidad_rafagas_cpu > 1
+        ? Array.from(
+            { length: it.cantidad_rafagas_cpu - 1 }, 
+            () => it.duracion_rafaga_es!
+           )
+        : undefined;
+
       return {
         pid,
         label: it.nombre,
         arribo: it.tiempo_arribo,
         rafagasCPU,
+        rafagasES,
         prioridadBase: it.prioridad_externa,
         estado: 'N' as const,
       };

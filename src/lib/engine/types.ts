@@ -39,7 +39,18 @@ export interface TraceEvent {
   data?: Record<string, unknown>;
 }
 
+/** Tipos de overhead visibles en el Gantt */
+export type OverheadKind = 'TIP' | 'TCP' | 'TFP';
+
+export interface OverheadSlice {
+  pid: number;
+  t0: number;
+  t1: number;
+  kind: OverheadKind; // TIP | TCP | TFP
+}
+
 export interface Trace {
   slices: TraceSlice[];
   events: TraceEvent[];
+  overheads?: OverheadSlice[]; // NUEVO: para mostrar TIP/TCP/TFP en Gantt
 }

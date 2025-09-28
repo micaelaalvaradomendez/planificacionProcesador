@@ -6,14 +6,13 @@ import type { GanttModel, GanttTrack, GanttSeg } from './schema';
  */
 export class GanttBuilder {
   /**
-   * Construye modelo Gantt filtrando solo slices CPU
-   * NO incluye TIP/TCP/TFP/IO como barras CPU
+   * Construye modelo Gantt incluyendo slices CPU y overheads (TIP/TCP/TFP)
    */
   static build(trace: Trace): GanttModel {
-    // Filtrar solo slices CPU reales
-    const slicesCPU = this.filtrarCPU(trace.slices);
+    // Obtener todos los segmentos agrupados por PID: CPU + overheads
+    const segmentosPorPID = this.crearSegmentos(trace);
     
-    if (slicesCPU.length === 0) {
+    if (segmentosPorPID.size === 0) {
       return {
         tracks: [],
         tMin: 0,
@@ -21,25 +20,17 @@ export class GanttBuilder {
       };
     }
     
-    // Agrupar por PID
-    const slicesPorPID = this.agruparPorPID(slicesCPU);
-    
     // Crear tracks
     const tracks: GanttTrack[] = [];
-    for (const [pidStr, slices] of slicesPorPID.entries()) {
+    for (const [pidStr, segments] of segmentosPorPID.entries()) {
       const pid = pidStr;
       
-      // Convertir slices a segmentos, ordenados por tiempo
-      const segments = slices
-        .map(slice => ({
-          start: slice.start,
-          end: slice.end
-        }))
-        .sort((a, b) => a.start - b.start);
+      // Ordenar segmentos por tiempo
+      const sortedSegments = segments.sort((a, b) => a.start - b.start);
       
       tracks.push({
         pid,
-        segments
+        segments: sortedSegments
       });
     }
     
@@ -58,6 +49,56 @@ export class GanttBuilder {
       tMin,
       tMax
     };
+  }
+
+  /**
+   * Crea todos los segmentos agrupados por PID: CPU slices + overhead slices
+   */
+  private static crearSegmentos(trace: Trace): Map<string, GanttSeg[]> {
+    const grupos = new Map<string, GanttSeg[]>();
+    
+    // Helper para agregar segmento a un PID
+    const agregarSegmento = (pid: number, segmento: GanttSeg) => {
+      const pidStr = pid.toString();
+      if (!grupos.has(pidStr)) {
+        grupos.set(pidStr, []);
+      }
+      grupos.get(pidStr)!.push(segmento);
+    };
+    
+    // Agregar slices CPU
+    for (const slice of trace.slices) {
+      if (slice.end > slice.start && slice.start >= 0) {
+        agregarSegmento(slice.pid, {
+          start: slice.start,
+          end: slice.end,
+          type: 'cpu'
+        });
+      }
+    }
+    
+    // Agregar overhead slices si existen
+    if (trace.overheads) {
+      for (const overhead of trace.overheads) {
+        if (overhead.t1 > overhead.t0 && overhead.t0 >= 0) {
+          agregarSegmento(overhead.pid, {
+            start: overhead.t0,
+            end: overhead.t1,
+            type: overhead.kind.toLowerCase() as 'tip' | 'tcp' | 'tfp'
+          });
+        }
+      }
+    }
+    
+    return grupos;
+  }
+
+  /**
+   * Agrupa segmentos por PID (deprecated, ahora se hace en crearSegmentos)
+   */
+  private static agruparSegmentosPorPID(segmentos: GanttSeg[]): Map<string, GanttSeg[]> {
+    // Este método ya no se usa, la agrupación se hace en crearSegmentos
+    return new Map();
   }
   
   /**

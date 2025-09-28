@@ -1,0 +1,37 @@
+{
+  "slices": [
+    {
+      "pid": 1,
+      "start": 2,
+      "end": 3
+    },
+    {
+      "pid": 2,
+      "start": 4,
+      "end": 6
+    },
+    {
+      "pid": 1,
+      "start": 7,
+      "end": 8
+    }
+  ],
+  "events": [
+    {
+      "t": 3,
+      "type": "C→L",
+      "pid": 1
+    },
+    {
+      "t": 7,
+      "type": "C→T",
+      "pid": 2
+    },
+    {
+      "t": 9,
+      "type": "C→T",
+      "pid": 1
+    }
+  ],
+  "overheads": []
+}

@@ -1,5 +1,3 @@
-// place files you want to import through the `$lib` alias in this folder.
-
 // Core engine
 export * from './engine/engine';
 export * from './engine/types';

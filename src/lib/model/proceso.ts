@@ -4,6 +4,8 @@ export interface Proceso {
   pid: number;
   arribo: number;           // tiempo de arribo (ms o ticks)
   rafagasCPU: number[];     // solo duraciones de ráfagas de CPU
+  /** Nuevo: ráfagas de E/S entre CPU[i] y CPU[i+1]. Largo = rafagasCPU.length - 1 */
+  rafagasES?: number[];     // bloqueos específicos del proceso
   estado: Estado;           // 'N'|'L'|'C'|'B'|'F'
   label?: string;           // nombre descriptivo (ej: "P1", "P2")
   prioridadBase?: number;   // prioridad para PRIORITY (menor número = mayor prioridad)

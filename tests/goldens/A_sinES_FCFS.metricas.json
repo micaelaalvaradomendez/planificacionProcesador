@@ -1,0 +1,31 @@
+{
+  "porProceso": [
+    {
+      "pid": 1,
+      "arribo": 0,
+      "fin": 6,
+      "servicioCPU": 3,
+      "TRp": 6,
+      "TE": 3,
+      "TRn": 2
+    },
+    {
+      "pid": 2,
+      "arribo": 1,
+      "fin": 9,
+      "servicioCPU": 2,
+      "TRp": 8,
+      "TE": 6,
+      "TRn": 4
+    }
+  ],
+  "global": {
+    "TRpPromedio": 7,
+    "TEPromedio": 4.5,
+    "TRnPromedio": 3,
+    "throughput": 0.2222222222222222,
+    "cambiosDeContexto": 3,
+    "expropiaciones": 0,
+    "tiempoTotalSimulacion": 9
+  }
+}

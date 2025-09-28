@@ -1,0 +1,535 @@
+@startuml diagramaClases
+title Diagrama de Clases - Simulador de Planificación de Procesos
+
+!define MODEL_COLOR #e8f4fd62
+!define ENGINE_COLOR #fdf2e962
+!define SCHED_COLOR #e8f8f562
+!define IO_COLOR #f3e5f562
+!define METRICS_COLOR #EBF5FB62
+!define GANTT_COLOR #FADBD862
+!define STORES_COLOR #bdbbb662
+!define COMPONENTS_COLOR #D5E8D462
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultTextAlignment left
+skinparam ArrowColor #66666662
+skinparam PackageBorderColor #99999962
+skinparam RectangleBorderColor #BBBBBB62
+skinparam NoteBackgroundColor #FFFEF562
+skinparam NoteBorderColor #E6D8A862
+skinparam minClassWidth 120
+skinparam nodesep 15
+skinparam ranksep 20
+hide circle
+
+' ================================
+' CAPA 1: MODELO DE DOMINIO
+' ================================
+package " MODEL - Entidades Base" MODEL_COLOR {
+  
+  enum Estado {
+    N : Nuevo
+    L : Listo/Ready  
+    C : Corriendo/CPU
+    B : Bloqueado/I-O
+    F : Finalizado
+  }
+
+  interface Proceso {
+    + pid: number
+    + arribo: number
+    + rafagasCPU: number[]
+    + rafagasES?: number[]
+    + estado: Estado
+    + label?: string
+    + prioridadBase?: number
+    --
+    + servicioTotal(): number
+    + isProcesoValido(): boolean
+  }
+
+  interface Costos {
+    + TIP: number
+    + TCP: number
+    + TFP: number
+    + bloqueoES: number
+    --
+    + validarCostos(): boolean
+    + makeCostos(input?): Costos
+  }
+
+  Proceso ||--|| Estado
+}
+
+' ================================
+' CAPA 2: MOTOR DE SIMULACIÓN
+' ================================
+package "   ENGINE - Motor y Eventos" ENGINE_COLOR {
+  
+  enum EventType {
+    "C→T" : Corriendo a Terminado
+    "C→B" : Corriendo a Bloqueado
+    "C→L" : Corriendo a Listo
+    "B→L" : Bloqueado a Listo
+    "N→L" : Nuevo a Listo
+    "L→C" : Listo a Corriendo
+  }
+
+  interface SimEvent {
+    + t: number
+    + type: EventType
+    + pid?: number
+    + data?: Record<string, unknown>
+  }
+
+  interface TraceSlice {
+    + pid: number
+    + start: number
+    + end: number
+  }
+
+  interface TraceEvent {
+    + t: number
+    + type: EventType
+    + pid?: number
+    + data?: Record<string, unknown>
+  }
+
+  interface OverheadSlice {
+    + pid: number
+    + t0: number
+    + t1: number
+    + kind: OverheadKind
+  }
+
+  interface Trace {
+    + slices: TraceSlice[]
+    + events: TraceEvent[]
+    + overheads?: OverheadSlice[]
+  }
+
+  class EventQueue {
+    - heap: InternalEvent[]
+    - seq: number
+    --
+    + isEmpty(): boolean
+    + push(e: SimEvent): void
+    + pop(): SimEvent | undefined
+    + peek(): SimEvent | undefined
+    - siftUp(i: number): void
+    - siftDown(i: number): void
+  }
+
+  class EngineInvariants {
+    + assertSingleCPU(): void
+    + assertNoNegativeRestante(): void
+    + assertValidEnqueue(): void
+    + logSliceEvent(): void
+  }
+
+  class "   Engine Functions" as EngineFunctions {
+    + runFCFSSandbox(): Trace
+    + runRR(): Trace
+    + runSPN(): Trace
+    + runSRTN(): Trace
+    + runPriority(): Trace
+    --
+    - getNextBurst(): number
+    - getRemainingNow(): number
+    - traceOverhead(): void
+  }
+}
+
+' Relaciones internas del engine
+SimEvent ||--|| EventType
+TraceEvent ||--|| EventType
+Trace *-- TraceSlice
+Trace *-- TraceEvent
+Trace *-- OverheadSlice
+EventQueue o-- SimEvent
+EngineFunctions ..> EventQueue : uses
+EngineFunctions ..> Trace : produces
+
+' ================================
+' CAPA 3: ALGORITMOS DE PLANIFICACIÓN
+' ================================
+package "   SCHEDULER - Algoritmos" SCHED_COLOR {
+  
+  interface IScheduler {
+    + onAdmit(pid: number): void
+    + onReady(pid: number): void
+    + onBlock(pid: number): void
+    + onFinish(pid: number): void
+    + onDesalojoActual?(pid: number): void
+    + next(): number | undefined
+    + compareForPreemption?(...): boolean
+  }
+
+  abstract class BaseScheduler {
+    # rq: ReadyQueue
+    --
+    + onAdmit(pid: number): void
+    + onReady(pid: number): void
+    + onBlock(pid: number): void
+    + onFinish(pid: number): void
+    + onDesalojoActual?(pid: number): void
+    {abstract} + next(): number | undefined
+    + compareForPreemption?(...): boolean
+  }
+
+  class ReadyQueue {
+    - pids: number[]
+    --
+    + enqueue(pid: number): void
+    + dequeue(): number | undefined
+    + isEmpty(): boolean
+    + clear(): void
+    + toArray(): number[]
+  }
+}
+
+' Schedulers específicos en fila horizontal
+class SchedulerFCFS SCHED_COLOR {
+  + next(): number | undefined
+}
+
+class SchedulerRR SCHED_COLOR {
+  - quantum: number
+  --
+  + constructor(quantum: number)
+  + next(): number | undefined
+  + getQuantum(): number
+  + onDesalojoActual(pid: number): void
+}
+
+class SchedulerSPN SCHED_COLOR {
+  - getNextBurst: (pid: number) => number
+  --
+  + constructor(getNextBurst)
+  + next(): number | undefined
+}
+
+class SchedulerSRTN SCHED_COLOR {
+  - getRemaining: (pid: number, now: number) => number
+  - getNow: () => number
+  --
+  + constructor(getRemaining, getNow)
+  + next(): number | undefined
+  + compareForPreemption(...): boolean
+}
+
+class SchedulerPriority SCHED_COLOR {
+  - prioridades: Record<number, number>
+  - aging: PriorityAgingCfg
+  - tReady: Map<number, number>
+  --
+  + constructor(prioridades, aging?)
+  + next(): number | undefined
+  + compareForPreemption(...): boolean
+  + onReady(pid: number): void
+  - getPrioridadEfectiva(pid: number, t: number): number
+}
+
+' Jerarquía de schedulers
+IScheduler <|.. BaseScheduler
+BaseScheduler <|-- SchedulerFCFS
+BaseScheduler <|-- SchedulerRR
+BaseScheduler <|-- SchedulerSPN
+BaseScheduler <|-- SchedulerSRTN
+BaseScheduler <|-- SchedulerPriority
+BaseScheduler *-- ReadyQueue
+
+' ================================
+' CAPA 4: ANÁLISIS Y VISUALIZACIÓN
+' ================================
+package " ANALYTICS - Métricas y Gantt" {
+  
+  package "metrics" METRICS_COLOR {
+    interface ProcessMetrics {
+      + pid: number
+      + arribo: number
+      + fin: number
+      + servicioCPU: number
+      + TRp: number
+      + TE: number
+      + TRn: number
+    }
+
+    interface GlobalMetrics {
+      + TRpPromedio: number
+      + TEPromedio: number
+      + TRnPromedio: number
+      + throughput: number
+      + cambiosDeContexto: number
+      + expropiaciones: number
+      + tiempoTotalSimulacion: number
+    }
+
+    class MetricsBuilder {
+      + {static} build(): ProcessMetrics[]
+      + {static} buildGlobal(): GlobalMetrics
+      - {static} calcularServicioCPU(): number
+      - {static} calcularTiempoEspera(): number
+    }
+  }
+
+  package "gantt" GANTT_COLOR {
+    interface GanttSeg {
+      + start: number
+      + end: number
+      + type?: string
+    }
+
+    interface GanttTrack {
+      + pid: string
+      + segments: GanttSeg[]
+    }
+
+    interface GanttModel {
+      + tracks: GanttTrack[]
+      + tMin: number
+      + tMax: number
+    }
+
+    class GanttBuilder {
+      + {static} build(trace: Trace): GanttModel
+      - {static} groupSlicesByPid(): Map
+      - {static} calculateTimeRange(): [number, number]
+    }
+  }
+}
+
+' Relaciones de builders
+MetricsBuilder ..> ProcessMetrics : creates
+MetricsBuilder ..> GlobalMetrics : creates
+GanttModel *-- GanttTrack
+GanttTrack *-- GanttSeg
+GanttBuilder ..> GanttModel : creates
+
+' ================================
+' CAPA 5: ENTRADA/SALIDA DE DATOS
+' ================================
+package "  I/O - Datos y Exportación" IO_COLOR {
+  
+  interface ProcesoTanda {
+    + nombre: string
+    + tiempo_arribo: number
+    + cantidad_rafagas_cpu: number
+    + duracion_rafaga_cpu: number
+    + duracion_rafaga_es?: number
+    + prioridad_externa?: number
+  }
+
+  interface SimulationExport {
+    + kind: string
+    + version: number
+    + timestamp: string
+    + cfg: ExportSimulationConfig
+    + procesos: Proceso[]
+    + trace: Trace
+    + metricas: object
+    + gantt: GanttModel
+  }
+
+  interface ValidationResult {
+    + ok: boolean
+    + issues: ValidationIssue[]
+  }
+
+  class Parser {
+    + {static} parseTandaJSON(): Proceso[]
+    + {static} extractBloqueoESGlobal(): number
+    - {static} parsePidFromNombre(): number
+  }
+
+  class Exporter {
+    + {static} exportToJSON(): string
+    + {static} exportMetricsToCSV(): string
+    + {static} exportTraceToCSV(): string
+    + {static} downloadJSON(): void
+    + {static} downloadCSV(): void
+  }
+
+  class Validator {
+    + {static} validateInputs(): ValidationResult
+    - {static} validateProceso(): ValidationIssue[]
+    - {static} validateConfig(): ValidationIssue[]
+  }
+}
+
+' Relaciones I/O
+Parser ..> Proceso : creates
+Exporter ..> SimulationExport : uses
+Validator ..> ValidationResult : creates
+
+' ================================
+' CAPA 6: ESTADO Y ORQUESTACIÓN
+' ================================
+package "🏪 STORES - Estado y Factories" STORES_COLOR {
+  
+  enum Politica {
+    FCFS
+    RR
+    SPN
+    SRTN
+    PRIORITY
+  }
+
+  interface SchedulerCfg {
+    + politica: Politica
+    + quantum?: number
+    + aging?: PriorityAgingCfg
+  }
+
+  interface SimulationConfig {
+    + politica: Politica
+    + quantum?: number
+    + aging?: PriorityAgingCfg
+    + costos?: Partial<Costos>
+  }
+
+  interface SimulationResult {
+    + trace: Trace
+    + metricas: object
+    + gantt: GanttModel
+  }
+
+  class SchedulerFactory {
+    + {static} getRunner(): Runner
+    - {static} validateQuantum(): void
+    - {static} validateAging(): void
+  }
+
+  class CostosFactory {
+    + {static} costosFromUI(): Costos
+    + {static} validateCostosUI(): string[]
+  }
+
+  class SimulationStore {
+    + simulationConfig: Writable<SimulationConfig>
+    + procesos: Writable<Proceso[]>
+    + simulationResult: Writable<SimulationResult | null>
+    + isSimulating: Writable<boolean>
+    + simulationError: Writable<string | null>
+    --
+    + runSimulation(): SimulationResult
+    + runSimulationFromTanda(): SimulationResult
+    + loadFromTanda(): Promise<void>
+    + executeSimulation(): void
+    + clearSimulation(): void
+    + exportResultadoJSON(): void
+    + exportMetricasCSV(): void
+    + exportTraceCSV(): void
+  }
+}
+
+' Relaciones stores
+SchedulerFactory ..> Politica : uses
+SimulationConfig ||--|| Politica
+SimulationResult o-- Trace
+SimulationResult o-- GanttModel
+
+' ================================
+' CAPA 7: INTERFAZ DE USUARIO
+' ================================
+package " UI - Componentes Visuales" COMPONENTS_COLOR {
+  
+  class GanttView {
+    + gantt: GanttModel | null
+    --
+    + scale(t: number): number
+    + getSegmentColor(pid: string): string
+    + formatTime(t: number): string
+  }
+
+  class MetricsTable {
+    + metricas: SimulationResult['metricas'] | null
+    --
+    + formatNumber(num: number, decimals?: number): string
+  }
+
+  class TraceViewer {
+    + trace: Trace | null
+    --
+    + formatEvent(event: TraceEvent): string
+    + getEventIcon(type: EventType): string
+  }
+}
+
+' Relaciones UI
+GanttView ..> GanttModel : renders
+MetricsTable ..> ProcessMetrics : displays
+MetricsTable ..> GlobalMetrics : displays
+TraceViewer ..> Trace : shows
+
+' ================================
+' RELACIONES PRINCIPALES ENTRE CAPAS
+' ================================
+
+'     FLUJO PRINCIPAL DE DATOS
+EngineFunctions ..> IScheduler : coordina
+EngineFunctions ..> Proceso : ejecuta
+EngineFunctions ..> Costos : aplica
+EngineFunctions ..> Trace : genera
+
+MetricsBuilder ..> Trace : analiza
+MetricsBuilder ..> Proceso : calcula para
+
+GanttBuilder ..> Trace : convierte
+
+SimulationStore ..> SchedulerFactory : usa
+SimulationStore ..> CostosFactory : usa
+SimulationStore ..> MetricsBuilder : usa
+SimulationStore ..> GanttBuilder : usa
+SimulationStore ..> Parser : usa
+SimulationStore ..> Exporter : usa
+
+SchedulerFactory ..> EngineFunctions : crea runners
+CostosFactory ..> Costos : crea
+
+Parser ..> ProcesoTanda : convierte
+Exporter ..> SimulationResult : exporta
+
+' NOTAS EXPLICATIVAS
+note top of EngineFunctions
+  **Motor Central**: Ejecuta la simulación
+  usando schedulers y generando trazas
+end note
+
+note bottom of SimulationStore
+  **Orquestador Principal**: Coordina
+  toda la aplicación y mantiene el estado
+end note
+
+note right of Costos
+  **TIP**: Tiempo ingreso proceso
+  **TCP**: Cambio de contexto  
+  **TFP**: Tiempo finalización
+  **bloqueoES**: Fallback E/S
+end note
+
+legend bottom
+** ARQUITECTURA EN CAPAS:**
+**1. MODEL** - Entidades base del dominio
+**2. ENGINE** - Motor de simulación y eventos  
+**3. SCHEDULER** - Algoritmos de planificación
+**4. ANALYTICS** - Análisis y visualización de datos
+**5. I/O** - Entrada y salida de datos
+**6. STORES** - Estado y orquestación
+**7. UI** - Componentes de interfaz
+
+** CONVENCIONES:**
+• **  Interfaces** = Contratos y tipos
+• **   Clases** = Implementaciones
+• **   Enums** = Valores discretos
+• **   Functions** = Lógica pura
+
+**    PATRONES DE DISEÑO:**
+• **Factory** - Creación de schedulers y costos
+• **Builder** - Construcción de métricas y gantt  
+• **Store** - Gestión de estado reactivo
+• **Layered** - Separación clara de responsabilidades
+endlegend
+
+@enduml

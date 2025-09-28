@@ -6,7 +6,7 @@ const procesos: Proceso[] = [
   { pid: 2, arribo: 0, rafagasCPU: [5], estado: 'N' }
 ];
 
-console.log('🔄 RR Debug - Looking for C→T@5 bug');
+console.log('    RR Debug - Looking for C→T@5 bug');
 
 const trace = runRR(procesos, { TIP: 0, TCP: 0, TFP: 0, bloqueoES: 0 }, 2);
 

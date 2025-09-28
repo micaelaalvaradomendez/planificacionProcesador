@@ -100,7 +100,7 @@
             <li><strong>TIP:</strong> Tiempo de ingreso de proceso al sistema</li>
             <li><strong>TCP:</strong> Tiempo de cambio de contexto entre procesos</li>
             <li><strong>TFP:</strong> Tiempo de finalización de proceso</li>
-            <li><strong>Bloqueo E/S:</strong> Tiempo de bloqueo entre ráfagas de CPU</li>
+            <li><strong>Bloqueo E/S:</strong> Tiempo de fallback cuando el proceso no especifica E/S propia</li>
           </ul>
           
           <h4>Formato de Procesos:</h4>
@@ -109,6 +109,14 @@
             <li><strong>Arribo:</strong> Tiempo de llegada al sistema</li>
             <li><strong>Ráfagas CPU:</strong> Lista de duraciones separadas por coma</li>
             <li><strong>Prioridad:</strong> Menor número = Mayor prioridad (solo PRIORITY)</li>
+          </ul>
+
+          <h4>E/S por Proceso (JSON):</h4>
+          <ul>
+            <li><strong>duracion_rafaga_es:</strong> Tiempo de E/S específico para este proceso</li>
+            <li>Si no se especifica, usa el valor de "Bloqueo E/S (Fallback)" global</li>
+            <li>Permite que cada proceso tenga diferentes tiempos de E/S</li>
+            <li>Ejemplo: P1 con 10ms de E/S, P2 con 20ms de E/S</li>
           </ul>
         </div>
       </details>

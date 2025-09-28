@@ -1,0 +1,115 @@
+@startuml arquitectura-simulador
+title Arquitectura Interna del Simulador
+
+package "Entrada del Usuario" as entrada {
+  component [Procesos] as procesos
+  component [SimulationConfig] as config
+  component [Costos] as costos
+}
+
+package "Inicializacion" as init {
+  component [runSimulation] as runSim
+  component [getRunner] as getRunner
+  component [costosFromUI] as costosUI
+}
+
+package "Motor de Simulacion" as engine {
+  component [EventQueue] as eq
+  component [Engine Loop] as loop
+  component [CPU State] as cpu
+  component [Runtime Map] as runtime
+}
+
+package "Planificadores" as schedulers {
+  component [BaseScheduler] as base
+  component [SchedulerFCFS] as fcfs
+  component [SchedulerRR] as rr
+  component [SchedulerSPN] as spn
+  component [SchedulerSRTN] as srtn
+  component [SchedulerPriority] as priority
+}
+
+package "Estados y Eventos" as events {
+  component [EventType] as eventType
+  component [SimEvent] as simEvent
+  component [TraceEvent] as traceEvent
+  component [TraceSlice] as traceSlice
+}
+
+package "Salida" as output {
+  component [Trace] as trace
+  component [GanttModel] as gantt
+  component [ProcessMetrics] as metrics
+}
+
+procesos --> runSim : Procesos de entrada
+config --> runSim : Politica + Quantum
+costos --> runSim : TIP, TCP, TFP, bloqueoES
+
+runSim --> getRunner : cfg.politica
+runSim --> costosUI : cfg.costos
+getRunner --> fcfs : FCFS
+getRunner --> rr : RR
+getRunner --> spn : SPN
+getRunner --> srtn : SRTN
+getRunner --> priority : PRIORITY
+
+runSim --> eq : new EventQueue()
+runSim --> runtime : Map<pid, Runtime>
+runSim --> cpu : CPUState {pid: null}
+
+eq --> loop : pop() eventos ordenados
+loop --> eventType : procesar eventos
+loop --> base : onAdmit(), onReady(), onFinish()
+loop --> cpu : asignar/liberar CPU
+loop --> runtime : actualizar tiempos
+
+loop --> traceEvent : trace.events.push()
+loop --> traceSlice : trace.slices.push()
+
+traceEvent --> trace : eventos de transicion
+traceSlice --> trace : slices de CPU
+trace --> gantt : GanttBuilder.build()
+trace --> metrics : MetricsBuilder.build()
+
+note top of eq
+Event Priority Order
+1:C->T, 2:C->B, 3:C->L
+4:B->L, 5:N->L, 6:L->C
+Heap Order: (t ASC, priority ASC)
+end note
+
+note top of loop
+Event Loop Pattern
+1. pop() proximo evento
+2. actualizar currentTick
+3. procesar transicion
+4. actualizar estados
+5. programar eventos futuros
+end note
+
+note right of base
+Scheduler Interface
+• onAdmit(pid) -> N->L
+• onReady(pid) -> B->L
+• onBlock(pid) -> C->B
+• onFinish(pid) -> C->T
+• next() -> elegir proximo
+• compareForPreemption()
+end note
+
+note bottom of runtime
+Runtime State
+• idxRafaga: indice actual
+• restante: tiempo restante
+• estado por proceso
+end note
+
+note bottom of cpu
+CPU State
+• pid: proceso actual
+• sliceStart: inicio del slice
+• control de overhead (TIP/TCP/TFP)
+end note
+
+@enduml

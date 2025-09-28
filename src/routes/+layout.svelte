@@ -27,14 +27,14 @@
 					class="nav-link"
 					class:active={currentPath === '/simulacion'}
 				>
-					⚙️ Simulación
+					   Simulación
 				</a>
 				<a 
 					href="/resultados" 
 					class="nav-link"
 					class:active={currentPath === '/resultados'}
 				>
-					📊 Resultados
+					 Resultados
 				</a>
 			</div>
 		</div>

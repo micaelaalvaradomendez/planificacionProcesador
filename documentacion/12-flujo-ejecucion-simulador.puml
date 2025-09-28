@@ -1,0 +1,104 @@
+@startuml flujo-ejecucion-simulador
+title Flujo de Ejecucion del Simulador - Event Loop Detallado
+
+start
+
+partition "FASE 1: Inicializacion" {
+  :Recibir Procesos[] + SimulationConfig;
+  :Validar entrada y clonar procesos defensivamente;
+  :Crear costos = costosFromUI(cfg.costos);
+  :Elegir runner = getRunner(cfg.politica);
+  note right: FCFS, RR, SPN, SRTN, PRIORITY
+  
+  :Crear EventQueue (min-heap);
+  :Crear Runtime Map (estado por proceso);
+  :Crear CPU State {pid: null, sliceStart: null};
+  :Crear Scheduler segun politica;
+  
+  :Programar eventos N->L (ADMIT) iniciales;
+  note right: t = proceso.arribo + TIP
+}
+
+partition "FASE 2: Event Loop Principal" {
+  while (EventQueue no vacia?) is (si)
+    :event = eventQueue.pop();
+    note right: Orden: (t ASC, priority ASC, seq ASC)
+    
+    :Actualizar currentTick = event.t;
+    :Agregar evento a trace.events;
+    
+    switch (event.type)
+    case (N->L ADMIT)
+      :scheduler.onAdmit(pid);
+      :Intentar despacharSiLibre();
+      
+    case (L->C DISPATCH)
+      :Asignar CPU al proceso;
+      :cpu.pid = pid; cpu.sliceStart = t + TCP;
+      :Calcular tiempos de finalizacion;
+      :Programar eventos futuros (C->T, C->B, Timer);
+      
+    case (C->B BLOCK)
+      :Cerrar slice actual;
+      :scheduler.onBlock(pid);
+      :Programar B->L @ t + bloqueoES;
+      :Intentar despacharSiLibre();
+      
+    case (B->L IO_OUT)
+      :Avanzar a proxima rafaga CPU;
+      :scheduler.onReady(pid);
+      :Intentar despacharSiLibre();
+      
+    case (C->T FINISH)
+      :Cerrar slice final;
+      :scheduler.onFinish(pid);
+      :Trazar overhead TFP si corresponde;
+      
+    case (C->L PREEMPT/TIMER)
+      :Cerrar slice actual;
+      :scheduler.onDesalojoActual(pid);
+      :Intentar despacharSiLibre();
+      
+    endswitch
+  endwhile (no)
+}
+
+partition "FASE 3: Despacho de Procesos" {
+  :function despacharSiLibre(t);
+  if (CPU ocupada?) then (si)
+    stop
+  endif
+  
+  :nextPid = scheduler.next();
+  if (nextPid disponible?) then (si)
+    :Programar L->C @ t;
+    :Marcar pendingDispatchAt = t;
+  endif
+}
+
+partition "FASE 4: Control de Expropiacion" {
+  if (Scheduler expropiativo?) then (si)
+    :function tryPreemptIfNeeded(t, pidNew);
+    if (CPU ocupada?) then (si)
+      :shouldPreempt = scheduler.compareForPreemption();
+      if (shouldPreempt?) then (si)
+        :Programar C->L (preempt) @ t;
+        :Cerrar slice actual;
+      endif
+    endif
+  endif
+}
+
+partition "FASE 5: Generacion de Salida" {
+  :Construir Trace final;
+  note right: {slices: TraceSlice[], events: TraceEvent[]}
+  
+  :metricas = MetricsBuilder.build(trace, procesos);
+  :gantt = GanttBuilder.build(trace);
+  
+  :return SimulationResult {trace, metricas, gantt};
+}
+
+stop
+
+@enduml

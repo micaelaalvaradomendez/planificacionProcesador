@@ -67,7 +67,7 @@
 </script>
 
 <div class="importer-container">
-  <h3>📁 Importar Datos</h3>
+  <h3>  Importar Datos</h3>
   
   <!-- Input de archivo oculto -->
   <input 
@@ -103,7 +103,7 @@
   
   <!-- Botones de fixtures -->
   <div class="fixtures-section">
-    <h4>🧪 Fixtures de Prueba</h4>
+    <h4>  Fixtures de Prueba</h4>
     <div class="fixtures-grid">
       <button 
         on:click={() => loadFixture('A_sinES_FCFS')}
@@ -118,7 +118,7 @@
         class="fixture-btn"
       >
         📗 B_conES_25
-        <small>Con bloqueo E/S</small>
+        <small>Con E/S por proceso (valores diferentes)</small>
       </button>
       
       <button 

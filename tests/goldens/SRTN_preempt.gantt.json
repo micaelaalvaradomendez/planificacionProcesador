@@ -1,0 +1,31 @@
+{
+  "tracks": [
+    {
+      "pid": "1",
+      "segments": [
+        {
+          "start": 2,
+          "end": 3,
+          "type": "cpu"
+        },
+        {
+          "start": 7,
+          "end": 8,
+          "type": "cpu"
+        }
+      ]
+    },
+    {
+      "pid": "2",
+      "segments": [
+        {
+          "start": 4,
+          "end": 6,
+          "type": "cpu"
+        }
+      ]
+    }
+  ],
+  "tMin": 2,
+  "tMax": 8
+}
