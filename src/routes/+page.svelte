@@ -2,6 +2,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { get } from 'svelte/store';
   
   import { 
@@ -20,11 +21,44 @@
   import RunButton from '$lib/components/RunButton.svelte';
   
   // Redirigir a resultados cuando hay una simulación exitosa
-  $: if ($simulationResult && !$isSimulating && window.location.pathname === '/') {
-    // Pequeño delay para permitir que se complete la actualización del store
-    setTimeout(() => {
-      goto('/resultados');
-    }, 100);
+  let hasNavigated = false;
+  
+  // Reset navigation flag when simulation starts
+  $: if ($isSimulating) {
+    hasNavigated = false;
+  }
+  
+  $: if ($simulationResult && !$isSimulating && !hasNavigated) {
+    console.log('🔍 +page.svelte: Simulación completada, verificando navegación...', {
+      routeId: $page.route?.id,
+      pathname: $page.url?.pathname,
+      href: $page.url?.href
+    });
+    
+    // Verificar que estamos en la página principal
+    const routeId = $page.route?.id;
+    
+    // Ser más flexible con la detección de página principal
+    const isHomePage = !routeId || routeId === '/' || routeId.includes('/(') || !routeId.includes('/resultados');
+    
+    if (isHomePage) {
+      hasNavigated = true;
+      
+      goto('./resultados')
+        .then(() => {
+        })
+        .catch((err) => {
+          return goto('/resultados');
+        })
+        .catch((err) => {
+          hasNavigated = false; // Permitir reintento
+        });
+    }
+  }
+  
+  // Reset navigation flag when simulation changes
+  $: if (!$simulationResult) {
+    hasNavigated = false;
   }
 
   // Función para comenzar nueva simulación
@@ -77,6 +111,30 @@
       <div class="status-card simulating">
         <h3>Ejecutando simulación...</h3>
         <p>Por favor espere mientras se procesa la simulación.</p>
+      </div>
+    {/if}
+
+    <!-- Debug: Navegación manual a resultados si hay simulación completa -->
+    {#if $simulationResult && !$isSimulating}
+      <div class="status-card success">
+        <h3>¡Simulación Completada!</h3>
+        <p>La simulación se ha ejecutado correctamente.</p>
+        <button 
+          class="manual-nav-button"
+          on:click={() => {
+            goto('./resultados').catch(() => goto('/resultados'));
+          }}
+        >
+          Ver Resultados 🎯
+        </button>
+        <button 
+          class="results-button"
+          on:click={() => {
+            goto('/resultados');
+          }}
+        >
+          Ver Resultados →
+        </button>
       </div>
     {/if}
 
@@ -230,6 +288,80 @@
     font-weight: 500;
   }
 
+  .status-card.success {
+    background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+    border: 2px solid #4caf50;
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+  }
+
+  .status-card.success h3 {
+    color: #2e7d32;
+    margin: 0 0 0.5rem 0;
+    font-weight: bold;
+  }
+
+  .status-card.success p {
+    color: #388e3c;
+    margin: 0 0 1rem 0;
+    font-weight: 500;
+  }
+
+  .results-button {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  }
+
+  .results-button:hover {
+    background: linear-gradient(135deg, #388e3c 0%, #4caf50 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4);
+  }
+
+  .status-card.success {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border: 2px solid #4caf50;
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.2);
+  }
+
+  .status-card.success h3 {
+    color: #2e7d32;
+    margin: 0 0 0.5rem 0;
+    font-weight: bold;
+  }
+
+  .status-card.success p {
+    color: #388e3c;
+    margin: 0;
+    font-weight: 500;
+  }
+
+  .results-button {
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #4caf50 0%, #81c784 100%);
+    color: white;
+    border: none;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.3s ease;
+  }
+
+  .results-button:hover {
+    background: linear-gradient(135deg, #388e3c 0%, #66bb6a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+  }
+
   .help-section {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     padding: 1.5rem;
@@ -313,6 +445,25 @@
     .status-card {
       padding: 1rem;
     }
+  }
 
+  .manual-nav-button {
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #3f2c50 0%, #633f6e 100%);
+    color: #dde5b6;
+    border: 2px solid #dde5b6;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+  }
+
+  .manual-nav-button:hover {
+    background: linear-gradient(135deg, #dde5b6 0%, #c8d49a 100%);
+    color: #3f2c50;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(63, 44, 80, 0.3);
   }
 </style>

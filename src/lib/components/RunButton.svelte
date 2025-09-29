@@ -1,6 +1,7 @@
 <!-- src/lib/components/RunButton.svelte -->
 <script lang="ts">
-  import { executeSimulation, canExecute, isSimulating, simulationError } from '$lib/stores/simulacion';
+  import { executeSimulation, canExecute, isSimulating, simulationError, simulationResult } from '$lib/stores/simulacion';
+  import { get } from 'svelte/store';
   
   $: canRun = $canExecute;
   $: running = $isSimulating;
@@ -10,17 +11,28 @@
   
   async function handleExecute() {
     try {
-      console.log('🚀 RunButton: Iniciando simulación...');
       lastError = '';
-      console.log('🔄 RunButton: Llamando executeSimulation...');
+      
+      // Verificar estado antes de continuar
+      if (!canRun || running) {
+        console.warn(' RunButton: No se puede ejecutar - canRun:', canRun, 'running:', running);
+        return;
+      }
+      
       await executeSimulation();
-      console.log('✅ RunButton: Simulación completada exitosamente');
-      // Si llegamos acá, la simulación fue exitosa
-      // Podrías navegar a /resultados o hacer scroll a los resultados
+      
+      // Verificar que los stores se hayan actualizado correctamente
+      const result = get(simulationResult);
+      const currentlySimulating = get(isSimulating);
+      
     } catch (err) {
-      console.error('❌ RunButton: Error en simulación:', err);
-      // Este catch maneja errores síncronos, pero executeSimulation ya maneja sus errores internamente
-      lastError = err instanceof Error ? err.message : String(err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      lastError = `Error en botón: ${errorMsg}`;
+      
+      // Mostrar el error en una alerta también para debugging
+      if (typeof window !== 'undefined') {
+        alert(`Error de simulación: ${errorMsg}`);
+      }
     }
   }
   
@@ -29,7 +41,9 @@
 
 <div class="run-section">
   <button 
-    on:click={handleExecute}
+    on:click={() => {
+      handleExecute();
+    }}
     disabled={!canRun || running}
     class="run-button"
     class:disabled={!canRun || running}

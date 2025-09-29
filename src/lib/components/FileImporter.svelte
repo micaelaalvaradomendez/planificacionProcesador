@@ -1,4 +1,5 @@
-<!-- src/lib/components/FileImporter.svelte -->
+
+Ñ/!-- src/lib/components/FileImporter.svelte -->
 <script lang="ts">
   import { loadFromTandaJSON, loadFixture, simulationError, importWarnings, simulationConfig, procesos } from '$lib/stores/simulacion';
   import { parseTandaJSON } from '$lib/io/parser';
@@ -142,7 +143,7 @@
   <!-- Warnings de importación -->
   {#if $importWarnings.length > 0}
     <div class="warnings">
-      <h4>⚠️ Advertencias de Importación</h4>
+      <h4>Advertencias de Importación</h4>
       <ul>
         {#each $importWarnings as warning}
           <li>{warning}</li>

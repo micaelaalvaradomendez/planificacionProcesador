@@ -216,50 +216,67 @@ export async function loadFromTanda(tandaData: ProcesoTanda[]): Promise<void> {
  * Acción para ejecutar la simulación con la configuración actual
  */
 export async function executeSimulation(): Promise<void> {
+  let hasStarted = false;
+  
   try {
-    console.log('🔧 Store: Iniciando executeSimulation...');
     isSimulating.set(true);
     simulationError.set(null);
+    hasStarted = true;
+    
+    // Verificar que las dependencias están disponibles
+    if (!get || !simulationConfig || !procesos) {
+      throw new Error('Dependencias de Svelte no disponibles');
+    }
     
     const cfg = get(simulationConfig);
     const procs = get(procesos);
     
-    console.log('📊 Store: Configuración:', cfg);
-    console.log('📋 Store: Procesos:', procs);
+    // Verificar que tenemos datos válidos
+    if (!cfg) {
+      throw new Error('Configuración no disponible');
+    }
+    if (!Array.isArray(procs) || procs.length === 0) {
+      throw new Error('No hay procesos cargados');
+    }
+    
+    // Verificar que las funciones necesarias están disponibles
+    if (!validateInputs) {
+      throw new Error('Función validateInputs no disponible');
+    }
+    if (!runSimulation) {
+      throw new Error('Función runSimulation no disponible');
+    }
     
     // Validar entradas antes de ejecutar
     const validation = validateInputs(procs, cfg);
-    console.log('✅ Store: Validación:', validation);
     if (!validation.ok) {
       throw new Error(`Entradas inválidas: ${validation.issues.map(i => i.msg).join(' | ')}`);
     }
     
     // Clonar defensivamente para la simulación
-    console.log('📄 Store: Clonando datos...');
-    function deepClone<T>(obj: T): T {
-      if (typeof globalThis !== 'undefined' && globalThis.structuredClone) {
-        return globalThis.structuredClone(obj);
-      }
-      return JSON.parse(JSON.stringify(obj));
+    const cfgClon = JSON.parse(JSON.stringify(cfg));
+    const procsClon = JSON.parse(JSON.stringify(procs));
+    
+    // Ejecutar simulación    
+    const result = runSimulation(cfgClon, procsClon);
+        
+    if (!result) {
+      throw new Error('runSimulation retornó resultado nulo');
     }
     
-    const cfgClon = deepClone(cfg);
-    const procsClon = deepClone(procs);
-    
-    // Ejecutar simulación
-    console.log('⚡ Store: Ejecutando runSimulation...');
-    const result = runSimulation(cfgClon, procsClon);
-    console.log('🎉 Store: Resultado obtenido:', result);
     simulationResult.set(result);
-    console.log('💾 Store: Resultado guardado en store');
     
   } catch (error) {
-    console.error('💥 Store: Error en executeSimulation:', error);
     const msg = error instanceof Error ? error.message : String(error);
     simulationError.set(`Error en simulación: ${msg}`);
+    
+    // También lanzar el error para que el componente lo pueda capturar
+    throw error;
+    
   } finally {
-    console.log('🏁 Store: Finalizando executeSimulation');
-    isSimulating.set(false);
+    if (hasStarted) {
+      isSimulating.set(false);
+    }
   }
 }
 
