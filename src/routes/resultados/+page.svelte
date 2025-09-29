@@ -23,7 +23,19 @@
   
   function backToSimulation() {
     console.log('🔙 Resultados: Navegando de vuelta a simulación...');
-    goto('../').catch(() => goto('/'));
+    goto('../')
+      .then(() => {
+        console.log('✅ Resultados: Regreso exitoso a simulación');
+      })
+      .catch((err) => {
+        console.warn('⚠️ Resultados: Navegación de regreso falló:', err);
+        // Como último recurso, recargar en la página principal
+        if (typeof window !== 'undefined') {
+          const currentUrl = new URL(window.location.href);
+          const basePath = '/planificacionProcesador/';
+          window.location.href = `${currentUrl.protocol}//${currentUrl.host}${basePath}`;
+        }
+      });
   }
   
   function startNewSimulation() {
@@ -32,13 +44,25 @@
       // Limpiar todos los datos de simulación
       clearSimulation();
       console.log('✅ Resultados: Datos limpiados, navegando...');
-      // Navegar al inicio
-      goto('../').catch(() => {
-        console.warn('⚠️ Resultados: Navegación relativa falló, intentando absoluta...');
-        return goto('/');
-      }).catch((err) => {
-        console.error('❌ Resultados: Error de navegación:', err);
-      });
+      // Navegar al inicio usando ruta relativa
+      goto('../')
+        .then(() => {
+          console.log('✅ Resultados: Navegación exitosa con ruta relativa');
+        })
+        .catch((err) => {
+          console.warn('⚠️ Resultados: Navegación relativa falló, intentando ruta absoluta con base:', err);
+          // Si falla, usar la ruta con base path
+          return goto('./');
+        })
+        .catch((err) => {
+          console.error('❌ Resultados: Todas las navegaciones fallaron:', err);
+          // Como último recurso, recargar la página en el dominio correcto
+          if (typeof window !== 'undefined') {
+            const currentUrl = new URL(window.location.href);
+            const basePath = '/planificacionProcesador/';
+            window.location.href = `${currentUrl.protocol}//${currentUrl.host}${basePath}`;
+          }
+        });
     } catch (error) {
       console.error('💥 Resultados: Error en startNewSimulation:', error);
     }
