@@ -24,7 +24,8 @@ const config = {
       },
       handleMissingId: ({ path, id, message }) => {
         console.warn(`could not find ${id} referenced from ${path}: ${message}`);
-      }
+      },
+      crawl: false
     },
     alias: {
       $lib: './src/lib'
