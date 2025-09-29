@@ -1,6 +1,7 @@
 <!-- src/routes/resultados/+page.svelte -->
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { get } from 'svelte/store';
   
   import { 
@@ -23,17 +24,20 @@
   
   function backToSimulation() {
     console.log('🔙 Resultados: Navegando de vuelta a simulación...');
-    goto('../')
+    console.log('🔙 Resultados: Base path:', base);
+    
+    // Usar el base path de SvelteKit
+    const targetPath = base || '/';
+    
+    goto(targetPath)
       .then(() => {
         console.log('✅ Resultados: Regreso exitoso a simulación');
       })
       .catch((err) => {
-        console.warn('⚠️ Resultados: Navegación de regreso falló:', err);
-        // Como último recurso, recargar en la página principal
+        console.error('❌ Resultados: Error en navegación:', err);
+        // Como último recurso, usar window.location
         if (typeof window !== 'undefined') {
-          const currentUrl = new URL(window.location.href);
-          const basePath = '/planificacionProcesador/';
-          window.location.href = `${currentUrl.protocol}//${currentUrl.host}${basePath}`;
+          window.location.href = targetPath;
         }
       });
   }
@@ -41,26 +45,26 @@
   function startNewSimulation() {
     try {
       console.log('🆕 Resultados: Iniciando nueva simulación...');
+      console.log('🆕 Resultados: Base path:', base);
+      
       // Limpiar todos los datos de simulación
       clearSimulation();
       console.log('✅ Resultados: Datos limpiados, navegando...');
-      // Navegar al inicio usando ruta relativa
-      goto('../')
+      
+      // Usar el base path de SvelteKit
+      const targetPath = base || '/';
+      console.log('🆕 Resultados: Navegando a:', targetPath);
+      
+      goto(targetPath)
         .then(() => {
-          console.log('✅ Resultados: Navegación exitosa con ruta relativa');
+          console.log('✅ Resultados: Navegación exitosa a nueva simulación');
         })
         .catch((err) => {
-          console.warn('⚠️ Resultados: Navegación relativa falló, intentando ruta absoluta con base:', err);
-          // Si falla, usar la ruta con base path
-          return goto('./');
-        })
-        .catch((err) => {
-          console.error('❌ Resultados: Todas las navegaciones fallaron:', err);
-          // Como último recurso, recargar la página en el dominio correcto
+          console.error('❌ Resultados: Error en navegación:', err);
+          // Como último recurso, usar window.location
           if (typeof window !== 'undefined') {
-            const currentUrl = new URL(window.location.href);
-            const basePath = '/planificacionProcesador/';
-            window.location.href = `${currentUrl.protocol}//${currentUrl.host}${basePath}`;
+            console.log('🔄 Resultados: Usando window.location como fallback');
+            window.location.href = targetPath;
           }
         });
     } catch (error) {
