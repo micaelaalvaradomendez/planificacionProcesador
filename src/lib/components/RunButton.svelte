@@ -10,11 +10,15 @@
   
   async function handleExecute() {
     try {
+      console.log('🚀 RunButton: Iniciando simulación...');
       lastError = '';
+      console.log('🔄 RunButton: Llamando executeSimulation...');
       await executeSimulation();
+      console.log('✅ RunButton: Simulación completada exitosamente');
       // Si llegamos acá, la simulación fue exitosa
       // Podrías navegar a /resultados o hacer scroll a los resultados
     } catch (err) {
+      console.error('❌ RunButton: Error en simulación:', err);
       // Este catch maneja errores síncronos, pero executeSimulation ya maneja sus errores internamente
       lastError = err instanceof Error ? err.message : String(err);
     }

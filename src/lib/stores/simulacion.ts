@@ -217,34 +217,48 @@ export async function loadFromTanda(tandaData: ProcesoTanda[]): Promise<void> {
  */
 export async function executeSimulation(): Promise<void> {
   try {
+    console.log('🔧 Store: Iniciando executeSimulation...');
     isSimulating.set(true);
     simulationError.set(null);
     
     const cfg = get(simulationConfig);
     const procs = get(procesos);
     
+    console.log('📊 Store: Configuración:', cfg);
+    console.log('📋 Store: Procesos:', procs);
+    
     // Validar entradas antes de ejecutar
     const validation = validateInputs(procs, cfg);
+    console.log('✅ Store: Validación:', validation);
     if (!validation.ok) {
       throw new Error(`Entradas inválidas: ${validation.issues.map(i => i.msg).join(' | ')}`);
     }
     
     // Clonar defensivamente para la simulación
-    const cfgClon = globalThis.structuredClone ? 
-      globalThis.structuredClone(cfg) : 
-      JSON.parse(JSON.stringify(cfg));
-    const procsClon = globalThis.structuredClone ? 
-      globalThis.structuredClone(procs) : 
-      JSON.parse(JSON.stringify(procs));
+    console.log('📄 Store: Clonando datos...');
+    function deepClone<T>(obj: T): T {
+      if (typeof globalThis !== 'undefined' && globalThis.structuredClone) {
+        return globalThis.structuredClone(obj);
+      }
+      return JSON.parse(JSON.stringify(obj));
+    }
+    
+    const cfgClon = deepClone(cfg);
+    const procsClon = deepClone(procs);
     
     // Ejecutar simulación
+    console.log('⚡ Store: Ejecutando runSimulation...');
     const result = runSimulation(cfgClon, procsClon);
+    console.log('🎉 Store: Resultado obtenido:', result);
     simulationResult.set(result);
+    console.log('💾 Store: Resultado guardado en store');
     
   } catch (error) {
+    console.error('💥 Store: Error en executeSimulation:', error);
     const msg = error instanceof Error ? error.message : String(error);
     simulationError.set(`Error en simulación: ${msg}`);
   } finally {
+    console.log('🏁 Store: Finalizando executeSimulation');
     isSimulating.set(false);
   }
 }
