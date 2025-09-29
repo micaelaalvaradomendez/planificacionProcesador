@@ -11,7 +11,7 @@ import { GanttBuilder } from '../gantt/builder';
 import { parseTandaJSON, extractBloqueoESGlobal, type ProcesoTanda } from '../io/parser';
 import { getFixture, type Fixture } from '../io/fixtures';
 import { validateInputs, type ValidationResult } from '../io/validate';
-import { exportToJSON, exportMetricsToCSV, exportTraceToCSV } from '../io/export';
+import { exportToJSON, exportMetricsToCSV, exportTraceToCSV, downloadMetricasCSV, downloadTraceCSV } from '../io/export';
 
 // ===== TIPOS PRINCIPALES =====
 
@@ -322,7 +322,7 @@ export function exportResultadoJSON(): void {
 export function exportMetricasCSV(): void {
   const res = get(simulationResult);
   if (!res) return;
-  exportMetricsToCSV(res.metricas.porProceso, 'metricas.csv');
+  downloadMetricasCSV('metricas', res.metricas);
 }
 
 /**
@@ -331,16 +331,14 @@ export function exportMetricasCSV(): void {
 export function exportTraceCSV(): void {
   const res = get(simulationResult);
   if (!res) return;
-  exportTraceToCSV(res.trace, 'trace.csv');
+  downloadTraceCSV('trace', res.trace);
 }
 
 // ==================== PASO 12: NUEVAS FUNCIONES DE EXPORT/IMPORT ====================
 
 import { 
   buildResultadoJSON, 
-  downloadJSON, 
-  downloadMetricasCSV, 
-  downloadTraceCSV,
+  downloadJSON,
   type ResultadoExport,
   type ExportSimulationConfig
 } from '../io/export';

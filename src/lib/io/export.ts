@@ -57,7 +57,7 @@ export function exportMetricsToCSV(
   const csv = [
     headers.join(','),
     ...rows.map(row => row.join(','))
-  ].join('\\n');
+  ].join('\n');
   
   if (filename && typeof window !== 'undefined') {
     downloadCSV(csv, filename);
@@ -98,7 +98,7 @@ export function exportTraceToCSV(
     ].join(','));
   });
   
-  const csv = [headers.join(','), ...rows].join('\\n');
+  const csv = [headers.join(','), ...rows].join('\n');
   
   if (filename && typeof window !== 'undefined') {
     downloadCSV(csv, filename);
