@@ -1,5 +1,5 @@
-import { runRR } from './src/lib/engine/engine';
-import type { Proceso } from './src/lib/model/proceso';
+import { runRR } from '../src/lib/engine/engine';
+import type { Proceso } from '../src/lib/model/proceso';
 
 const procesos: Proceso[] = [
   { pid: 1, arribo: 0, rafagasCPU: [5], estado: 'N' },

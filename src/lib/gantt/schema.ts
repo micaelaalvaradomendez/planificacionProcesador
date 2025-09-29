@@ -8,7 +8,7 @@
 export interface GanttSeg {
   start: number;
   end: number;
-  type?: 'cpu' | 'tip' | 'tcp' | 'tfp'; // tipo de segmento para styling
+  type?: 'cpu' | 'tip' | 'tcp' | 'tfp' | 'io'; // tipo de segmento para styling
 }
 
 /**

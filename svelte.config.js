@@ -9,13 +9,16 @@ export default {
     adapter: adapter({
       pages: 'build',
       assets: 'build',
-      fallback: '404.html'
+      fallback: '404.html',
+      strict: false
     }),
     paths: {
       base: dev ? '' : '/planificacionProcesador'
     },
     prerender: {
-      entries: ['*']
+      entries: ['/', '/resultados'],
+      handleMissingId: 'warn',
+      handleHttpError: 'warn'
     }
   }
 };

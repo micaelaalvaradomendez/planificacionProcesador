@@ -1,4 +1,4 @@
-// src/lib/engine/engine.ts
+// src/lib/engine/engine-fixed.ts
 import { EventQueue } from './queue';
 import { EVENT_PRIORITY, type EventType, type SimEvent, type Trace, type TraceSlice, type OverheadKind } from './types';
 import { EngineInvariants } from './invariants';
@@ -14,20 +14,25 @@ import { SchedulerPriority } from '../scheduler/priority';
 type Runtime = {
   idxRafaga: number;      // índice de ráfaga actual
   restante: number;       // tiempo restante de esa ráfaga
+  generation: number;     // para detectar eventos stale
 };
 
 type CPUState = {
   pid: number | null;
   sliceStart: number | null;
+  generation: number;     // generación del proceso en CPU
 };
 
+// Eventos corregidos: separamos fin de CPU del overhead administrativo
 const EVT: Record<string, EventType> = {
-  FINISH: 'C→T',
-  BLOCK:  'C→B',
-  PREEMPT:'C→L',
+  CPU_DONE: 'CPU_DONE',   // NUEVO: fin de ráfaga de CPU (sin overhead)
+  FINISH: 'C→T',          // fin definitivo del proceso
+  ADMIN_FINISH: 'ADMIN_FINISH', // NUEVO: overhead TFP completado
+  BLOCK: 'C→B',
+  PREEMPT: 'C→L',
   IO_OUT: 'B→L',
-  ADMIT:  'N→L',
-  DISPATCH:'L→C'
+  ADMIT: 'N→L',
+  DISPATCH: 'L→C'
 };
 
 // Helper para trazar overheads (TIP/TCP/TFP) en el Gantt
@@ -36,16 +41,215 @@ function traceOverhead(trace: Trace, pid: number, kind: OverheadKind, t0: number
   (trace.overheads ??= []).push({ pid, t0, t1, kind });
 }
 
+// Helper para logging de eventos con validación de pid obligatorio
+function traceEvent(trace: Trace, t: number, type: EventType, pid: number, data?: Record<string, unknown>) {
+  if (pid == null || pid === undefined) {
+    throw new Error(`Event ${type} at t=${t} requires a valid pid, got: ${pid}`);
+  }
+  trace.events.push({ t, type, pid, data });
+}
 
-/** 
- * Ejecuta Round Robin con quantum, con TIP/TCP/TFP/bloqueoES respetados.
- * 
- * Reglas críticas:
- * - Quantum se REINICIA en cada L→C (no hay quantum restante entre despachos)
- * - Timer se programa desde t_s = t + TCP (no desde t)
- * - TCP no cuenta dentro del quantum (solo desplaza t_s)
- * - Se programan siempre ambos eventos (fin ráfaga y timer)
- * - Si coinciden, C→T/C→B (prio 1/2) gana a C→L (prio 3)
+// Helper para logging de slices con validación
+function traceSlice(trace: Trace, pid: number, start: number, end: number) {
+  if (start >= end) return; // No crear slices vacíos o negativos
+  if (pid == null || pid === undefined) {
+    throw new Error(`Slice [${start}, ${end}) requires a valid pid, got: ${pid}`);
+  }
+  trace.slices.push({ pid, start, end });
+}
+
+/**
+ * FCFS corregido con separación de eventos de fin y overhead
+ */
+export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trace {
+  const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
+  const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
+  const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
+  const bloqueoES = Number.isFinite(costos.bloqueoES as number) ? (costos.bloqueoES as number) : 25;
+
+  const q = new EventQueue();
+  const trace: Trace = { slices: [], events: [] };
+  const rt = new Map<number, Runtime>();
+  const cpu: CPUState = { pid: null, sliceStart: null, generation: 0 };
+  const sched = new SchedulerFCFS();
+
+  let currentTick = Number.NEGATIVE_INFINITY;
+  let pendingDispatchAt: number | null = null;
+
+  // Admisiones con TIP
+  for (const p of procesos) {
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0), generation: 0 });
+    const tAdm = p.arribo + TIP;
+    q.push({ t: tAdm, type: EVT.ADMIT, pid: p.pid });
+    
+    if (TIP > 0) {
+      traceOverhead(trace, p.pid, 'TIP', p.arribo, tAdm);
+    }
+  }
+
+  const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
+    q.push({ t, type, pid, data });
+
+  const abrirSlice = (t: number, pid: number) => { 
+    cpu.pid = pid; 
+    cpu.sliceStart = t; 
+    const r = rt.get(pid);
+    if (r) cpu.generation = r.generation;
+  };
+
+  const cerrarSlice = (t: number) => {
+    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
+      traceSlice(trace, cpu.pid, cpu.sliceStart, t);
+    }
+    cpu.pid = null; 
+    cpu.sliceStart = null;
+  };
+
+  const despacharSiLibre = (t: number) => {
+    if (cpu.pid != null) return;
+    if (pendingDispatchAt === t) return;
+    const nextPid = sched.next();
+    if (nextPid != null) {
+      programar(t, EVT.DISPATCH, nextPid);
+      pendingDispatchAt = t;
+    }
+  };
+
+  const getRafagas = (pid: number) =>
+    procesos.find(x => x.pid === pid)?.rafagasCPU ?? [];
+
+  while (!q.isEmpty()) {
+    const e = q.pop()!;
+    if (e.t !== currentTick) { 
+      currentTick = e.t; 
+      pendingDispatchAt = null; 
+    }
+
+    // Solo logear eventos válidos después de verificar que no son stale
+    const shouldLogEvent = () => {
+      if (e.pid == null) return false;
+      if (e.type === EVT.PREEMPT || e.type === EVT.CPU_DONE) {
+        const r = rt.get(e.pid);
+        return r && (e.data?.generation === r.generation);
+      }
+      return true;
+    };
+
+    switch (e.type) {
+      case EVT.ADMIT: {
+        if (e.pid == null) break;
+        traceEvent(trace, e.t, e.type, e.pid);
+        sched.onAdmit(e.pid);
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.DISPATCH: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid != null) {
+          // Proceso ya no existe o CPU ocupada - evento stale
+          break;
+        }
+
+        traceEvent(trace, e.t, e.type, e.pid);
+
+        // TCP se aplica ANTES del inicio del slice
+        const tStart = e.t + TCP;
+        
+        if (TCP > 0) {
+          traceOverhead(trace, e.pid, 'TCP', e.t, tStart);
+        }
+        
+        abrirSlice(tStart, e.pid);
+
+        const rBurst = r.restante;
+        const tEnd = tStart + rBurst;
+
+        // Programar fin de CPU (SIN overhead)
+        programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+
+        break;
+      }
+
+      case EVT.CPU_DONE: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale - ignorar
+          break;
+        }
+
+        // Cerrar slice de CPU exactamente en tEnd (sin TFP)
+        cerrarSlice(e.t);
+        
+        // Marcar ráfaga como terminada
+        r.restante = 0;
+        
+        const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
+        
+        if (esUltima) {
+          // Emitir C→T en el momento exacto de fin de CPU
+          traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          
+          // Programar overhead administrativo TFP si existe
+          if (TFP > 0) {
+            traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
+            programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          }
+          
+          sched.onFinish(e.pid);
+        } else {
+          // Emitir C→B y manejar E/S
+          traceEvent(trace, e.t, EVT.BLOCK, e.pid);
+          
+          const proceso = procesos.find(p => p.pid === e.pid);
+          if (proceso) {
+            const durES = Number.isFinite(proceso.rafagasES?.[r.idxRafaga])
+              ? (proceso.rafagasES as number[])[r.idxRafaga]
+              : bloqueoES;
+
+            programar(e.t + durES, EVT.IO_OUT, e.pid);
+            sched.onBlock(e.pid);
+          }
+        }
+        
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.IO_OUT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r) break;
+
+        traceEvent(trace, e.t, e.type, e.pid);
+        
+        // Avanzar a siguiente ráfaga
+        r.idxRafaga += 1;
+        r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
+        r.generation += 1; // Nueva generación para detectar eventos stale
+        
+        sched.onReady(e.pid);
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.ADMIN_FINISH: {
+        // Overhead TFP completado - no hacer nada más
+        break;
+      }
+    }
+  }
+
+  return trace;
+}
+
+/**
+ * Round Robin corregido con epochs y manejo correcto de quantum
  */
 export function runRR(
   procesos: Proceso[],
@@ -60,475 +264,44 @@ export function runRR(
   const q = new EventQueue();
   const trace: Trace = { slices: [], events: [] };
   const rt = new Map<number, Runtime>();
-  const cpu: CPUState = { pid: null, sliceStart: null };
+  const cpu: CPUState = { pid: null, sliceStart: null, generation: 0 };
   const sched = new SchedulerRR(quantum);
 
   let currentTick = Number.NEGATIVE_INFINITY;
   let pendingDispatchAt: number | null = null;
 
-  // admisiones con TIP
+  // Admisiones con TIP
   for (const p of procesos) {
-    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0) });
-    q.push({ t: p.arribo + TIP, type: EVT.ADMIT, pid: p.pid });
-    
-    // NUEVO: trazar TIP si > 1
-    if (TIP > 1) {
-      traceOverhead(trace, p.pid, 'TIP', p.arribo, p.arribo + TIP);
-    }
-  }
-
-  const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
-    q.push({ t, type, pid, data });
-
-  const logEvent = (e: SimEvent) => trace.events.push({ t: e.t, type: e.type, pid: e.pid });
-
-  const abrirSlice = (t: number, pid: number) => { cpu.pid = pid; cpu.sliceStart = t; };
-  const cerrarSlice = (t: number) => {
-    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
-      trace.slices.push({ pid: cpu.pid, start: cpu.sliceStart, end: t });
-    }
-    cpu.pid = null; cpu.sliceStart = null;
-  };
-
-  const despacharSiLibre = (t: number) => {
-    if (cpu.pid != null) return;
-    if (pendingDispatchAt === t) return; // guard por tick
-    const nextPid = sched.next();
-    if (nextPid != null) {
-      programar(t, EVT.DISPATCH, nextPid);
-      pendingDispatchAt = t;
-    }
-  };
-
-  const getRafagas = (pid: number) =>
-    procesos.find(x => x.pid === pid)?.rafagasCPU ?? [];
-
-  while (!q.isEmpty()) {
-    const e = q.pop()!;
-    if (e.t !== currentTick) { currentTick = e.t; pendingDispatchAt = null; }
-    logEvent(e);
-
-    switch (e.type) {
-      case 'N→L': {
-        if (e.pid == null) break;
-        sched.onAdmit(e.pid);
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'L→C': {
-
-
-        const pid = e.pid;
-        if (pid == null) break;
-        
-        if (cpu.pid != null) { sched.onReady(pid); break; }   // defensivo
-
-        const r = rt.get(pid); if (!r) break;
-
-        const tStart = e.t + TCP;        // inicio real del slice
-        
-        // NUEVO: trazar TCP si > 1
-        if (TCP > 1) {
-          traceOverhead(trace, pid, 'TCP', e.t, tStart);
-        }
-        
-        abrirSlice(tStart, pid);
-
-        const rBurst = r.restante;       // snapshot de ráfaga restante (no tocar!!)
-        const qRest  = sched.getQuantum?.() ?? quantum;  // reinicio de quantum
-
-        const tFinCPU = tStart + rBurst;
-        const tTimer  = tStart + qRest;
-
-
-
-        const esUltima = (r.idxRafaga >= (getRafagas(pid).length - 1));
-        if (esUltima) {
-          // NUEVO: trazar TFP si > 1
-          if (TFP > 1) {
-            traceOverhead(trace, pid, 'TFP', tFinCPU, tFinCPU + TFP);
-          }
-          
-          // Para fin total: programar C→T (prioridad 1) que libera CPU en su tiempo real
-          programar(tFinCPU + TFP, EVT.FINISH, pid, { 
-            realFinishTime: tFinCPU, 
-            expectedSliceStart: tStart 
-          });
-        } else {
-          // Solo programar el fin de CPU, el handler EVT.BLOCK maneja la E/S
-          programar(tFinCPU, EVT.BLOCK, pid);
-        }
-
-        programar(tTimer, EVT.PREEMPT, pid); // C→L del timer (empate lo resuelven prioridades)
-        break;
-      }
-
-      case EVT.BLOCK: {
-        // Bloqueo: cerrar slice y manejar E/S per-proceso
-        cerrarSlice(e.t);
-        if (e.pid != null) {
-          const r = rt.get(e.pid);
-          if (r) {
-            const proceso = procesos.find(p => p.pid === e.pid);
-            const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
-            
-            if (esUltima) {
-              // Última ráfaga: finalizar proceso
-              programar(e.t + TFP, EVT.FINISH, e.pid, { 
-                realFinishTime: e.t, 
-                expectedSliceStart: cpu.sliceStart 
-              });
-            } else {
-              // Programar E/S con duración específica del proceso
-              const duracionES = proceso?.rafagasES?.[r.idxRafaga] ?? bloqueoES;
-              programar(e.t + duracionES, EVT.IO_OUT, e.pid);
-              sched.onBlock(e.pid);
-            }
-          }
-        }
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'B→L': {
-        if (e.pid == null) break;
-        const r = rt.get(e.pid); if (!r) break;
-        r.idxRafaga += 1;
-        r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
-        sched.onReady(e.pid);
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'C→L': {
-        if (e.pid == null) break;
-        if (cpu.pid !== e.pid || cpu.sliceStart == null) break; // stale
-
-        const pid = e.pid;
-        const r = rt.get(pid); if (!r) break;
-
-        const runFor = e.t - cpu.sliceStart;
-        cerrarSlice(e.t);
-        r.restante = Math.max(0, r.restante - runFor);
-
-        if (r.restante > 0) {
-          (sched as any).onDesalojoActual?.(pid);
-        }
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'C→T': {
-        if (e.pid == null) break;
-        
-        const realFinishTime = (e.data?.realFinishTime as number) ?? e.t;
-        const expectedSliceStart = (e.data?.expectedSliceStart as number) ?? null;
-        
-        // Verificar si el proceso está ejecutando desde exactamente el slice esperado
-        if (cpu.pid !== e.pid || cpu.sliceStart !== expectedSliceStart) {
-          break; // C→T stale - corresponde a un slice anterior
-        }
-        
-        // Proceso realmente terminó - descontar lo que ejecutó y cerrar
-        const r = rt.get(e.pid);
-        if (r) {
-          const executed = realFinishTime - cpu.sliceStart;
-          r.restante = Math.max(0, r.restante - executed);
-        }
-        
-        cerrarSlice(realFinishTime);
-        despacharSiLibre(realFinishTime);
-        sched.onFinish(e.pid);
-        break;
-      }
-    }
-  }
-
-  return trace;
-}
-
-export function runFCFSSandbox(procesos: Proceso[], costos: Partial<Costos> = {}): Trace {
-  const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
-  const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
-  const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
-  const bloqueoES = Number.isFinite(costos.bloqueoES as number) ? (costos.bloqueoES as number) : 25;
-
-  const q = new EventQueue();
-  const trace: Trace = { slices: [], events: [] };
-
-  // Estado runtime por PID
-  const rt: Map<number, Runtime> = new Map();
-
-  // CPU
-  const cpu: CPUState = { pid: null, sliceStart: null };
-
-  // Planificador FCFS
-  const sched = new SchedulerFCFS();
-
-  // Guard por tick: evita múltiples L→C en el mismo instante
-  let currentTick = Number.NEGATIVE_INFINITY;
-  let pendingDispatchAt: number | null = null;
-
-  // Programar admisiones N→L (con TIP)
-  for (const p of procesos) {
-    // inicialización runtime
-    rt.set(p.pid, {
-      idxRafaga: 0,
-      restante: (p.rafagasCPU?.[0] ?? 0)
-    });
-    // agenda N→L en t=arribo + TIP
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0), generation: 0 });
     const tAdm = p.arribo + TIP;
     q.push({ t: tAdm, type: EVT.ADMIT, pid: p.pid });
     
-    // NUEVO: trazar TIP si > 1
-    if (TIP > 1) {
+    if (TIP > 0) {
       traceOverhead(trace, p.pid, 'TIP', p.arribo, tAdm);
     }
   }
 
-  // Helpers de scheduling
-  const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) => {
-    q.push({ t, type, pid, data });
-  };
-
-  const abrirSlice = (t: number, pid: number) => {
-    cpu.pid = pid;
-    cpu.sliceStart = t;
-  };
-
-  const cerrarSlice = (t: number) => {
-    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
-      trace.slices.push({ pid: cpu.pid, start: cpu.sliceStart, end: t });
-    }
-    cpu.pid = null;
-    cpu.sliceStart = null;
-  };
-
-  const logEvent = (e: SimEvent) => {
-    trace.events.push({ t: e.t, type: e.type, pid: e.pid });
-  };
-
-  const despacharSiLibre = (t: number) => {
-    if (cpu.pid != null) return;              // CPU ocupada
-    if (pendingDispatchAt === t) return;      // ya agendé un L→C en el mismo tick
-    const nextPid = sched.next();
-    if (nextPid != null) {
-      programar(t, EVT.DISPATCH, nextPid);
-      pendingDispatchAt = t;                  // marca: ya hay un L→C@t
-    }
-  };
-
-  // ---- Event loop ----
-  while (!q.isEmpty()) {
-    const e = q.pop()!;
-    // reset del guard cuando cambia el tiempo
-    if (e.t !== currentTick) {
-      currentTick = e.t;
-      pendingDispatchAt = null;
-    }
-    logEvent(e);
-
-    switch (e.type) {
-      case 'N→L': {
-        // Admitir a ready
-        if (e.pid == null) break;
-        sched.onAdmit(e.pid);
-        // Si la CPU está libre, intentamos despachar en el mismo t
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'L→C': {
-        // --- liberar CPU y cerrar slice si viene como "gatillo de release" ---
-        const releasePid = (e.data?.releasePid as number) ?? null;
-        const releaseAt  = (e.data?.releaseAt  as number) ?? null;
-
-        if (releasePid != null && releaseAt != null) {
-          // Cerrar el slice del que terminó CPU exactamente en releaseAt
-          if (cpu.pid === releasePid && cpu.sliceStart != null && cpu.sliceStart < releaseAt) {
-            trace.slices.push({ pid: releasePid, start: cpu.sliceStart, end: releaseAt });
-          }
-          // liberar CPU para que podamos despachar a otro
-          cpu.pid = null;
-          cpu.sliceStart = null;
-          // ojo: seguimos en el mismo handler, ahora intentaremos abrir un nuevo slice
-        }
-        // ---------------------------------------------------------------------
-
-        if (cpu.pid != null) {
-          // defensivo: CPU ocupada -> reencolar
-          if (e.pid != null) sched.onReady(e.pid);
-          break;
-        }
-
-        let pid = e.pid ?? sched.next();   // si no vino pid, elegimos ahora
-        if (pid == null) break;
-
-        const r = rt.get(pid);
-        if (!r) break;
-
-        // TCP: el slice inicia en t + TCP (no contamina ráfaga/quantum)
-        const tStart = e.t + TCP;
-        abrirSlice(tStart, pid);
-
-        // NUEVO: trazar TCP si > 1
-        if (TCP > 1) {
-          traceOverhead(trace, pid, 'TCP', e.t, tStart);
-        }
-
-        // Programar fin de ráfaga actual
-        const dur = r.restante;
-        const esUltima = (r.idxRafaga >= (getRafagas(procesos, pid).length - 1));
-        const tFinCPU = tStart + dur; // fin del trabajo útil (CPU)
-
-        if (esUltima) {
-          // 1) Evento administrativo (NO CPU)
-          programar(tFinCPU + TFP, EVT.FINISH, pid, { realFinishTime: tFinCPU });
-          // 2) Gatillo de despacho en tFinCPU (cierra slice y libera CPU ANTES de elegir next)
-          programar(tFinCPU, EVT.DISPATCH, undefined, { releasePid: pid, releaseAt: tFinCPU });
-        } else {
-          programar(tFinCPU, EVT.BLOCK, pid);              // C→B @ fin
-          programar(tFinCPU + bloqueoES, EVT.IO_OUT, pid); // B→L @ fin + bloqueoES
-        }
-        break;
-      }
-
-      case EVT.BLOCK: {
-        // Bloqueo: cerrar slice y liberar CPU
-        cerrarSlice(e.t);
-        if (e.pid != null) {
-          // FCFS no necesita nada especial aquí
-          sched.onBlock(e.pid);
-        }
-        // Tras un bloqueo, intentamos despachar otro
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'B→L': {
-        if (e.pid == null) break;
-        // Avanza a la próxima ráfaga
-        const r = rt.get(e.pid);
-        if (!r) break;
-        r.idxRafaga += 1;
-        r.restante = getRafagas(procesos, e.pid)[r.idxRafaga] ?? 0;
-
-        // Vuelve a ready
-        sched.onReady(e.pid);
-        // Intentar despacho si CPU libre
-        despacharSiLibre(e.t);
-        break;
-      }
-
-      case 'C→T': {
-        if (e.pid == null) break;
-        // El slice YA se cerró en tFinCPU (releaseAt) cuando procesamos el gatillo
-        // Este evento es administrativo: registrar y avisar al scheduler
-        sched.onFinish(e.pid);
-        
-        // NUEVO: trazar TFP si > 1
-        // En runFCFSSandbox, realFinishTime está en e.data
-        const realFinishTime = (e.data?.realFinishTime as number) ?? e.t;
-        if (TFP > 1) {
-          traceOverhead(trace, e.pid, 'TFP', realFinishTime, e.t);
-        }
-        // Nada de despachar aquí (la CPU está liberada desde tFinCPU)
-        break;
-      }
-
-      case 'C→L': {
-        // En FCFS sandbox NO usamos expropiación (no debería llegar)
-        // Si llegara por error, cerramos slice y devolvemos a ready.
-        if (e.pid != null) {
-          cerrarSlice(e.t);
-          sched.onReady(e.pid);
-          despacharSiLibre(e.t);
-        }
-        break;
-      }
-    }
-  }
-
-  return trace;
-}
-
-// ---- util: obtener ráfagas por pid ----
-function getRafagas(procesos: Proceso[], pid: number): number[] {
-  const p = procesos.find(x => x.pid === pid);
-  return p?.rafagasCPU ?? [];
-}
-
-// Helper functions for SPN/SRTN
-function getNextBurst(procesos: Proceso[], rt: Map<number, Runtime>, pid: number): number {
-  const r = rt.get(pid);
-  const arr = procesos.find(p => p.pid === pid)?.rafagasCPU ?? [];
-  const i = r?.idxRafaga ?? 0;
-  return arr[i] ?? 0;
-}
-
-function getRemainingNow(rt: Map<number, Runtime>, cpu: CPUState, pid: number, now: number): number {
-  const r = rt.get(pid);
-  if (!r) return 0;
-  if (cpu.pid === pid && cpu.sliceStart != null) {
-    // restante dinámico: lo que queda del burst menos lo ya corrido en este slice
-    const ran = now - cpu.sliceStart;
-    return Math.max(0, r.restante - ran);
-  }
-  // si no está ejecutando, su restante coincide con r.restante
-  return r.restante;
-}
-
-/** 
- * Ejecuta SPN (Shortest Process Next) - no expropiativo
- * Selecciona siempre el proceso con la ráfaga próxima más corta
- */
-export function runSPN(
-  procesos: Proceso[],
-  costos: Partial<Costos> = {}
-): Trace {
-  const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
-  const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
-  const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
-  const bloqueoES = Number.isFinite(costos.bloqueoES as number) ? (costos.bloqueoES as number) : 25;
-
-  const q = new EventQueue();
-  const trace: Trace = { slices: [], events: [] };
-  const rt = new Map<number, Runtime>();
-  const cpu: CPUState = { pid: null, sliceStart: null };
-  
-  const sched = new SchedulerSPN((pid: number) => getNextBurst(procesos, rt, pid));
-
-  let currentTick = Number.NEGATIVE_INFINITY;
-  let pendingDispatchAt: number | null = null;
-
-  // admisiones con TIP
-  for (const p of procesos) {
-    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0) });
-    q.push({ t: p.arribo + TIP, type: EVT.ADMIT, pid: p.pid });
-    
-    // NUEVO: trazar TIP si > 1
-    if (TIP > 1) {
-      traceOverhead(trace, p.pid, 'TIP', p.arribo, p.arribo + TIP);
-    }
-  }
-
   const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
     q.push({ t, type, pid, data });
 
-  const logEvent = (e: SimEvent) => trace.events.push({ t: e.t, type: e.type, pid: e.pid });
+  const abrirSlice = (t: number, pid: number) => { 
+    cpu.pid = pid; 
+    cpu.sliceStart = t; 
+    const r = rt.get(pid);
+    if (r) cpu.generation = r.generation;
+  };
 
-  const abrirSlice = (t: number, pid: number) => { cpu.pid = pid; cpu.sliceStart = t; };
   const cerrarSlice = (t: number) => {
     if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
-      trace.slices.push({ pid: cpu.pid, start: cpu.sliceStart, end: t });
+      traceSlice(trace, cpu.pid, cpu.sliceStart, t);
     }
-    cpu.pid = null; cpu.sliceStart = null;
+    cpu.pid = null; 
+    cpu.sliceStart = null;
   };
 
   const despacharSiLibre = (t: number) => {
     if (cpu.pid != null) return;
-    if (pendingDispatchAt === t) return; // guard por tick
+    if (pendingDispatchAt === t) return;
     const nextPid = sched.next();
     if (nextPid != null) {
       programar(t, EVT.DISPATCH, nextPid);
@@ -541,90 +314,139 @@ export function runSPN(
 
   while (!q.isEmpty()) {
     const e = q.pop()!;
-    if (e.t !== currentTick) { currentTick = e.t; pendingDispatchAt = null; }
-    logEvent(e);
+    if (e.t !== currentTick) { 
+      currentTick = e.t; 
+      pendingDispatchAt = null; 
+    }
 
     switch (e.type) {
-      case 'N→L': {
+      case EVT.ADMIT: {
         if (e.pid == null) break;
+        traceEvent(trace, e.t, e.type, e.pid);
         sched.onAdmit(e.pid);
         despacharSiLibre(e.t);
         break;
       }
 
-      case 'L→C': {
+      case EVT.DISPATCH: {
         if (e.pid == null) break;
-        if (cpu.pid != null) { sched.onReady(e.pid); break; }   
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid != null) break;
 
-        const pid = e.pid;
-        const r = rt.get(pid); if (!r) break;
+        traceEvent(trace, e.t, e.type, e.pid);
 
-        const tStart = e.t + TCP;        
-        abrirSlice(tStart, pid);
+        const tStart = e.t + TCP;
+        
+        if (TCP > 0) {
+          traceOverhead(trace, e.pid, 'TCP', e.t, tStart);
+        }
+        
+        abrirSlice(tStart, e.pid);
 
-        // NUEVO: trazar TCP si > 1
-        if (TCP > 1) {
-          traceOverhead(trace, pid, 'TCP', e.t, tStart);
+        const rBurst = r.restante;
+        const tEnd = tStart + rBurst;
+        const tTimer = tStart + quantum;
+
+        // Programar eventos con generation para detectar stale
+        programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+        
+        // Solo programar preemption si el quantum no alcanza
+        if (rBurst > quantum) {
+          programar(tTimer, EVT.PREEMPT, e.pid, { generation: r.generation, reason: 'quantum' });
         }
 
-        const rBurst = r.restante;       
-        const tFinCPU = tStart + rBurst;
-
-        const esUltima = (r.idxRafaga >= (getRafagas(pid).length - 1));
-        if (esUltima) {
-          programar(tFinCPU + TFP, EVT.FINISH, pid, { 
-            realFinishTime: tFinCPU, 
-            expectedSliceStart: tStart 
-          });
-        } else {
-          const proceso = procesos.find(p => p.pid === pid);
-          const tiempoBloqueoES = proceso?.rafagasES?.[r.idxRafaga] ?? bloqueoES;
-          programar(tFinCPU, EVT.BLOCK, pid);
-          programar(tFinCPU + tiempoBloqueoES, EVT.IO_OUT, pid);
-        }
         break;
       }
 
-      case EVT.BLOCK: {
+      case EVT.CPU_DONE: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale
+          break;
+        }
+
         cerrarSlice(e.t);
-        if (e.pid != null) sched.onBlock(e.pid);
+        
+        // Marcar ráfaga como terminada
+        r.restante = 0;
+        
+        const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
+        
+        if (esUltima) {
+          traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          
+          if (TFP > 0) {
+            traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
+            programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          }
+          
+          sched.onFinish(e.pid);
+        } else {
+          traceEvent(trace, e.t, EVT.BLOCK, e.pid);
+          
+          const proceso = procesos.find(p => p.pid === e.pid);
+          if (proceso) {
+            const durES = Number.isFinite(proceso.rafagasES?.[r.idxRafaga])
+              ? (proceso.rafagasES as number[])[r.idxRafaga]
+              : bloqueoES;
+
+            programar(e.t + durES, EVT.IO_OUT, e.pid);
+            sched.onBlock(e.pid);
+          }
+        }
+        
         despacharSiLibre(e.t);
         break;
       }
 
-      case 'B→L': {
+      case EVT.PREEMPT: {
         if (e.pid == null) break;
-        const r = rt.get(e.pid); if (!r) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale
+          break;
+        }
+
+        // Actualizar tiempo restante
+        const runFor = e.t - (cpu.sliceStart ?? e.t);
+        r.restante = Math.max(0, r.restante - runFor);
+        
+        cerrarSlice(e.t);
+        traceEvent(trace, e.t, EVT.PREEMPT, e.pid, { reason: e.data?.reason ?? 'quantum' });
+        
+        // ***invalidar eventos pendientes de la generación anterior***
+        r.generation += 1;
+        
+        if (r.restante > 0) {
+          sched.onReady(e.pid);
+        }
+        
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.IO_OUT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r) break;
+
+        traceEvent(trace, e.t, e.type, e.pid);
+        
         r.idxRafaga += 1;
         r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
+        r.generation += 1;
+        
         sched.onReady(e.pid);
         despacharSiLibre(e.t);
         break;
       }
 
-      case 'C→T': {
-        if (e.pid == null) break;
-        const realFinishTime = (e.data?.realFinishTime as number) ?? e.t;
-        const expectedSliceStart = (e.data?.expectedSliceStart as number) ?? null;
-        
-        if (cpu.pid !== e.pid || cpu.sliceStart !== expectedSliceStart) {
-          break; // C→T stale
-        }
-        
-        const r = rt.get(e.pid);
-        if (r) {
-          const executed = realFinishTime - cpu.sliceStart!;
-          r.restante = Math.max(0, r.restante - executed);
-        }
-        
-        cerrarSlice(realFinishTime);
-        despacharSiLibre(realFinishTime);
-        sched.onFinish(e.pid);
-        
-        // NUEVO: trazar TFP si > 1
-        if (TFP > 1) {
-          traceOverhead(trace, e.pid, 'TFP', realFinishTime, e.t);
-        }
+      case EVT.ADMIN_FINISH: {
         break;
       }
     }
@@ -633,23 +455,11 @@ export function runSPN(
   return trace;
 }
 
-/** 
- * Ejecuta SRTN (Shortest Remaining Time Next) - expropiativo
- * Expropia cuando llega un proceso con menor tiempo restante
- */
-// TEMPORARY: runSRTN disabled due to structural issues from previous edits
-// TODO: Restore runSRTN with proper structure
-
-
 /**
- * Planificador SRTN (Shortest Remaining Time Next)
- * - Preempción por menor tiempo restante
- * - E/S por proceso usando rafagasES con fallback a bloqueoES global
+ * SPN (Shortest Process Next) - no expropiativo
+ * Selecciona siempre el proceso con la ráfaga CPU más corta entre los listos
  */
-export function runSRTN(
-  procesos: Proceso[],
-  costos: Partial<Costos> = {}
-): Trace {
+export function runSPN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace {
   const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
   const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
   const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
@@ -657,155 +467,172 @@ export function runSRTN(
 
   const q = new EventQueue();
   const trace: Trace = { slices: [], events: [] };
+  const rt = new Map<number, Runtime>();
+  const cpu: CPUState = { pid: null, sliceStart: null, generation: 0 };
   
-  type RT = { idxRafaga: number; restante: number };
-  const rt = new Map<number, RT>();
-  
-  const byPid = (pid: number) => procesos.find(p => p.pid === pid)!;
-  
-  const durES = (p: Proceso, idxCPU: number): number =>
-    Number.isFinite(p.rafagasES?.[idxCPU]) ? (p.rafagasES as number[])[idxCPU] : bloqueoES;
+  // SPN scheduler que selecciona por ráfaga más corta
+  const sched = new SchedulerSPN((pid: number) => {
+    const r = rt.get(pid);
+    return r ? r.restante : Infinity; // ráfaga actual restante
+  });
 
-  const cpu = { pid: null as number | null, sliceStart: null as number | null };
-  let currentTick = 0;
+  let currentTick = Number.NEGATIVE_INFINITY;
+  let pendingDispatchAt: number | null = null;
 
-  const sched = new SchedulerSRTN(
-    (pid: number, at: number) => getRemainingNow(rt, cpu, pid, at),
-    () => currentTick
-  );
+  // Admisiones con TIP
+  for (const p of procesos) {
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0), generation: 0 });
+    const tAdm = p.arribo + TIP;
+    q.push({ t: tAdm, type: EVT.ADMIT, pid: p.pid });
+    
+    if (TIP > 0) {
+      traceOverhead(trace, p.pid, 'TIP', p.arribo, tAdm);
+    }
+  }
 
   const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
     q.push({ t, type, pid, data });
 
-  const traceEvent = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
-    trace.events.push({ t, type, pid, data });
-
-  const traceSlice = (pid: number, start: number, end: number) => {
-    if (start < end) {
-      trace.slices.push({ pid, start, end });
-    }
-  };
-
-  const despacharSiLibre = (t: number): void => {
-    if (cpu.pid !== null) return; 
-    const nextPid = sched.next();
-    if (nextPid == null) return;
-
-    const tStart = t + TCP;
-    cpu.pid = nextPid;
-    cpu.sliceStart = tStart;
-    
-    const r = rt.get(nextPid)!;
-    programar(tStart + r.restante, EVT.BLOCK, nextPid);
-  };
-
-  /** Preempción solo si el recién llegado tiene restante menor que el actual. */
-  const tryPreemptIfNeeded = (t: number, pidNuevo: number): void => {
-    if (cpu.pid == null) return;
-    const rNuevo = rt.get(pidNuevo)!.restante;
-
-    // restante "real" del que corre = lo que faltaba menos lo ejecutado desde sliceStart  
-    const rActual = rt.get(cpu.pid)!.restante - Math.max(0, t - (cpu.sliceStart ?? t));
-    if (rNuevo < rActual) {
-      // Cerrar slice del actual en t y devolverlo a listos
-      traceSlice(cpu.pid, cpu.sliceStart!, t);
-      traceEvent(t, 'C→L', cpu.pid);
-      rt.get(cpu.pid)!.restante = rActual;     // actualizar restante tras ejecución parcial
-      sched.onReady(cpu.pid);
-      cpu.pid = null;
-      cpu.sliceStart = null;
-      despacharSiLibre(t);                      // gatillar nuevo despacho
-    }
-  };
-
-  const getRemainingNow = (rt: Map<number, RT>, cpu: { pid: number | null, sliceStart: number | null }, pid: number, at: number): number => {
+  const abrirSlice = (t: number, pid: number) => { 
+    cpu.pid = pid; 
+    cpu.sliceStart = t; 
     const r = rt.get(pid);
-    if (!r) return Infinity;
-    
-    if (cpu.pid === pid && cpu.sliceStart !== null) {
-      // Este proceso está corriendo, calcular restante actual
-      return Math.max(0, r.restante - (at - cpu.sliceStart));
-    }
-    
-    return r.restante;
+    if (r) cpu.generation = r.generation;
   };
 
-  // Inicializar estado de ejecución de cada proceso y programar su admisión
-  for (const p of procesos) {
-    rt.set(p.pid, { idxRafaga: 0, restante: p.rafagasCPU[0] ?? 0 });
-    programar(p.arribo + TIP, EVT.ADMIT, p.pid);
-    
-    // NUEVO: trazar TIP si > 1
-    if (TIP > 1) {
-      traceOverhead(trace, p.pid, 'TIP', p.arribo, p.arribo + TIP);
+  const cerrarSlice = (t: number) => {
+    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
+      traceSlice(trace, cpu.pid, cpu.sliceStart, t);
     }
-  }
+    cpu.pid = null; 
+    cpu.sliceStart = null;
+  };
 
-  // Event loop con vocabulario unificado
+  const despacharSiLibre = (t: number) => {
+    if (cpu.pid != null) return;
+    if (pendingDispatchAt === t) return;
+    const nextPid = sched.next();
+    if (nextPid != null) {
+      programar(t, EVT.DISPATCH, nextPid);
+      pendingDispatchAt = t;
+    }
+  };
+
+  const getRafagas = (pid: number) =>
+    procesos.find(x => x.pid === pid)?.rafagasCPU ?? [];
+
   while (!q.isEmpty()) {
-    const ev = q.pop()!;
-    currentTick = ev.t;
+    const e = q.pop()!;
+    if (e.t !== currentTick) { 
+      currentTick = e.t; 
+      pendingDispatchAt = null; 
+    }
 
-    switch (ev.type) {
+    switch (e.type) {
       case EVT.ADMIT: {
-        const pid = ev.pid!;
-        sched.onAdmit(pid);
-        tryPreemptIfNeeded(currentTick, pid);
-        despacharSiLibre(currentTick);
+        if (e.pid == null) break;
+        traceEvent(trace, e.t, e.type, e.pid);
+        sched.onAdmit(e.pid);
+        despacharSiLibre(e.t);
         break;
       }
 
       case EVT.DISPATCH: {
-        // Este caso se maneja directamente en despacharSiLibre
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid != null) {
+          // Proceso ya no existe o CPU ocupada - evento stale
+          break;
+        }
+
+        traceEvent(trace, e.t, e.type, e.pid);
+
+        // TCP se aplica ANTES del inicio del slice
+        const tStart = e.t + TCP;
+        
+        if (TCP > 0) {
+          traceOverhead(trace, e.pid, 'TCP', e.t, tStart);
+        }
+        
+        abrirSlice(tStart, e.pid);
+
+        const rBurst = r.restante;
+        const tEnd = tStart + rBurst;
+
+        // Programar fin de CPU (SIN overhead)
+        programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+
         break;
       }
 
-      case EVT.BLOCK: { // fin de ráfaga de CPU (C→B)
-        if (typeof ev.pid === 'number' && cpu.pid === ev.pid) {
-          traceSlice(ev.pid, cpu.sliceStart!, currentTick);
-          const p = byPid(ev.pid);
-          const st = rt.get(ev.pid)!;
-          const justFinished = st.idxRafaga;
+      case EVT.CPU_DONE: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale - ignorar
+          break;
+        }
 
-          cpu.pid = null;
-          cpu.sliceStart = null;
+        // Cerrar slice de CPU exactamente en tEnd (sin TFP)
+        cerrarSlice(e.t);
+        
+        // Marcar ráfaga como terminada
+        r.restante = 0;
+        
+        const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
+        
+        if (esUltima) {
+          // Emitir C→T en el momento exacto de fin de CPU
+          traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          
+          // Programar overhead administrativo TFP si existe
+          if (TFP > 0) {
+            traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
+            programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          }
+          
+          sched.onFinish(e.pid);
+        } else {
+          // Emitir C→B y manejar E/S
+          traceEvent(trace, e.t, EVT.BLOCK, e.pid);
+          
+          const proceso = procesos.find(p => p.pid === e.pid);
+          if (proceso) {
+            const durES = Number.isFinite(proceso.rafagasES?.[r.idxRafaga])
+              ? (proceso.rafagasES as number[])[r.idxRafaga]
+              : bloqueoES;
 
-          const hayMasCPU = justFinished < p.rafagasCPU.length - 1;
-          if (hayMasCPU) {
-            // Programar salida de E/S con duración por-proceso
-            const d = durES(p, justFinished);
-            traceEvent(currentTick, 'C→B', ev.pid, { bloqueoES: d });
-            // Avanzar índice de ráfaga *antes* de volver
-            st.idxRafaga = justFinished + 1;
-            programar(currentTick + d, EVT.IO_OUT, ev.pid);
-            sched.onBlock(ev.pid);
-            despacharSiLibre(currentTick);
-          } else {
-            // Última ráfaga → finalizar con TFP
-            programar(currentTick + TFP, EVT.FINISH, ev.pid);
-            sched.onFinish(ev.pid);
-            despacharSiLibre(currentTick);
+            programar(e.t + durES, EVT.IO_OUT, e.pid);
+            sched.onBlock(e.pid);
           }
         }
+        
+        despacharSiLibre(e.t);
         break;
       }
 
-      case EVT.IO_OUT: { // retorno de E/S a listos (B→L)
-        const pid = ev.pid!;
-        const p = byPid(pid);
-        const st = rt.get(pid)!;
+      case EVT.IO_OUT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r) break;
 
-        // Cargar la nueva ráfaga de CPU (la que sigue al índice ya avanzado en BLOCK)
-        st.restante = p.rafagasCPU[st.idxRafaga] ?? 0;
-
-        sched.onReady(pid);
-        tryPreemptIfNeeded(currentTick, pid);
-        despacharSiLibre(currentTick);
+        traceEvent(trace, e.t, e.type, e.pid);
+        
+        // Avanzar a siguiente ráfaga
+        r.idxRafaga += 1;
+        r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
+        r.generation += 1; // Nueva generación para detectar eventos stale
+        
+        sched.onReady(e.pid);
+        despacharSiLibre(e.t);
         break;
       }
 
-      case EVT.FINISH: { // (C→T)
-        traceEvent(currentTick, 'C→T', ev.pid);
+      case EVT.ADMIN_FINISH: {
+        // Overhead TFP completado - no hacer nada más
         break;
       }
     }
@@ -815,19 +642,268 @@ export function runSRTN(
 }
 
 /**
- * Planificador con prioridades y envejecimiento (Priority + Aging)
- * 
- * CONVENCIÓN EXPLÍCITA:
- * - Prioridad numérica menor = mayor prioridad (0 es la más alta)
- * - Aging: cada tick reduce la prioridad efectiva en 0.01 (mejora)
- * - Preemption: proceso de mayor prioridad puede expropiar al CPU
- * - Event loop: N→L/B→L → tryPreemptIfNeeded → despacharSiLibre
- * - Guards: TelemetryGuards + invariants + defensive ready queue
+ * SRTN corregido con preemption correcta
+ */
+export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace {
+  const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
+  const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
+  const TFP = Number.isFinite(costos.TFP as number) ? (costos.TFP as number) : 0;
+  const bloqueoES = Number.isFinite(costos.bloqueoES as number) ? (costos.bloqueoES as number) : 25;
+
+  const q = new EventQueue();
+  const trace: Trace = { slices: [], events: [] };
+  const rt = new Map<number, Runtime>();
+  const cpu: CPUState = { pid: null, sliceStart: null, generation: 0 };
+  const sched = new SchedulerSRTN(
+    (pid: number, now: number) => rt.get(pid)?.restante ?? 0,
+    () => currentTick
+  );
+
+  let currentTick = Number.NEGATIVE_INFINITY;
+  let pendingDispatchAt: number | null = null;
+
+  // Admisiones con TIP
+  for (const p of procesos) {
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0), generation: 0 });
+    const tAdm = p.arribo + TIP;
+    q.push({ t: tAdm, type: EVT.ADMIT, pid: p.pid });
+    
+    if (TIP > 0) {
+      traceOverhead(trace, p.pid, 'TIP', p.arribo, tAdm);
+    }
+  }
+
+  const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
+    q.push({ t, type, pid, data });
+
+  const abrirSlice = (t: number, pid: number) => { 
+    cpu.pid = pid; 
+    cpu.sliceStart = t; 
+    const r = rt.get(pid);
+    if (r) cpu.generation = r.generation;
+  };
+
+  const cerrarSlice = (t: number) => {
+    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
+      traceSlice(trace, cpu.pid, cpu.sliceStart, t);
+    }
+    cpu.pid = null; 
+    cpu.sliceStart = null;
+  };
+
+  const tryPreemptIfNeeded = (t: number, newPid: number) => {
+    if (cpu.pid == null || cpu.sliceStart == null) return false;
+    
+    const currentPid = cpu.pid;
+    const currentR = rt.get(currentPid);
+    const newR = rt.get(newPid);
+    
+    if (!currentR || !newR || currentPid == null) return false;
+    
+    // Permitir evaluación en el mismo tick de inicio; si t==sliceStart ⇒ runFor=0
+    // Esto evita consumir CPU por error pero permite preemption inmediata si corresponde
+    
+    // Calcular tiempo ejecutado y restante actual
+    const runFor = t - cpu.sliceStart; // puede ser 0 si t == sliceStart
+    
+    if (newR.restante < currentR.restante - runFor) {
+      // Preemptar: 1) descontar si corrió, 2) invalidar eventos pendientes, 3) a ready
+      
+      // 1) Solo modificar r.restante si hubo ejecución real (t > sliceStart)
+      if (t > cpu.sliceStart) {
+        currentR.restante = Math.max(0, currentR.restante - runFor);
+        cerrarSlice(t);
+      } else {
+        // t == sliceStart: no hubo ejecución, solo limpiar estado CPU sin modificar r.restante
+        cpu.pid = null;
+        cpu.sliceStart = null;
+      }
+      
+      // 2) ***INVALIDAR eventos ya programados (CPU_DONE viejo)***
+      currentR.generation += 1;
+      
+      // 3) traza y a ready
+      traceEvent(trace, t, EVT.PREEMPT, currentPid, { reason: 'preempt' });
+      sched.onReady(currentPid);
+      return true;
+    }
+    
+    return false;
+  };
+
+  const despacharSiLibre = (t: number) => {
+    if (cpu.pid != null) return;
+    if (pendingDispatchAt === t) return;
+    const nextPid = sched.next();
+    if (nextPid != null) {
+      programar(t, EVT.DISPATCH, nextPid);
+      pendingDispatchAt = t;
+    }
+  };
+
+  const getRafagas = (pid: number) =>
+    procesos.find(x => x.pid === pid)?.rafagasCPU ?? [];
+
+  while (!q.isEmpty()) {
+    const e = q.pop()!;
+    if (e.t !== currentTick) { 
+      currentTick = e.t; 
+      pendingDispatchAt = null; 
+    }
+
+    switch (e.type) {
+      case EVT.ADMIT: {
+        if (e.pid == null) break;
+        traceEvent(trace, e.t, e.type, e.pid);
+        sched.onAdmit(e.pid);
+        
+        // Intentar preemptar si llegó un proceso con menor tiempo restante
+        if (!tryPreemptIfNeeded(e.t, e.pid)) {
+          despacharSiLibre(e.t);
+        } else {
+          despacharSiLibre(e.t);
+        }
+        break;
+      }
+
+      case EVT.DISPATCH: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid != null) break;
+
+        traceEvent(trace, e.t, e.type, e.pid);
+
+        const tStart = e.t + TCP;
+        
+        if (TCP > 0) {
+          traceOverhead(trace, e.pid, 'TCP', e.t, tStart);
+        }
+        
+        abrirSlice(tStart, e.pid);
+
+        const rBurst = r.restante;
+        const tEnd = tStart + rBurst;
+
+        programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+        break;
+      }
+
+      case EVT.CPU_DONE: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          break;
+        }
+
+        cerrarSlice(e.t);
+        
+        // Marcar ráfaga como terminada
+        r.restante = 0;
+        
+        const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
+        
+        if (esUltima) {
+          traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          
+          if (TFP > 0) {
+            traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
+            programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          }
+          
+          sched.onFinish(e.pid);
+        } else {
+          traceEvent(trace, e.t, EVT.BLOCK, e.pid);
+          
+          const proceso = procesos.find(p => p.pid === e.pid);
+          if (proceso) {
+            const durES = Number.isFinite(proceso.rafagasES?.[r.idxRafaga])
+              ? (proceso.rafagasES as number[])[r.idxRafaga]
+              : bloqueoES;
+
+            programar(e.t + durES, EVT.IO_OUT, e.pid);
+            sched.onBlock(e.pid);
+          }
+        }
+        
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.PREEMPT: {
+        // SRTN usa preemption sincrónica (tryPreemptIfNeeded)
+        // Este case solo debe usarse para RR (events de quantum en cola)
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale - ignorar
+          break;
+        }
+
+        // Solo procesar si es preemption por quantum (RR)
+        if (e.data?.reason !== 'quantum') {
+          // SRTN no debe usar eventos PREEMPT en cola
+          break;
+        }
+
+        const runFor = e.t - (cpu.sliceStart ?? e.t);
+        r.restante = Math.max(0, r.restante - runFor);
+        
+        cerrarSlice(e.t);
+        traceEvent(trace, e.t, EVT.PREEMPT, e.pid, { reason: 'quantum' });
+        
+        // ***invalidar eventos pendientes de la generación anterior***
+        r.generation += 1;
+        
+        if (r.restante > 0) {
+          sched.onReady(e.pid);
+        }
+        
+        despacharSiLibre(e.t);
+        break;
+      }
+
+      case EVT.IO_OUT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r) break;
+
+        traceEvent(trace, e.t, e.type, e.pid);
+        
+        r.idxRafaga += 1;
+        r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
+        r.generation += 1;
+        
+        sched.onReady(e.pid);
+        
+        // Intentar preemptar si retornó un proceso con menor tiempo restante
+        if (!tryPreemptIfNeeded(e.t, e.pid)) {
+          despacharSiLibre(e.t);
+        } else {
+          despacharSiLibre(e.t);
+        }
+        break;
+      }
+
+      case EVT.ADMIN_FINISH: {
+        break;
+      }
+    }
+  }
+
+  return trace;
+}
+
+/**
+ * Priority corregido con preemption
  */
 export function runPriority(
   procesos: Proceso[],
-  prioridades: Record<number, number>, // pid -> prioridad base
-  costos: Partial<Costos> = {}
+  costos: Partial<Costos> = {},
+  priorityAging?: { quantum: number; incremento: number }
 ): Trace {
   const TIP = Number.isFinite(costos.TIP as number) ? (costos.TIP as number) : 0;
   const TCP = Number.isFinite(costos.TCP as number) ? (costos.TCP as number) : 0;
@@ -837,184 +913,237 @@ export function runPriority(
   const q = new EventQueue();
   const trace: Trace = { slices: [], events: [] };
   const rt = new Map<number, Runtime>();
-  const cpu: CPUState = { pid: null, sliceStart: null };
+  const cpu: CPUState = { pid: null, sliceStart: null, generation: 0 };
+  
+  // Priority scheduler que selecciona por prioridad más alta (menor número)
+  const sched = new SchedulerPriority(
+    (pid: number) => procesos.find(p => p.pid === pid)?.prioridadBase ?? 10, // Default priority 10 (low)
+    (pid: number, now: number) => rt.get(pid)?.restante ?? 0,
+    () => currentTick,
+    priorityAging ? {
+      ageQuantum: priorityAging.quantum,
+      ageStep: priorityAging.incremento,
+      minPriority: 0,
+      maxPriority: 10
+    } : undefined
+  );
 
   let currentTick = Number.NEGATIVE_INFINITY;
   let pendingDispatchAt: number | null = null;
 
-  // Funciones auxiliares para SchedulerPriority
-  const getPriorityBase = (pid: number): number => prioridades[pid] ?? 10;
-  const getRemaining = (pid: number, now: number): number => rt.get(pid)?.restante ?? 0;
-  const getNow = (): number => currentTick;
-  
-  const sched = new SchedulerPriority(getPriorityBase, getRemaining, getNow);
-
-  // admisiones con TIP
+  // Admisiones con TIP
   for (const p of procesos) {
-    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0) });
-    q.push({ t: p.arribo + TIP, type: EVT.ADMIT, pid: p.pid });
+    rt.set(p.pid, { idxRafaga: 0, restante: (p.rafagasCPU?.[0] ?? 0), generation: 0 });
+    const tAdm = p.arribo + TIP;
+    q.push({ t: tAdm, type: EVT.ADMIT, pid: p.pid });
+    
+    if (TIP > 0) {
+      traceOverhead(trace, p.pid, 'TIP', p.arribo, tAdm);
+    }
   }
 
   const programar = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) =>
     q.push({ t, type, pid, data });
 
-  const traceEvent = (t: number, type: EventType, pid?: number, data?: Record<string, unknown>) => {
-    trace.events.push({ t, type, pid, data });
+  const abrirSlice = (t: number, pid: number) => { 
+    cpu.pid = pid; 
+    cpu.sliceStart = t; 
+    const r = rt.get(pid);
+    if (r) cpu.generation = r.generation;
   };
 
-  const traceSlice = (pid: number, start: number, end: number) => {
-    if (end > start) {
-      trace.slices.push({ pid, start, end });
+  const cerrarSlice = (t: number) => {
+    if (cpu.pid != null && cpu.sliceStart != null && cpu.sliceStart < t) {
+      traceSlice(trace, cpu.pid, cpu.sliceStart, t);
     }
+    cpu.pid = null; 
+    cpu.sliceStart = null;
   };
 
-  const tryPreemptIfNeeded = (t: number): void => {
-    if (cpu.pid === null || pendingDispatchAt !== null) return;
-
-    const runningPid = cpu.pid;
+  const tryPreemptIfNeeded = (t: number, newPid: number) => {
+    if (cpu.pid == null || cpu.sliceStart == null) return false;
     
-    // Obtener lista de procesos en ready sin sacarlos
-    const readyPids = sched.getReadyQueue?.() || [];
-    if (readyPids.length === 0) return;
+    const currentPid = cpu.pid;
+    const currentR = rt.get(currentPid);
+    const newR = rt.get(newPid);
     
-    // Buscar el de mayor prioridad y verificar si debe expropiar
-    for (const candidatePid of readyPids) {
-      if (candidatePid !== runningPid && sched.compareForPreemption) {
-        const shouldPreempt = sched.compareForPreemption(t, candidatePid, getRemaining, runningPid);
-        
-        if (shouldPreempt) {
-          // Expropiar proceso actual
-          traceSlice(runningPid, cpu.sliceStart!, t);
-          traceEvent(t, 'C→L', runningPid, { reason: 'preempt' });
-          sched.onDesalojoActual?.(runningPid);
-          cpu.pid = null;
-          cpu.sliceStart = null;
-          
-          // Programar despacho con TCP
-          pendingDispatchAt = t + TCP;
-          if (TCP > 0) {
-            programar(pendingDispatchAt, EVT.DISPATCH);
-          } else {
-            pendingDispatchAt = null;
-            despacharSiLibre(t);
-          }
-          return; // Solo un proceso puede expropiar
-        }
+    if (!currentR || !newR || currentPid == null) return false;
+    
+    // Obtener prioridades efectivas (menor número = mayor prioridad)
+    const currentPriority = procesos.find(p => p.pid === currentPid)?.prioridadBase ?? 10;
+    const newPriority = procesos.find(p => p.pid === newPid)?.prioridadBase ?? 10;
+    
+    // Preemptar si el nuevo proceso tiene mayor prioridad (menor número)
+    if (newPriority < currentPriority) {
+      // Calcular tiempo ejecutado
+      const runFor = t - cpu.sliceStart; // puede ser 0 si t == sliceStart
+      
+      // 1) Solo modificar r.restante si hubo ejecución real (t > sliceStart)
+      if (t > cpu.sliceStart) {
+        currentR.restante = Math.max(0, currentR.restante - runFor);
+        cerrarSlice(t);
+      } else {
+        // t == sliceStart: no hubo ejecución, solo limpiar estado CPU sin modificar r.restante
+        cpu.pid = null;
+        cpu.sliceStart = null;
       }
+      
+      // 2) ***INVALIDAR eventos ya programados (CPU_DONE viejo)***
+      currentR.generation += 1;
+      
+      // 3) traza y a ready
+      traceEvent(trace, t, EVT.PREEMPT, currentPid, { reason: 'preempt' });
+      sched.onReady(currentPid);
+      return true;
     }
+    
+    return false;
   };
 
-  const despacharSiLibre = (t: number): void => {
-    if (cpu.pid !== null) return;
-
+  const despacharSiLibre = (t: number) => {
+    if (cpu.pid != null) return;
+    if (pendingDispatchAt === t) return;
     const nextPid = sched.next();
-    if (nextPid === undefined) return;
-
-    cpu.pid = nextPid;
-    cpu.sliceStart = t;
-    traceEvent(t, 'L→C', nextPid);
-
-    const proceso = procesos.find(p => p.pid === nextPid);
-    const runtimeState = rt.get(nextPid);
-    
-    if (!proceso || !runtimeState) return;
-
-    const rafagaCPU = runtimeState.restante;
-    
-    // Programar fin de ráfaga
-    programar(t + rafagaCPU, EVT.BLOCK, nextPid);
-  };
-
-  const finalizarProceso = (t: number, pid: number): void => {
-    const tfpFinal = t + TFP;
-    traceEvent(tfpFinal, 'C→T', pid, { TFP });
-    sched.onFinish(pid);
-  };
-
-  // Helper: obtiene duración de E/S específica del proceso o fallback global
-  const durES = (p: Proceso, idxCPU: number): number => {
-    const v = p.rafagasES?.[idxCPU];
-    return Number.isFinite(v) ? (v as number) : bloqueoES; // fallback global
-  };
-
-  const procesarBloqueoES = (t: number, pid: number): void => {
-    const rt_state = rt.get(pid);
-    if (!rt_state) return;
-    const p = procesos.find(x => x.pid === pid);
-    if (!p) return;
-
-    // idx de la ráfaga de CPU que acaba de finalizar
-    const justFinished = rt_state.idxRafaga;
-
-    // ¿quedan CPU por ejecutar?
-    const hayMasCPU = justFinished < p.rafagasCPU.length - 1;
-
-    if (hayMasCPU) {
-      const d = durES(p, justFinished);        // ES específica del proceso en esa frontera
-      traceEvent(t, 'C→B', pid, { bloqueoES: d });
-      programar(t + d, EVT.IO_OUT, pid);
-
-      // avanzar al siguiente burst de CPU
-      rt_state.idxRafaga = justFinished + 1;
-      sched.onBlock(pid);
-    } else {
-      finalizarProceso(t, pid);
+    if (nextPid != null) {
+      programar(t, EVT.DISPATCH, nextPid);
+      pendingDispatchAt = t;
     }
   };
 
-  // Event loop principal
+  const getRafagas = (pid: number) =>
+    procesos.find(x => x.pid === pid)?.rafagasCPU ?? [];
+
   while (!q.isEmpty()) {
-    const event = q.pop()!;
-    currentTick = event.t;
+    const e = q.pop()!;
+    if (e.t !== currentTick) { 
+      currentTick = e.t; 
+      pendingDispatchAt = null; 
+    }
 
-    // Aging se maneja automáticamente en SchedulerPriority
-
-    switch (event.type) {
-      case EVT.ADMIT:
-        if (typeof event.pid === 'number') {
-          traceEvent(currentTick, 'N→L', event.pid);
-          sched.onAdmit(event.pid);
-          tryPreemptIfNeeded(currentTick);
-          if (pendingDispatchAt === null) {
-            despacharSiLibre(currentTick);
-          }
+    switch (e.type) {
+      case EVT.ADMIT: {
+        if (e.pid == null) break;
+        traceEvent(trace, e.t, e.type, e.pid);
+        sched.onAdmit(e.pid);
+        
+        // Intentar preemptar si llegó un proceso con mayor prioridad
+        if (!tryPreemptIfNeeded(e.t, e.pid)) {
+          despacharSiLibre(e.t);
+        } else {
+          despacharSiLibre(e.t);
         }
         break;
+      }
 
-      case EVT.DISPATCH:
-        pendingDispatchAt = null;
-        despacharSiLibre(currentTick);
+      case EVT.DISPATCH: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid != null) {
+          // Proceso ya no existe o CPU ocupada - evento stale
+          break;
+        }
+
+        traceEvent(trace, e.t, e.type, e.pid);
+
+        // TCP se aplica ANTES del inicio del slice
+        const tStart = e.t + TCP;
+        
+        if (TCP > 0) {
+          traceOverhead(trace, e.pid, 'TCP', e.t, tStart);
+        }
+        
+        abrirSlice(tStart, e.pid);
+
+        const rBurst = r.restante;
+        const tEnd = tStart + rBurst;
+
+        // Programar fin de CPU con generation para detectar eventos obsoletos
+        programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+
         break;
+      }
 
-      case EVT.BLOCK:
-        if (typeof event.pid === 'number' && cpu.pid === event.pid) {
-          traceSlice(event.pid, cpu.sliceStart!, currentTick);
-          cpu.pid = null;
-          cpu.sliceStart = null;
-          procesarBloqueoES(currentTick, event.pid);
+      case EVT.CPU_DONE: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale - ignorar
+          break;
+        }
+
+        // Cerrar slice de CPU exactamente en tEnd (sin TFP)
+        cerrarSlice(e.t);
+        
+        // Marcar ráfaga como terminada
+        r.restante = 0;
+        
+        const esUltima = (r.idxRafaga >= (getRafagas(e.pid).length - 1));
+        
+        if (esUltima) {
+          // Emitir C→T en el momento exacto de fin de CPU
+          traceEvent(trace, e.t, EVT.FINISH, e.pid);
           
-          if (pendingDispatchAt === null) {
-            despacharSiLibre(currentTick);
+          // Programar overhead administrativo TFP si existe
+          if (TFP > 0) {
+            traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
+            programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
           }
-        }
-        break;
+          
+          sched.onFinish(e.pid);
+        } else {
+          // Emitir C→B y manejar E/S
+          traceEvent(trace, e.t, EVT.BLOCK, e.pid);
+          
+          const proceso = procesos.find(p => p.pid === e.pid);
+          if (proceso) {
+            const durES = Number.isFinite(proceso.rafagasES?.[r.idxRafaga])
+              ? (proceso.rafagasES as number[])[r.idxRafaga]
+              : bloqueoES;
 
-      case EVT.IO_OUT:
-        if (typeof event.pid === 'number') {
-          const rt_state = rt.get(event.pid);
-          if (rt_state && rt_state.idxRafaga < procesos.find(p => p.pid === event.pid)!.rafagasCPU.length) {
-            rt_state.restante = procesos.find(p => p.pid === event.pid)!.rafagasCPU[rt_state.idxRafaga];
-            traceEvent(currentTick, 'B→L', event.pid);
-            sched.onReady(event.pid);
-            tryPreemptIfNeeded(currentTick);
-            if (pendingDispatchAt === null) {
-              despacharSiLibre(currentTick);
-            }
+            programar(e.t + durES, EVT.IO_OUT, e.pid);
+            sched.onBlock(e.pid);
           }
         }
+        
+        despacharSiLibre(e.t);
         break;
+      }
+
+      case EVT.IO_OUT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r) break;
+
+        traceEvent(trace, e.t, e.type, e.pid);
+        
+        // Avanzar a siguiente ráfaga
+        r.idxRafaga += 1;
+        r.restante = getRafagas(e.pid)[r.idxRafaga] ?? 0;
+        r.generation += 1; // Nueva generación para detectar eventos stale
+        
+        sched.onReady(e.pid);
+        
+        // Intentar preemptar si el proceso que retorna tiene mayor prioridad
+        if (!tryPreemptIfNeeded(e.t, e.pid)) {
+          despacharSiLibre(e.t);
+        } else {
+          despacharSiLibre(e.t);
+        }
+        break;
+      }
+
+      case EVT.ADMIN_FINISH: {
+        // Overhead TFP completado - no hacer nada más
+        break;
+      }
     }
   }
 
   return trace;
 }
+
+// Alias para mantener compatibilidad
+export const runFCFSSandbox = runFCFS;

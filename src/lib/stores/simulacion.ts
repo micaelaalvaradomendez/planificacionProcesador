@@ -34,18 +34,26 @@ export interface SimulationResult {
       arribo: number;
       fin: number;
       servicioCPU: number;
-      TRp: number;       // Tiempo Respuesta = fin - arribo
-      TE: number;        // Tiempo Espera = TRp - servicioCPU  
-      TRn: number;       // Tiempo Respuesta Normalizado = TRp/servicioCPU
+      tiempoES: number;      // Tiempo en E/S (entrada/salida)
+      tiempoEspera: number;  // Tiempo en estado Listo (espera)
+      overheads: number;     // Suma de TIP + TCP + TFP para este proceso
+      TRp: number;           // Tiempo de Retorno (turnaround) = fin - arribo
+      TE: number;            // Tiempo de Espera total en Listo
+      TRn: number;           // Tiempo de Respuesta Normalizada = TRp/servicioCPU
     }>;
     global: {
       TRpPromedio: number;
-      TEPromedio: number;
+      TEPromedio: number;  
       TRnPromedio: number;
       throughput: number;
       cambiosDeContexto: number;
       expropiaciones: number;
       tiempoTotalSimulacion: number;
+      // Nuevas métricas de CPU
+      cpuOciosa: number;           // Tiempo CPU ociosa
+      cpuOciosaPorc: number;       // % CPU ociosa
+      utilizacionCPU: number;      // % Utilización CPU (busy + overheads)
+      utilizacionCPUBusy: number;  // % Utilización CPU solo busy (sin overheads)
     };
   };
   gantt: GanttModel;
@@ -123,6 +131,7 @@ export function runSimulation(cfg: SimulationConfig, procesosInput: Proceso[]): 
   const procesosClon: Proceso[] = procesosInput.map(p => ({
     ...p,
     rafagasCPU: [...(p.rafagasCPU ?? [])],
+    rafagasES: [...(p.rafagasES ?? [])],
     estado: 'N'
   }));
 

@@ -10,10 +10,10 @@ import type { Runtime } from './invariants';
 // Usar variables de entorno de Vite que son seguras para el cliente
 export const TELEMETRY_CONFIG = {
   // Habilitar invariants en puntos críticos (desarrollo)
-  enableInvariants: import.meta.env.DEV ?? false,
+  enableInvariants: (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ?? false,
   
   // Habilitar logs detallados de slices
-  enableSliceLogs: import.meta.env.VITE_DEBUG_SLICES === 'true',
+  enableSliceLogs: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEBUG_SLICES === 'true') ?? false,
   
   // Habilitar warnings de enqueue
   enableEnqueueWarnings: true

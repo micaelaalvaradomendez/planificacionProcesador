@@ -19,15 +19,31 @@
     return (t - tMin) / range * (W - 120) + 80;
   }
   
-  function getSegmentColor(pid: string): string {
+  function getSegmentColor(pid: string, type?: string): string {
+    // Colores fijos para overheads (mismo color independiente del proceso)
+    if (type === 'tip') return '#795548'; // Marrón
+    if (type === 'tcp') return '#607d8b'; // Azul gris
+    if (type === 'tfp') return '#3f51b5'; // Indigo
+    if (type === 'io') return '#9e9e9e';  // Gris claro para E/S
+    
+    // Colores diferenciados por proceso para CPU
     const colors = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4', '#CDDC39'];
     const pidNum = parseInt(pid) || 0;
     return colors[pidNum % colors.length];
   }
+
+  function getSegmentLabel(segment: any): string {
+    const duration = segment.end - segment.start;
+    if (segment.type === 'tip') return `TIP:${duration}`;
+    if (segment.type === 'tcp') return `TCP:${duration}`;
+    if (segment.type === 'tfp') return `TFP:${duration}`;
+    if (segment.type === 'io') return `E/S:${duration}`;
+    return duration.toString(); // CPU
+  }
 </script>
 
 <div class="gantt-container">
-  <h3> Diagrama de Gantt (Solo CPU)</h3>
+  <h3>📊 Diagrama de Gantt (CPU + E/S + Overheads)</h3>
   
   {#if !model}
     <div class="empty-state">
@@ -66,11 +82,12 @@
           <line x1="80" y1={y + trackHeight/2} x2={W - 40} y2={y + trackHeight/2} 
                 stroke="#ddd" stroke-width="1"/>
           
-          <!-- Segmentos CPU -->
+          <!-- Segmentos (CPU, I/O, overheads) -->
           {#each track.segments as segment}
             {@const x = scale(segment.start)}
             {@const width = scale(segment.end) - scale(segment.start)}
-            {@const color = getSegmentColor(track.pid)}
+            {@const color = getSegmentColor(track.pid, segment.type)}
+            {@const label = getSegmentLabel(segment)}
             
             <rect 
               x={x} 
@@ -81,6 +98,7 @@
               stroke="#fff"
               stroke-width="1"
               rx="3"
+              opacity={segment.type === 'io' ? 0.7 : 1}
             />
             
             <!-- Texto del segmento (si hay espacio) -->
@@ -90,10 +108,10 @@
                 y={y + trackHeight/2 + 4}
                 text-anchor="middle"
                 font-size="10"
-                fill="white"
+                fill={segment.type === 'io' ? '#333' : 'white'}
                 font-weight="bold"
               >
-                {segment.end - segment.start}
+                {label}
               </text>
             {/if}
           {/each}
@@ -105,12 +123,30 @@
     <div class="legend">
       <h4>Leyenda:</h4>
       <div class="legend-items">
+        <!-- Procesos CPU -->
         {#each tracks as track}
           <div class="legend-item">
-            <div class="color-box" style="background-color: {getSegmentColor(track.pid)}"></div>
-            <span>P{track.pid}</span>
+            <div class="color-box" style="background-color: {getSegmentColor(track.pid, 'cpu')}"></div>
+            <span>P{track.pid} CPU</span>
           </div>
         {/each}
+        <!-- Tipos de overhead -->
+        <div class="legend-item">
+          <div class="color-box" style="background-color: {getSegmentColor('', 'tip')}"></div>
+          <span>TIP (Costo Ingreso)</span>
+        </div>
+        <div class="legend-item">
+          <div class="color-box" style="background-color: {getSegmentColor('', 'tcp')}"></div>
+          <span>TCP (Cambio Contexto)</span>
+        </div>
+        <div class="legend-item">
+          <div class="color-box" style="background-color: {getSegmentColor('', 'tfp')}"></div>
+          <span>TFP (Costo Fin)</span>
+        </div>
+        <div class="legend-item">
+          <div class="color-box" style="background-color: {getSegmentColor('', 'io')}; opacity: 0.7"></div>
+          <span>E/S (Entrada/Salida)</span>
+        </div>
       </div>
     </div>
     

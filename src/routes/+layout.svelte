@@ -17,24 +17,19 @@
 <div class="app">
 	<nav class="navbar">
 		<div class="nav-container">
-			<a href="/" class="nav-brand">
-				🖥️ Planificador de Procesos
-			</a>
+			<div class="brand-info">
+				<h1 class="brand-title">Simulador de Planificación de Procesos</h1>
+				<p class="brand-subtitle">Trabajo Práctico Integrador - Sistemas Operativos</p>
+			</div>
+			
 			
 			<div class="nav-links">
-				<a 
-					href="/simulacion" 
-					class="nav-link"
-					class:active={currentPath === '/simulacion'}
-				>
-					   Simulación
-				</a>
-				<a 
-					href="/resultados" 
-					class="nav-link"
-					class:active={currentPath === '/resultados'}
-				>
-					 Resultados
+				<a href="https://github.com/micaelaalvaradomendez/planificacionProcesador" 
+				   target="_blank" 
+				   rel="noopener noreferrer" 
+				   class="nav-link github-link"
+				   aria-label="Ver repositorio en GitHub">
+				   Repositorio
 				</a>
 			</div>
 		</div>
@@ -46,9 +41,11 @@
 	
 	<footer class="footer">
 		<div class="footer-content">
-			<p>
-				Simulador de Algoritmos de Planificación de Procesos - 
-				Universidad Nacional de Tierra del Fuego
+			<p class="footer-text">
+				&copy; 2025 - <strong>Micaela Alvarado Mendez</strong>
+			</p>
+			<p class="footer-subtitle">
+				Universidad Nacional de Tierra del Fuego - Sistemas Operativos
 			</p>
 		</div>
 	</footer>
@@ -68,10 +65,11 @@
 	}
 
 	.navbar {
-		background-color: #1976d2;
+		background: linear-gradient(135deg, #3f2c50 0%, #633f6e 100%);
 		color: white;
-		padding: 0.75rem 0;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		padding: 1rem 0;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		border-bottom: 3px solid #dde5b6;
 	}
 
 	.nav-container {
@@ -83,15 +81,19 @@
 		align-items: center;
 	}
 
-	.nav-brand {
-		font-size: 1.25rem;
+	.brand-title {
+		margin: 0 0 0.25rem 0;
+		font-size: 1.6rem;
 		font-weight: bold;
-		color: white;
-		text-decoration: none;
+		color: #dde5b6;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 	}
 
-	.nav-brand:hover {
-		color: #bbdefb;
+	.brand-subtitle {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #bdc3c7;
+		font-style: italic;
 	}
 
 	.nav-links {
@@ -100,20 +102,30 @@
 	}
 
 	.nav-link {
-		color: white;
+		color: #633f6e;
+		background-color: #dde5b6;
 		text-decoration: none;
-		padding: 0.5rem 1rem;
-		border-radius: 4px;
-		transition: background-color 0.2s;
+		padding: 0.75rem 1.5rem;
+		border-radius: 25px;
+		font-weight: 600;
+		font-size: 0.9rem;
+		border: 2px solid #dde5b6;
+		transition: all 0.3s ease;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 	}
 
 	.nav-link:hover {
-		background-color: rgba(255, 255, 255, 0.1);
+		background-color: transparent;
+		color: #dde5b6;
+		border-color: #dde5b6;
+		transform: translateY(-2px);
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 	}
 
-	.nav-link.active {
-		background-color: rgba(255, 255, 255, 0.2);
-		font-weight: bold;
+	.brand-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 
 	.main {
@@ -122,10 +134,11 @@
 	}
 
 	.footer {
-		background-color: #333;
+		background: linear-gradient(135deg, #3f2c50 0%, #633f6e 100%);
 		color: white;
 		padding: 1rem 0;
 		margin-top: 2rem;
+		border-top: 3px solid #dde5b6;
 	}
 
 	.footer-content {
@@ -146,11 +159,25 @@
 			padding: 0 1rem;
 			flex-direction: column;
 			gap: 1rem;
+			text-align: center;
+		}
+
+		.brand-title {
+			font-size: 1.4rem;
+		}
+
+		.brand-subtitle {
+			font-size: 0.8rem;
 		}
 
 		.nav-links {
 			width: 100%;
 			justify-content: center;
+		}
+
+		.nav-link {
+			padding: 0.6rem 1.2rem;
+			font-size: 0.85rem;
 		}
 	}
 </style>

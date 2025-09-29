@@ -34,6 +34,15 @@
     const rafagas = rafagasText.split(',').map(r => parseInt(r.trim())).filter(r => !isNaN(r) && r > 0);
     updateProcess(index, 'rafagasCPU', rafagas);
   }
+
+  function updateRafagasES(index: number, rafagasESText: string) {
+    const rafagasES = rafagasESText
+      .split(',')
+      .map(r => r.trim())
+      .filter(r => r.length > 0)
+      .map(r => Math.max(0, parseInt(r) || 0));
+    updateProcess(index, 'rafagasES', rafagasES);
+  }
   
   function validatePid(index: number, newPid: number) {
     const existing = procesosArray.find((p, i) => i !== index && p.pid === newPid);
@@ -66,6 +75,7 @@
             <th>Nombre</th>
             <th>Arribo</th>
             <th>Ráfagas CPU</th>
+            <th>Ráfagas E/S</th>
             <th>Prioridad</th>
             <th>Acciones</th>
           </tr>
@@ -106,6 +116,18 @@
                   placeholder="ej: 5, 3, 2"
                   class:error={!proceso.rafagasCPU || proceso.rafagasCPU.length === 0}
                 />
+              </td>
+              <td>
+                <input 
+                  type="text" 
+                  value={(proceso.rafagasES || []).join(', ')}
+                  on:input={(e) => updateRafagasES(index, e.currentTarget.value)}
+                  placeholder="ej: 4, 3, 5"
+                  title="Ráfagas de E/S entre CPU. Si hay menos que CPU-1, se usa bloqueoES como fallback"
+                />
+                <small class="help-text">
+                  {proceso.rafagasCPU.length > 1 ? `Esperado: ${proceso.rafagasCPU.length - 1} valores` : 'Opcional'}
+                </small>
               </td>
               <td>
                 <input 
@@ -245,5 +267,12 @@
     margin-bottom: 0.25rem;
     font-size: 0.875rem;
     color: #666;
+  }
+
+  .help-text {
+    display: block;
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 0.25rem;
   }
 </style>

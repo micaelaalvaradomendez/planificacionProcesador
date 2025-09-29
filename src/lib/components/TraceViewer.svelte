@@ -17,15 +17,12 @@
   
   function formatEventType(type: string): string {
     const typeMap: Record<string, string> = {
-      'N→L': '🆕 Nuevo → Listo',
-      'L→E': '▶️ Listo → Ejecutando',
-      'E→L': '⏸️ Ejecutando → Listo',
-      'E→B': '⏹️ Ejecutando → Bloqueado',
-      'B→L': '    Bloqueado → Listo',
-      'E→T': ' Ejecutando → Terminado',
-      'TIP': '💰 Costo Ingreso',
-      'TCP': '    Costo Cambio',
-      'TFP': '💰 Costo Fin'
+      'N→L': 'Nuevo → Listo',
+      'L→C': 'Listo → CPU',
+      'C→L': 'CPU → Listo',
+      'C→B': 'CPU → Bloqueado',
+      'B→L': 'Bloqueado → Listo',
+      'C→T': 'CPU → Terminado'
     };
     return typeMap[type] || type;
   }
@@ -33,14 +30,11 @@
   function getEventColor(type: string): string {
     const colorMap: Record<string, string> = {
       'N→L': '#4caf50',
-      'L→E': '#2196f3',
-      'E→L': '#ff9800',
-      'E→B': '#f44336',
+      'L→C': '#2196f3',
+      'C→L': '#ff9800',
+      'C→B': '#f44336',
       'B→L': '#9c27b0',
-      'E→T': '#00bcd4',
-      'TIP': '#795548',
-      'TCP': '#607d8b',
-      'TFP': '#3f51b5'
+      'C→T': '#00bcd4'
     };
     return colorMap[type] || '#666';
   }
@@ -65,7 +59,7 @@
       on:click={() => showTrace = !showTrace}
       class="toggle-btn"
     >
-      {showTrace ? '  Ocultar' : '📂 Mostrar'} Trace ({eventos.length} eventos)
+      {showTrace ? '  Ocultar' : 'Mostrar'} Trace ({eventos.length} eventos)
     </button>
   </div>
   
@@ -83,7 +77,7 @@
             disabled={currentPage === 0}
             class="page-btn"
           >
-            ⬅️ Anterior
+            Anterior
           </button>
           
           <span class="page-info">
@@ -96,7 +90,7 @@
             disabled={currentPage >= totalPages - 1}
             class="page-btn"
           >
-            Siguiente ➡️
+            Siguiente
           </button>
         </div>
       {/if}
@@ -145,7 +139,7 @@
             disabled={currentPage === 0}
             class="page-btn"
           >
-            ⬅️ Anterior
+            Anterior
           </button>
           
           <span class="page-info">
@@ -157,7 +151,7 @@
             disabled={currentPage >= totalPages - 1}
             class="page-btn"
           >
-            Siguiente ➡️
+            Siguiente
           </button>
         </div>
       {/if}

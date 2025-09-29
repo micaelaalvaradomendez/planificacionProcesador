@@ -52,7 +52,7 @@ export class GanttBuilder {
   }
 
   /**
-   * Crea todos los segmentos agrupados por PID: CPU slices + overhead slices
+   * Crea todos los segmentos agrupados por PID: CPU slices + overhead slices + I/O periods
    */
   private static crearSegmentos(trace: Trace): Map<string, GanttSeg[]> {
     const grupos = new Map<string, GanttSeg[]>();
@@ -89,8 +89,44 @@ export class GanttBuilder {
         }
       }
     }
+
+    // Agregar períodos de I/O (E/S)
+    const ioPeriods = this.construirIO(trace);
+    for (const io of ioPeriods) {
+      agregarSegmento(io.pid, {
+        start: io.start,
+        end: io.end,
+        type: 'io'
+      });
+    }
     
     return grupos;
+  }
+
+  /**
+   * Construye períodos de I/O emparejando eventos C→B con B→L
+   */
+  private static construirIO(trace: Trace): Array<{pid: number; start: number; end: number}> {
+    const porPid: Record<number, number[]> = {};
+    const res: Array<{pid: number; start: number; end: number}> = [];
+    const evs = [...trace.events].sort((a,b) => a.t - b.t);
+
+    for (const e of evs) {
+      const pid = e.pid ?? -1;
+      if (pid < 0) continue;
+      
+      if (e.type === 'C→B') {
+        (porPid[pid] ??= []).push(e.t);
+      } else if (e.type === 'B→L') {
+        const starts = porPid[pid] ?? [];
+        if (starts.length) {
+          const t0 = starts.shift()!;
+          res.push({ pid, start: t0, end: e.t });
+        }
+      }
+    }
+    
+    return res;
   }
 
   /**

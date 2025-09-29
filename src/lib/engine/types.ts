@@ -1,7 +1,7 @@
 // src/lib/engine/types.ts
 
 /** Tipos de evento del motor (notación canónica N,L,C,B,F) */
-export type EventType = 'C→T' | 'C→B' | 'C→L' | 'B→L' | 'N→L' | 'L→C';
+export type EventType = 'C→T' | 'C→B' | 'C→L' | 'B→L' | 'N→L' | 'L→C' | 'CPU_DONE' | 'ADMIN_FINISH';
 
 /**
  * Prioridad de eventos (1 = mayor prioridad)
@@ -14,7 +14,9 @@ export const EVENT_PRIORITY: Record<EventType, number> = {
   'C→L': 3,
   'B→L': 4,
   'N→L': 5,
-  'L→C': 6
+  'L→C': 6,
+  'CPU_DONE': 1,  // Mismo que C→T
+  'ADMIN_FINISH': 7  // Menor prioridad
 };
 
 /** Evento de simulación (mínimo necesario para el loop) */

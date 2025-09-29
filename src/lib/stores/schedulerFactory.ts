@@ -2,7 +2,7 @@
 import type { Proceso } from '../model/proceso';
 import type { Costos } from '../model/costos';
 import type { Trace } from '../engine/types';
-import { runRR, runFCFSSandbox, runSPN, runSRTN, runPriority } from '../engine/engine';
+import { runRR, runFCFS, runSPN, runSRTN, runPriority } from '../engine/engine';
 
 export type Politica = 'FCFS' | 'RR' | 'SPN' | 'SRTN' | 'PRIORITY';
 
@@ -26,7 +26,7 @@ type Runner = (procesos: Proceso[], costos: Costos, cfg: SchedulerCfg) => Trace;
 export function getRunner(cfg: SchedulerCfg): Runner {
   switch (cfg.politica) {
     case 'FCFS':
-      return (ps, c) => runFCFSSandbox(ps, c);
+      return (ps, c) => runFCFS(ps, c);
     
     case 'RR':
       return (ps, c, scfg) => {
@@ -62,7 +62,11 @@ export function getRunner(cfg: SchedulerCfg): Runner {
         if (aging.step < 1) throw new Error('aging.step debe ser >= 1');
         if (aging.quantum < 1) throw new Error('aging.quantum debe ser >= 1');
         
-        return runPriority(ps, prioridades, c);
+        // Mapear aging config de UI a formato del engine
+        return runPriority(ps, c, { 
+          quantum: aging.quantum, 
+          incremento: aging.step 
+        });
       };
     
     default:
