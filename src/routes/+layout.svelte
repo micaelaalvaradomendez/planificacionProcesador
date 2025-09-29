@@ -9,8 +9,7 @@
 <svelte:head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
-	<link rel="icon" href="%sveltekit.assets%/favicon.ico" />
+	<!-- Los favicons se manejan en app.html -->
 	<title>Simulador de Planificación de Procesos</title>
 </svelte:head>
 

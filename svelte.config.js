@@ -12,19 +12,15 @@ const config = {
       assets: 'build',
       fallback: undefined,
       precompress: false,
-      strict: true
+      strict: false
     }),
     paths: {
       base: dev ? '' : '/planificacionProcesador'
     },
     prerender: {
       entries: ['/', '/resultados'],
-      handleHttpError: ({ path, referrer, message }) => {
-        console.warn(`could not prerender ${path} from ${referrer}: ${message}`);
-      },
-      handleMissingId: ({ path, id, message }) => {
-        console.warn(`could not find ${id} referenced from ${path}: ${message}`);
-      },
+      handleHttpError: 'warn',
+      handleMissingId: 'warn',
       crawl: false
     },
     alias: {
