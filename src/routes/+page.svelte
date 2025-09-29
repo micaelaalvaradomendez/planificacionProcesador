@@ -37,20 +37,27 @@
     
     // Verificar que estamos en la página principal
     const routeId = $page.route?.id;
+    const pathname = $page.url?.pathname || '';
     
     // Ser más flexible con la detección de página principal
-    const isHomePage = !routeId || routeId === '/' || routeId.includes('/(') || !routeId.includes('/resultados');
+    const isHomePage = !routeId || routeId === '/' || routeId.includes('/(') || !pathname.includes('/resultados');
+    
+    console.log('🏠 +page.svelte: ¿Es página principal?', isHomePage, { routeId, pathname });
     
     if (isHomePage) {
       hasNavigated = true;
+      console.log('🚀 +page.svelte: Navegando a resultados...');
       
       goto('./resultados')
         .then(() => {
+          console.log('✅ +page.svelte: Navegación exitosa a resultados');
         })
         .catch((err) => {
+          console.warn('⚠️ +page.svelte: Falló navegación relativa, intentando absoluta:', err);
           return goto('/resultados');
         })
         .catch((err) => {
+          console.error('❌ +page.svelte: Falló navegación absoluta:', err);
           hasNavigated = false; // Permitir reintento
         });
     }

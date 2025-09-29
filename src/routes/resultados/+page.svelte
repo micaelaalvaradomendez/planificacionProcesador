@@ -22,14 +22,26 @@
   $: procesosData = $procesos;
   
   function backToSimulation() {
-    goto('/');
+    console.log('🔙 Resultados: Navegando de vuelta a simulación...');
+    goto('../').catch(() => goto('/'));
   }
   
   function startNewSimulation() {
-    // Limpiar todos los datos de simulación
-    clearSimulation();
-    // Navegar al inicio
-    goto('/');
+    try {
+      console.log('🆕 Resultados: Iniciando nueva simulación...');
+      // Limpiar todos los datos de simulación
+      clearSimulation();
+      console.log('✅ Resultados: Datos limpiados, navegando...');
+      // Navegar al inicio
+      goto('../').catch(() => {
+        console.warn('⚠️ Resultados: Navegación relativa falló, intentando absoluta...');
+        return goto('/');
+      }).catch((err) => {
+        console.error('❌ Resultados: Error de navegación:', err);
+      });
+    } catch (error) {
+      console.error('💥 Resultados: Error en startNewSimulation:', error);
+    }
   }
   
   function handleExportJSON() {

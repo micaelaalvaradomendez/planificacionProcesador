@@ -284,10 +284,17 @@ export async function executeSimulation(): Promise<void> {
  * Acción para limpiar todo el estado
  */
 export function clearSimulation(): void {
-  procesos.set([]);
-  simulationResult.set(null);
-  simulationError.set(null);
-  importWarnings.set([]);
+  console.log('🧹 Store: Limpiando simulación...');
+  try {
+    procesos.set([]);
+    simulationResult.set(null);
+    simulationError.set(null);
+    importWarnings.set([]);
+    isSimulating.set(false); // Asegurar que no quede en estado de "simulando"
+    console.log('✅ Store: Simulación limpiada correctamente');
+  } catch (error) {
+    console.error('❌ Store: Error limpiando simulación:', error);
+  }
 }
 
 /**
