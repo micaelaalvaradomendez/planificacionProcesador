@@ -70,6 +70,14 @@ export const simulationConfig = writable<SimulationConfig>({
 /** Procesos cargados para simular */
 export const procesos = writable<Proceso[]>([]);
 
+// Agregar logging automático cuando cambien los procesos
+procesos.subscribe(procs => {
+  console.log('📋 Store: Procesos actualizados:', {
+    cantidad: procs.length,
+    procesos: procs
+  });
+});
+
 /** Resultado de la última simulación */
 export const simulationResult = writable<SimulationResult | null>(null);
 
@@ -192,6 +200,10 @@ export async function loadFromTanda(tandaData: ProcesoTanda[]): Promise<void> {
     importWarnings.set([]);
     
     const procesosImportados = parseTandaJSON(tandaData);
+    console.log('Store: Cargando procesos desde tanda JSON:', {
+      count: procesosImportados.length,
+      procesos: procesosImportados
+    });
     procesos.set(procesosImportados);
     
     // Extraer bloqueoES automáticamente
@@ -257,6 +269,12 @@ export async function executeSimulation(): Promise<void> {
     const cfgClon = JSON.parse(JSON.stringify(cfg));
     const procsClon = JSON.parse(JSON.stringify(procs));
     
+    console.log('Store: Ejecutando simulación con los siguientes valores:', {
+      configuracion: cfgClon,
+      procesos: procsClon,
+      cantidadProcesos: procsClon.length
+    });
+    
     // Ejecutar simulación    
     const result = runSimulation(cfgClon, procsClon);
         
@@ -284,8 +302,9 @@ export async function executeSimulation(): Promise<void> {
  * Acción para limpiar todo el estado
  */
 export function clearSimulation(): void {
-  console.log('🧹 Store: Limpiando simulación...');
+  console.log('Store: Limpiando simulación...');
   try {
+    console.log('Store: Eliminando todos los procesos cargados');
     procesos.set([]);
     simulationResult.set(null);
     simulationError.set(null);
@@ -306,6 +325,11 @@ export function loadFixture(name: 'A_sinES_FCFS' | 'B_conES_25' | 'RR_q2' | 'SRT
     importWarnings.set([]);
     
     const { cfg, procesos: ps } = getFixture(name);
+    console.log('Store: Cargando fixture de pruebas:', {
+      name,
+      config: cfg,
+      procesos: ps
+    });
     simulationConfig.set(cfg);
     procesos.set(ps);
     simulationResult.set(null); // no ejecutar automáticamente
@@ -324,6 +348,10 @@ export function loadFromTandaJSON(json: unknown): void {
     importWarnings.set([]);
     
     const ps = parseTandaJSON(json as any);
+    console.log('Store: Cargando procesos desde JSON:', {
+      count: ps.length,
+      procesos: ps
+    });
     procesos.set(ps);
     simulationResult.set(null);
   } catch (error) {
@@ -432,6 +460,10 @@ export async function importEscenario(file: File): Promise<void> {
   };
 
   // Setear stores y NO ejecutar (el usuario decide)
+  console.log('Store: Importando escenario completo:', {
+    config: internalCfg,
+    procesos: data.procesos
+  });
   simulationConfig.set(internalCfg);
   procesos.set(data.procesos);
   simulationResult.set(null);
@@ -454,6 +486,12 @@ export async function importResultado(file: File): Promise<void> {
   };
 
   // Setear stores solo para visualizar (no alterar core)
+  console.log('Store: Importando resultado completo:', {
+    config: internalCfg,
+    procesos: data.procesos,
+    trace: data.trace,
+    metricas: data.metricas
+  });
   simulationConfig.set(internalCfg);
   procesos.set(data.procesos);
   simulationResult.set({ 

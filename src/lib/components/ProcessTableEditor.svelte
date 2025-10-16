@@ -15,23 +15,37 @@
       estado: 'N'
     };
     
-    procesos.update(procs => [...procs, newProcess]);
+    console.log('ProcessTableEditor: Agregando nuevo proceso:', newProcess);
+    procesos.update(procs => {
+      const updatedProcs = [...procs, newProcess];
+      console.log('ProcessTableEditor: Lista de procesos actualizada:', updatedProcs);
+      return updatedProcs;
+    });
   }
   
   function removeProcess(index: number) {
-    procesos.update(procs => procs.filter((_, i) => i !== index));
+    console.log(`ProcessTableEditor: Eliminando proceso en índice ${index}:`, procesosArray[index]);
+    procesos.update(procs => {
+      const updatedProcs = procs.filter((_, i) => i !== index);
+      console.log('ProcessTableEditor: Lista de procesos actualizada:', updatedProcs);
+      return updatedProcs;
+    });
   }
   
   function updateProcess(index: number, field: keyof Proceso, value: any) {
-    procesos.update(procs => 
-      procs.map((p, i) => 
+    console.log(`ProcessTableEditor: Actualizando proceso ${procesosArray[index]?.pid} - ${field}:`, value);
+    procesos.update(procs => {
+      const updatedProcs = procs.map((p, i) => 
         i === index ? { ...p, [field]: value } : p
-      )
-    );
+      );
+      console.log('ProcessTableEditor: Lista de procesos actualizada:', updatedProcs);
+      return updatedProcs;
+    });
   }
   
   function updateRafagas(index: number, rafagasText: string) {
     const rafagas = rafagasText.split(',').map(r => parseInt(r.trim())).filter(r => !isNaN(r) && r > 0);
+    console.log(`ProcessTableEditor: Actualizando ráfagas CPU del proceso ${procesosArray[index]?.pid}:`, rafagas);
     updateProcess(index, 'rafagasCPU', rafagas);
   }
 
@@ -41,6 +55,7 @@
       .map(r => r.trim())
       .filter(r => r.length > 0)
       .map(r => Math.max(0, parseInt(r) || 0));
+    console.log(`ProcessTableEditor: Actualizando ráfagas E/S del proceso ${procesosArray[index]?.pid}:`, rafagasES);
     updateProcess(index, 'rafagasES', rafagasES);
   }
   

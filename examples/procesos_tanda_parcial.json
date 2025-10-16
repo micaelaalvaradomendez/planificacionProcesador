@@ -1,0 +1,58 @@
+[
+  {
+    "nombre": "P1",
+    "tiempo_arribo": 0,
+    "cantidad_rafagas_cpu": 2,
+    "duracion_rafaga_cpu": 5,
+    "duracion_rafaga_es": 3,
+    "prioridad_externa": 2
+  },
+  {
+    "nombre": "P2",
+    "tiempo_arribo": 1,
+    "cantidad_rafagas_cpu": 3,
+    "duracion_rafaga_cpu": 6,
+    "duracion_rafaga_es": 4,
+    "prioridad_externa": 1
+  },
+  {
+    "nombre": "P3",
+    "tiempo_arribo": 2,
+    "cantidad_rafagas_cpu": 4,
+    "duracion_rafaga_cpu": 4,
+    "duracion_rafaga_es": 2,
+    "prioridad_externa": 3
+  },
+  {
+    "nombre": "P4",
+    "tiempo_arribo": 3,
+    "cantidad_rafagas_cpu": 3,
+    "duracion_rafaga_cpu": 5,
+    "duracion_rafaga_es": 3,
+    "prioridad_externa": 4
+  },
+  {
+    "nombre": "P5",
+    "tiempo_arribo": 4,
+    "cantidad_rafagas_cpu": 2,
+    "duracion_rafaga_cpu": 7,
+    "duracion_rafaga_es": 5,
+    "prioridad_externa": 1
+  },
+  {
+    "nombre": "P6",
+    "tiempo_arribo": 6,
+    "cantidad_rafagas_cpu": 3,
+    "duracion_rafaga_cpu": 4,
+    "duracion_rafaga_es": 2,
+    "prioridad_externa": 3
+  },
+  {
+    "nombre": "P7",
+    "tiempo_arribo": 8,
+    "cantidad_rafagas_cpu": 2,
+    "duracion_rafaga_cpu": 6,
+    "duracion_rafaga_es": 3,
+    "prioridad_externa": 2
+  }
+]
