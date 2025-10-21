@@ -2,13 +2,22 @@
 
 export class ReadyQueue {
   private q: number[] = [];
+  private pidSet: Set<number> = new Set(); // Para evitar duplicados
 
   enqueue(pid: number): void {
-    this.q.push(pid);
+    // Solo encolar si no está ya presente (evita duplicados)
+    if (!this.pidSet.has(pid)) {
+      this.q.push(pid);
+      this.pidSet.add(pid);
+    }
   }
 
   dequeue(): number | undefined {
-    return this.q.shift();
+    const pid = this.q.shift();
+    if (pid !== undefined) {
+      this.pidSet.delete(pid);
+    }
+    return pid;
   }
 
   isEmpty(): boolean {
@@ -17,9 +26,15 @@ export class ReadyQueue {
 
   clear(): void {
     this.q.length = 0;
+    this.pidSet.clear();
   }
 
   toArray(): number[] {
     return [...this.q];
+  }
+
+  // Método para verificar si un PID está en la cola (útil para debugging)
+  contains(pid: number): boolean {
+    return this.pidSet.has(pid);
   }
 }

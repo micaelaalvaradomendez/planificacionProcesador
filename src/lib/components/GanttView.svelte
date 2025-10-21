@@ -150,11 +150,30 @@
       </div>
     </div>
     
-    <!-- Información del modelo -->
+    <!-- Información del modelo (expandida con debugging) -->
     <div class="model-info">
       <p><strong>Tiempo total:</strong> {tMin} - {tMax} ({tMax - tMin} unidades)</p>
       <p><strong>Procesos con CPU:</strong> {tracks.length}</p>
-      <p><strong>Segmentos CPU totales:</strong> {tracks.reduce((sum, t) => sum + t.segments.length, 0)}</p>
+      <p><strong>Segmentos totales:</strong> {tracks.reduce((sum, t) => sum + t.segments.length, 0)}</p>
+      
+      <!-- Desglose por tipo de segmento -->
+      {#each tracks as track}
+        {@const cpuSegs = track.segments.filter(s => s.type === 'cpu' || !s.type)}
+        {@const overheadSegs = track.segments.filter(s => s.type === 'tip' || s.type === 'tcp' || s.type === 'tfp')}
+        {@const ioSegs = track.segments.filter(s => s.type === 'io')}
+        
+        <div class="process-detail">
+          <strong>P{track.pid}:</strong> 
+          {cpuSegs.length} CPU, 
+          {overheadSegs.length} overhead, 
+          {ioSegs.length} E/S
+          
+          <!-- Detección de problemas potenciales -->
+          {#if track.segments.some((s, i) => i > 0 && s.start < track.segments[i-1].end)}
+            <span class="warning">⚠️ Posibles solapamientos</span>
+          {/if}
+        </div>
+      {/each}
     </div>
   {/if}
 </div>
@@ -231,5 +250,18 @@
     margin: 0.25rem 0;
     font-size: 0.875rem;
     color: #2e7d32;
+  }
+
+  .process-detail {
+    margin: 0.125rem 0;
+    font-size: 0.8rem;
+    color: #2e7d32;
+    padding-left: 1rem;
+  }
+
+  .warning {
+    color: #ff9800;
+    font-weight: bold;
+    font-size: 0.75rem;
   }
 </style>

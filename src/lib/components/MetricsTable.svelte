@@ -1,4 +1,3 @@
-<!-- src/lib/components/MetricsTable.svelte -->
 <script lang="ts">
   import type { SimulationResult } from '$lib/stores/simulacion';
   
@@ -67,7 +66,7 @@
           <div class="metric-card">
             <div class="metric-value">{formatNumber(global.TRpPromedio)}</div>
             <div class="metric-label">TRp Promedio</div>
-            <div class="metric-description">Tiempo de respuesta promedio</div>
+            <div class="metric-description">Tiempo de retorno promedio</div>
           </div>
           
           <div class="metric-card">

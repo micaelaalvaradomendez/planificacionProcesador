@@ -5,18 +5,25 @@ export type EventType = 'C→T' | 'C→B' | 'C→L' | 'B→L' | 'N→L' | 'L→C
 
 /**
  * Prioridad de eventos (1 = mayor prioridad)
- * Regla de la consigna:
- *   1:C→T, 2:C→B, 3:C→L, 4:B→L, 5:N→L, 6:L→C
+ * Orden correcto para eventos simultáneos:
+ *   0: CPU_DONE (fin de ráfaga de CPU)
+ *   1: C→T (terminado)
+ *   2: C→B (bloqueado)  
+ *   3: C→L (preemption/quantum)
+ *   4: B→L (retorno de E/S)
+ *   5: N→L (nuevo a listo)
+ *   6: L→C (despacho)
+ *   7: ADMIN_FINISH (overhead administrativo)
  */
 export const EVENT_PRIORITY: Record<EventType, number> = {
-  'C→T': 1,
-  'C→B': 2,
-  'C→L': 3,
-  'B→L': 4,
-  'N→L': 5,
-  'L→C': 6,
-  'CPU_DONE': 1,  // Mismo que C→T
-  'ADMIN_FINISH': 7  // Menor prioridad
+  'CPU_DONE': 0,     // Fin de ráfaga CPU (mayor prioridad)
+  'C→T': 1,          // Terminado
+  'C→B': 2,          // Bloqueado
+  'C→L': 3,          // Preemption/quantum  
+  'B→L': 4,          // Retorno de E/S
+  'N→L': 5,          // Nuevo a listo
+  'L→C': 6,          // Despacho
+  'ADMIN_FINISH': 7  // Overhead administrativo (menor prioridad)
 };
 
 /** Evento de simulación (mínimo necesario para el loop) */

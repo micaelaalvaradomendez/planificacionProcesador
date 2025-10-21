@@ -197,7 +197,8 @@ export class MetricsBuilder {
     let total = 0;
     
     for (const e of evs) {
-      if ((e.type === 'N→L') || (e.type === 'B→L')) {
+      // CORREGIDO: incluir C→L (expropiaciones) como entrada a Listo
+      if ((e.type === 'N→L') || (e.type === 'B→L') || (e.type === 'C→L')) {
         enListoDesde = e.t;
       } else if (e.type === 'L→C' && enListoDesde !== null) {
         total += (e.t - enListoDesde);

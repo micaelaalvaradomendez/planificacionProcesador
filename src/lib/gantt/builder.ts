@@ -53,6 +53,7 @@ export class GanttBuilder {
 
   /**
    * Crea todos los segmentos agrupados por PID: CPU slices + overhead slices + I/O periods
+   * Incluye fusión de segmentos adyacentes del mismo tipo para evitar fragmentación visual
    */
   private static crearSegmentos(trace: Trace): Map<string, GanttSeg[]> {
     const grupos = new Map<string, GanttSeg[]>();
@@ -77,10 +78,17 @@ export class GanttBuilder {
       }
     }
     
-    // Agregar overhead slices si existen
+    // Agregar overhead slices si existen (con validación mejorada)
     if (trace.overheads) {
       for (const overhead of trace.overheads) {
-        if (overhead.t1 > overhead.t0 && overhead.t0 >= 0) {
+        // Validación estricta de overheads
+        if (overhead.t1 > overhead.t0 && 
+            overhead.t0 >= 0 && 
+            overhead.t1 >= 0 &&
+            Number.isFinite(overhead.t0) && 
+            Number.isFinite(overhead.t1) &&
+            ['TIP', 'TCP', 'TFP'].includes(overhead.kind.toUpperCase())) {
+          
           agregarSegmento(overhead.pid, {
             start: overhead.t0,
             end: overhead.t1,
@@ -98,6 +106,13 @@ export class GanttBuilder {
         end: io.end,
         type: 'io'
       });
+    }
+    
+    // Fusionar segmentos adyacentes del mismo tipo por PID para evitar fragmentación
+    for (const [pid, segments] of grupos.entries()) {
+      const fusionados = this.fusionarSegmentosAdyacentes(segments);
+      const validados = this.validarYLimpiarSolapamientos(fusionados);
+      grupos.set(pid, validados);
     }
     
     return grupos;
@@ -170,6 +185,104 @@ export class GanttBuilder {
     return grupos;
   }
   
+  /**
+   * Valida y limpia solapamientos problemáticos entre segmentos
+   * Prioriza CPU > overheads > I/O en caso de conflictos
+   */
+  private static validarYLimpiarSolapamientos(segments: GanttSeg[]): GanttSeg[] {
+    if (segments.length <= 1) return segments;
+    
+    // Ordenar por tiempo de inicio, con prioridad de tipo en caso de empate
+    const prioridades = { 'cpu': 1, 'tip': 2, 'tcp': 3, 'tfp': 4, 'io': 5 };
+    const ordenados = segments.sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      const prioA = prioridades[a.type || 'cpu'] || 999;
+      const prioB = prioridades[b.type || 'cpu'] || 999;
+      return prioA - prioB;
+    });
+    
+    const limpiados: GanttSeg[] = [];
+    let ultimo: GanttSeg | null = null;
+    
+    for (const segmento of ordenados) {
+      if (!ultimo) {
+        limpiados.push(segmento);
+        ultimo = segmento;
+        continue;
+      }
+      
+      // Verificar solapamiento
+      if (segmento.start < ultimo.end) {
+        // Hay solapamiento - truncar el segmento anterior o actual según prioridad
+        const prioUltimo = prioridades[ultimo.type || 'cpu'] || 999;
+        const prioActual = prioridades[segmento.type || 'cpu'] || 999;
+        
+        if (prioActual < prioUltimo) {
+          // El actual tiene mayor prioridad - truncar el último
+          ultimo.end = Math.min(ultimo.end, segmento.start);
+          if (ultimo.end <= ultimo.start) {
+            // El último se volvió inválido, removerlo
+            limpiados.pop();
+          }
+          limpiados.push(segmento);
+          ultimo = segmento;
+        } else {
+          // El último tiene mayor prioridad - ajustar el actual
+          if (segmento.end > ultimo.end) {
+            // El actual se extiende más allá - crear segmento residual
+            const residual: GanttSeg = {
+              start: ultimo.end,
+              end: segmento.end,
+              type: segmento.type
+            };
+            if (residual.end > residual.start) {
+              limpiados.push(residual);
+              ultimo = residual;
+            }
+          }
+          // Si el actual está completamente contenido en el último, se descarta
+        }
+      } else {
+        // No hay solapamiento
+        limpiados.push(segmento);
+        ultimo = segmento;
+      }
+    }
+    
+    return limpiados;
+  }
+
+  /**
+   * Fusiona segmentos adyacentes del mismo tipo para evitar fragmentación visual
+   * Por ejemplo: dos segmentos CPU consecutivos se convierten en uno solo
+   */
+  private static fusionarSegmentosAdyacentes(segments: GanttSeg[]): GanttSeg[] {
+    if (segments.length <= 1) return segments;
+    
+    // Ordenar por tiempo de inicio
+    const ordenados = segments.sort((a, b) => a.start - b.start);
+    const fusionados: GanttSeg[] = [];
+    let actual = { ...ordenados[0] };
+    
+    for (let i = 1; i < ordenados.length; i++) {
+      const siguiente = ordenados[i];
+      
+      // Fusionar si son del mismo tipo Y adyacentes (end === start)
+      if (actual.type === siguiente.type && actual.end === siguiente.start) {
+        actual.end = siguiente.end; // Extender el segmento actual
+      } else {
+        // No se pueden fusionar, agregar el actual y avanzar
+        fusionados.push(actual);
+        actual = { ...siguiente };
+      }
+    }
+    
+    // Agregar el último segmento
+    fusionados.push(actual);
+    
+    return fusionados;
+  }
+
   /**
    * Detecta gaps reales entre segmentos (para debug/análisis)
    * Los "huecos" en el Gantt representan tiempo donde el proceso 

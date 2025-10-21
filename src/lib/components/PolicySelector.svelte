@@ -1,4 +1,3 @@
-<!-- src/lib/components/PolicySelector.svelte -->
 <script lang="ts">
   import { simulationConfig } from '$lib/stores/simulacion';
   

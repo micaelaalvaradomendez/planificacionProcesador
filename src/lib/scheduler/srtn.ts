@@ -37,6 +37,12 @@ export class SchedulerSRTN extends BaseScheduler {
       return; // No encolar si restante <= 0
     }
     
+    // CORREGIDO: evitar duplicados - si ya está en ready, no volver a encolar
+    const alreadyExists = this.ready.some(item => item.pid === pid);
+    if (alreadyExists) {
+      return; // Ya está en la cola, no duplicar
+    }
+    
     this.ready.push({ pid, key, seq: this.seq++ });
   }
 
@@ -62,11 +68,16 @@ export class SchedulerSRTN extends BaseScheduler {
 
   /**
    * ¿Conviene expropiar al actual por llegada/retorno de pidNew en "now"?
-   * SRTN: sí si remaining(pidNew) < remaining(current).
+   * SRTN: sí si remaining(pidNew) < remaining(current) - tiempo_ejecutado.
+   * REGLA ESTRICTA: solo expropia si el nuevo es ESTRICTAMENTE menor.
+   * En empates (igual restante), no expropia para evitar thrashing.
    */
   override compareForPreemption(now: number, pidNew: number, _getRemaining: (pid: number, at: number) => number, currentPid: number): boolean {
     const rNew = this.getRemaining(pidNew, now);
     const rCur = this.getRemaining(currentPid, now);
+    
+    // Solo expropia si el nuevo proceso tiene ESTRICTAMENTE menor tiempo restante
+    // En empates (rNew === rCur), mantiene el actual para evitar thrashing
     return rNew < rCur;
   }
 }

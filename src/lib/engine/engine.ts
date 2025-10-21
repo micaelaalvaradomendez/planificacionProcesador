@@ -150,6 +150,10 @@ export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
         const r = rt.get(e.pid);
         if (!r || cpu.pid != null) {
           // Proceso ya no existe o CPU ocupada - evento stale
+          // ANTIFLAP: limpiar para evitar bloqueo de futuros despachos
+          if (pendingDispatchAt === e.t) {
+            pendingDispatchAt = null;
+          }
           break;
         }
 
@@ -216,6 +220,10 @@ export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
           }
         }
         
+        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
+        // Esto es crítico cuando un proceso termina instantáneamente (duración 0)
+        // y hay otros procesos esperando en ready queue
+        pendingDispatchAt = null;
         despacharSiLibre(e.t);
         break;
       }
@@ -398,6 +406,8 @@ export function runRR(
           }
         }
         
+        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
+        pendingDispatchAt = null;
         despacharSiLibre(e.t);
         break;
       }
@@ -422,7 +432,12 @@ export function runRR(
         r.generation += 1;
         
         if (r.restante > 0) {
-          sched.onReady(e.pid);
+          // CORREGIDO: En RR, expropiación por quantum va al FINAL de la cola
+          if (e.data?.reason === 'quantum') {
+            sched.onDesalojoActual?.(e.pid);
+          } else {
+            sched.onReady(e.pid);
+          }
         }
         
         despacharSiLibre(e.t);
@@ -609,6 +624,8 @@ export function runSPN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace
           }
         }
         
+        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
+        pendingDispatchAt = null;
         despacharSiLibre(e.t);
         break;
       }
@@ -700,13 +717,13 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
     
     if (!currentR || !newR || currentPid == null) return false;
     
-    // Permitir evaluación en el mismo tick de inicio; si t==sliceStart ⇒ runFor=0
-    // Esto evita consumir CPU por error pero permite preemption inmediata si corresponde
-    
-    // Calcular tiempo ejecutado y restante actual
+    // Calcular tiempo ejecutado y restante efectivo del proceso actual
     const runFor = t - cpu.sliceStart; // puede ser 0 si t == sliceStart
+    const currentEffRemaining = currentR.restante - runFor;
     
-    if (newR.restante < currentR.restante - runFor) {
+    // Solo expropiar si el nuevo proceso tiene ESTRICTAMENTE menor tiempo restante
+    // En empates (newR.restante === currentEffRemaining), NO expropia para evitar thrashing
+    if (newR.restante < currentEffRemaining) {
       // Preemptar: 1) descontar si corrió, 2) invalidar eventos pendientes, 3) a ready
       
       // 1) Solo modificar r.restante si hubo ejecución real (t > sliceStart)
@@ -724,7 +741,7 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
       
       // 3) traza y a ready
       traceEvent(trace, t, EVT.PREEMPT, currentPid, { reason: 'preempt' });
-      sched.onReady(currentPid);
+      sched.onDesalojoActual?.(currentPid);
       return true;
     }
     
@@ -827,6 +844,8 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
           }
         }
         
+        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
+        pendingDispatchAt = null;
         despacharSiLibre(e.t);
         break;
       }
@@ -1107,6 +1126,8 @@ export function runPriority(
           }
         }
         
+        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
+        pendingDispatchAt = null;
         despacharSiLibre(e.t);
         break;
       }
