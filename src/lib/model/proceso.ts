@@ -20,7 +20,7 @@ export function servicioTotal(p: Pick<Proceso, 'rafagasCPU'>): number {
   return (p.rafagasCPU ?? []).reduce((acc, d) => acc + (d ?? 0), 0);
 }
 
-/** Helpers opcionales para validaciones triviales del Paso 1 */
+/** Helpers para validaciones */
 export function isProcesoValido(p: Proceso): boolean {
   if (p.pid == null || p.pid < 0) return false;
   if (p.arribo == null || p.arribo < 0) return false;

@@ -1,0 +1,12 @@
+{
+  "cfg": {
+    "politica": "RR"
+  },
+  "procesos": [
+    {
+      "pid": 1,
+      "arribo": 0,
+      "rafagas": [5]
+    }
+  ]
+}

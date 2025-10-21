@@ -112,9 +112,35 @@ La tanda de trabajos a procesar se cargará en un archivo que el simulador debe 
 
 ## Desarrollo
 
-### Instalación y Configuración
+### Clonar y Configurar el Proyecto
 
-Si estás viendo esto, probablemente ya hayas creado el proyecto. ¡Felicitaciones!
+Para descargar y ejecutar este proyecto localmente desde el repositorio:
+
+```sh
+# 1. Clonar el repositorio
+git clone https://github.com/micaelaalvaradomendez/planificacionProcesador.git
+
+# 2. Navegar al directorio del proyecto
+cd planificacionProcesador
+
+# 3. Instalar las dependencias
+npm install
+
+# 4. Iniciar el servidor de desarrollo
+npm run dev
+```
+
+El simulador estará disponible en `http://localhost:5173` (o el puerto que se indique en la consola).
+
+### Requisitos Previos
+
+- **Node.js** (versión 18 o superior)
+- **npm** (viene incluido con Node.js)
+- **Git** para clonar el repositorio
+
+### Instalación desde Cero
+
+Si prefieres crear un nuevo proyecto desde cero:
 
 ```sh
 # crear un nuevo proyecto en el directorio actual

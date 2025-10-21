@@ -1,6 +1,5 @@
 import type { Estado } from './proceso';
 
-/** Estados canónicos del Paso 1 */
 export const ESTADOS = ['N','L','C','B','F'] as const;
 
 /** Conjunto de transiciones legales mínimas */
@@ -12,10 +11,7 @@ const TRANSICIONES_LEGALES: Record<Estado, ReadonlyArray<Estado>> = {
   F: []              // absorbente
 };
 
-/**
- * isTransicionLegal(from,to): true si (from→to) está permitido en el Paso 1.
- * Nota: cualquier transición no listada es ilegal (p.ej., C→N).
- */
+
 export function isTransicionLegal(from: Estado, to: Estado): boolean {
   return TRANSICIONES_LEGALES[from]?.includes(to) ?? false;
 }

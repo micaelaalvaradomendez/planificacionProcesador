@@ -11,6 +11,7 @@ import { GanttBuilder } from '../gantt/builder';
 import { parseTandaJSON, extractBloqueoESGlobal, type ProcesoTanda } from '../io/parser';
 import { getFixture, type Fixture } from '../io/fixtures';
 import { validateInputs, type ValidationResult } from '../io/validate';
+import { validateExecutionSafety, canExecuteQuickCheck } from '../io/runtime-validator';
 import { exportToJSON, exportMetricsToCSV, exportTraceToCSV, downloadMetricasCSV, downloadTraceCSV } from '../io/export';
 
 // ===== TIPOS PRINCIPALES =====
@@ -64,7 +65,7 @@ export interface SimulationResult {
 /** Configuración actual de la simulación */
 export const simulationConfig = writable<SimulationConfig>({
   politica: 'FCFS',
-  costos: { TIP: 1, TCP: 1, TFP: 1, bloqueoES: 25 }
+  costos: { TIP: 0, TCP: 0, TFP: 0, bloqueoES: 25 }
 });
 
 /** Procesos cargados para simular */
@@ -72,7 +73,7 @@ export const procesos = writable<Proceso[]>([]);
 
 // Agregar logging automático cuando cambien los procesos
 procesos.subscribe(procs => {
-  console.log('📋 Store: Procesos actualizados:', {
+  console.log('Store: Procesos actualizados:', {
     cantidad: procs.length,
     procesos: procs
   });
@@ -100,11 +101,12 @@ export const hasProcesses: Readable<boolean> = derived(
 
 /** Indica si se puede ejecutar la simulación */
 export const canExecute: Readable<boolean> = derived(
-  [hasProcesses, isSimulating, simulationConfig],
-  ([$hasProcesses, $isSimulating, $cfg]) => {
+  [hasProcesses, isSimulating, simulationConfig, procesos],
+  ([$hasProcesses, $isSimulating, $cfg, $procs]) => {
     if (!$hasProcesses || $isSimulating) return false;
-    if ($cfg.politica === 'RR' && !($cfg.quantum && $cfg.quantum > 0)) return false;
-    return true;
+    
+    // Usar validación
+    return canExecuteQuickCheck($procs, $cfg);
   }
 );
 
@@ -251,6 +253,26 @@ export async function executeSimulation(): Promise<void> {
       throw new Error('No hay procesos cargados');
     }
     
+    // VALIDACIONES
+    console.log('Store: Validando seguridad de ejecución...');
+    const safetyCheck = validateExecutionSafety(procs, cfg);
+    
+    if (!safetyCheck.canExecute) {
+      const errorMsg = safetyCheck.errors.join('\n• ');
+      throw new Error(`❌ No se puede ejecutar la simulación:\n• ${errorMsg}`);
+    }
+    
+    // Mostrar advertencias si las hay
+    if (safetyCheck.warnings.length > 0) {
+      console.warn('⚠️ Advertencias de ejecución:', safetyCheck.warnings);
+      importWarnings.set(safetyCheck.warnings);
+    }
+    
+    // Mostrar recomendaciones
+    if (safetyCheck.recommendations.length > 0) {
+      console.info('💡 Recomendaciones:', safetyCheck.recommendations);
+    }
+    
     // Verificar que las funciones necesarias están disponibles
     if (!validateInputs) {
       throw new Error('Función validateInputs no disponible');
@@ -269,10 +291,12 @@ export async function executeSimulation(): Promise<void> {
     const cfgClon = JSON.parse(JSON.stringify(cfg));
     const procsClon = JSON.parse(JSON.stringify(procs));
     
-    console.log('Store: Ejecutando simulación con los siguientes valores:', {
+    console.log('Store: Validaciones completas. Ejecutando simulación con:', {
       configuracion: cfgClon,
       procesos: procsClon,
-      cantidadProcesos: procsClon.length
+      cantidadProcesos: procsClon.length,
+      warnings: safetyCheck.warnings.length,
+      recommendations: safetyCheck.recommendations.length
     });
     
     // Ejecutar simulación    
@@ -310,7 +334,7 @@ export function clearSimulation(): void {
     simulationError.set(null);
     importWarnings.set([]);
     isSimulating.set(false); // Asegurar que no quede en estado de "simulando"
-    console.log('✅ Store: Simulación limpiada correctamente');
+    console.log('Store: Simulación limpiada correctamente');
   } catch (error) {
     console.error('❌ Store: Error limpiando simulación:', error);
   }
@@ -363,7 +387,7 @@ export function loadFromTandaJSON(json: unknown): void {
 // ===== EXPORTS DE CONVENIENCIA =====
 
 /**
- * Exportar resultado completo como JSON (Paso 12)
+ * Exportar resultado completo como JSON
  */
 export function exportResultadoJSON(): void {
   const cfg = get(simulationConfig);
@@ -399,8 +423,6 @@ export function exportTraceCSV(): void {
   if (!res) return;
   downloadTraceCSV('trace', res.trace);
 }
-
-// ==================== PASO 12: NUEVAS FUNCIONES DE EXPORT/IMPORT ====================
 
 import { 
   buildResultadoJSON, 

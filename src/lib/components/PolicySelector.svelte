@@ -12,11 +12,31 @@
     simulationConfig.update(c => ({ ...c, quantum }));
   }
   
+  function incrementQuantum() {
+    const current = cfg.quantum || 2;
+    updateQuantum(current + 1);
+  }
+  
+  function decrementQuantum() {
+    const current = cfg.quantum || 2;
+    updateQuantum(Math.max(1, current - 1));
+  }
+  
   function updateAging(field: 'step' | 'quantum', value: number) {
     simulationConfig.update(c => ({
       ...c,
       aging: { ...(c.aging || { step: 1, quantum: 4 }), [field]: value }
     }));
+  }
+  
+  function incrementAging(field: 'step' | 'quantum') {
+    const current = field === 'step' ? (cfg.aging?.step || 1) : (cfg.aging?.quantum || 4);
+    updateAging(field, current + 1);
+  }
+  
+  function decrementAging(field: 'step' | 'quantum') {
+    const current = field === 'step' ? (cfg.aging?.step || 1) : (cfg.aging?.quantum || 4);
+    updateAging(field, Math.max(1, current - 1));
   }
 </script>
 
@@ -58,15 +78,31 @@
 
   {#if cfg.politica === 'RR'}
     <div class="form-group">
-      <label for="quantum">Quantum:</label>
-      <input 
-        id="quantum"
-        type="number" 
-        min="1" 
-        value={cfg.quantum || ''}
-        on:input={(e) => updateQuantum(+e.currentTarget.value)}
-        placeholder="Ingrese quantum > 0"
-      />
+      <label for="quantum">Quantum <small>(Por defecto: 2)</small>:</label>
+      <div class="number-input-container">
+        <input 
+          id="quantum"
+          type="number" 
+          min="1" 
+          value={cfg.quantum || 2}
+          on:input={(e) => updateQuantum(+e.currentTarget.value)}
+          placeholder="2"
+        />
+        <div class="number-controls">
+          <button 
+            type="button" 
+            class="number-btn up" 
+            aria-label="Incrementar quantum"
+            on:click={incrementQuantum}
+          ></button>
+          <button 
+            type="button" 
+            class="number-btn down" 
+            aria-label="Decrementar quantum"
+            on:click={decrementQuantum}
+          ></button>
+        </div>
+      </div>
       {#if !cfg.quantum || cfg.quantum <= 0}
         <span class="error">RR requiere quantum > 0</span>
       {/if}
@@ -77,26 +113,58 @@
     <div class="priority-info">
       <p><strong>Regla:</strong> Menor número = Mayor prioridad</p>
       <div class="form-group">
-        <label for="aging-step">Aging Step:</label>
-        <input 
-          id="aging-step"
-          type="number" 
-          min="1" 
-          value={cfg.aging?.step ?? 1}
-          on:input={(e) => updateAging('step', +e.currentTarget.value)}
-          placeholder="Cuánto mejora la prioridad"
-        />
+        <label for="aging-step">Aging Step <small>(Por defecto: 1)</small>:</label>
+        <div class="number-input-container">
+          <input 
+            id="aging-step"
+            type="number" 
+            min="1" 
+            value={cfg.aging?.step ?? 1}
+            on:input={(e) => updateAging('step', +e.currentTarget.value)}
+            placeholder="1"
+          />
+          <div class="number-controls">
+            <button 
+              type="button" 
+              class="number-btn up" 
+              aria-label="Incrementar aging step"
+              on:click={() => incrementAging('step')}
+            ></button>
+            <button 
+              type="button" 
+              class="number-btn down" 
+              aria-label="Decrementar aging step"
+              on:click={() => decrementAging('step')}
+            ></button>
+          </div>
+        </div>
       </div>
       <div class="form-group">
-        <label for="aging-quantum">Aging Quantum:</label>
-        <input 
-          id="aging-quantum"
-          type="number" 
-          min="1" 
-          value={cfg.aging?.quantum ?? 4}
-          on:input={(e) => updateAging('quantum', +e.currentTarget.value)}
-          placeholder="Cada cuántos ticks aplica aging"
-        />
+        <label for="aging-quantum">Aging Quantum <small>(Por defecto: 4)</small>:</label>
+        <div class="number-input-container">
+          <input 
+            id="aging-quantum"
+            type="number" 
+            min="1" 
+            value={cfg.aging?.quantum ?? 4}
+            on:input={(e) => updateAging('quantum', +e.currentTarget.value)}
+            placeholder="4"
+          />
+          <div class="number-controls">
+            <button 
+              type="button" 
+              class="number-btn up" 
+              aria-label="Incrementar aging quantum"
+              on:click={() => incrementAging('quantum')}
+            ></button>
+            <button 
+              type="button" 
+              class="number-btn down" 
+              aria-label="Decrementar aging quantum"
+              on:click={() => decrementAging('quantum')}
+            ></button>
+          </div>
+        </div>
       </div>
     </div>
   {/if}
@@ -132,24 +200,93 @@
 
   .form-group input, .form-group select {
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 2.5rem 0.75rem 1rem;
     border: 2px solid #e9ecef;
     border-radius: 8px;
     font-size: 0.95rem;
     transition: all 0.3s ease;
     background-color: white;
     color: #3f2c50;
+    box-sizing: border-box;
+  }
+
+  .form-group select {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    background: linear-gradient(135deg, white 0%, #f8f9fa 100%);
+  }
+
+  .form-group input[type="number"]::-webkit-outer-spin-button,
+  .form-group input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .form-group input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .number-input-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+  }
+
+  .number-controls {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .number-btn {
+    width: 20px;
+    height: 14px;
+    border: 1px solid #ccc;
+    background: linear-gradient(to bottom, #f9f9f9, #e9e9e9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: #555;
+    user-select: none;
+    border-radius: 2px;
+    transition: all 0.1s ease;
+  }
+
+  .number-btn:hover {
+    background: linear-gradient(to bottom, #e9e9e9, #d9d9d9);
+    border-color: #999;
+  }
+
+  .number-btn:active {
+    background: linear-gradient(to bottom, #d9d9d9, #c9c9c9);
+    transform: scale(0.95);
+  }
+
+  .number-btn.up::before {
+    content: "▲";
+  }
+
+  .number-btn.down::before {
+    content: "▼";
+  }
+
+  .form-group select {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    background: linear-gradient(135deg, white 0%, #f8f9fa 100%);
   }
 
   .form-group input:focus, .form-group select:focus {
     outline: none;
     border-color: #dde5b6;
     box-shadow: 0 0 0 3px rgba(221, 229, 182, 0.3);
-  }
-
-  .form-group select {
-    cursor: pointer;
-    background: linear-gradient(135deg, white 0%, #f8f9fa 100%);
   }
 
   .error {

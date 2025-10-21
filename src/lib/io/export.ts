@@ -143,8 +143,6 @@ function downloadCSV(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-// ==================== PASO 12: NUEVAS FUNCIONES ====================
-
 import type { Proceso } from '../model/proceso';
 import type { Costos } from '../model/costos';
 

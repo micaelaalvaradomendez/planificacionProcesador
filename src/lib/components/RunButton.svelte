@@ -1,4 +1,3 @@
-<!-- src/lib/components/RunButton.svelte -->
 <script lang="ts">
   import { executeSimulation, canExecute, isSimulating, simulationError, simulationResult } from '$lib/stores/simulacion';
   import { get } from 'svelte/store';
@@ -81,10 +80,18 @@
 
 <style>
   .run-section {
-    padding: 1rem;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    margin-bottom: 1rem;
+    padding: 1.5rem;
+    border: 2px solid #dde5b6;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, white 0%, #f8f9fa 100%);
+    box-shadow: 0 4px 16px rgba(63, 44, 80, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .run-section:hover {
+    border-color: #c8d49a;
+    box-shadow: 0 6px 24px rgba(63, 44, 80, 0.15);
   }
 
     .run-button {

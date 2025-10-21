@@ -1,4 +1,3 @@
-<!-- src/routes/+page.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -168,26 +167,38 @@
           
           <h4>Costos del Sistema:</h4>
           <ul>
-            <li><strong>TIP:</strong> Tiempo de ingreso de proceso al sistema</li>
-            <li><strong>TCP:</strong> Tiempo de cambio de contexto entre procesos</li>
-            <li><strong>TFP:</strong> Tiempo de finalización de proceso</li>
-            <li><strong>Bloqueo E/S:</strong> Tiempo de fallback cuando el proceso no especifica E/S propia</li>
+            <li><strong>TIP:</strong> Tiempo de ingreso de proceso al sistema <br> Por defecto: 0ms</li>
+            <li><strong>TCP:</strong> Tiempo de cambio de contexto entre procesos <br> Por defecto: 0ms</li>
+            <li><strong>TFP:</strong> Tiempo de finalización de proceso <br> Por defecto: 0ms</li>
+            <li><strong>Bloqueo E/S:</strong> Tiempo de fallback cuando el proceso no especifica E/S propia <br> Por defecto: 25ms</li>
           </ul>
           
           <h4>Formato de Procesos:</h4>
           <ul>
             <li><strong>PID:</strong> Identificador único del proceso</li>
             <li><strong>Arribo:</strong> Tiempo de llegada al sistema</li>
-            <li><strong>Ráfagas CPU:</strong> Lista de duraciones separadas por coma</li>
-            <li><strong>Prioridad:</strong> Menor número = Mayor prioridad (solo PRIORITY)</li>
+            <li><strong>Ráfagas CPU:</strong> Lista de duraciones separadas por coma ( No se permite 0, se cambia automáticamente a 1ms)</li>
+            <li><strong>Prioridad:</strong> Rango 1-10, menor número = Mayor prioridad ( Si ingresa 0, se usa 10 por defecto)</li>
           </ul>
 
           <h4>E/S por Proceso (JSON):</h4>
           <ul>
             <li><strong>duracion_rafaga_es:</strong> Tiempo de E/S específico para este proceso</li>
-            <li>Si no se especifica, usa el valor de "Bloqueo E/S (Fallback)" global</li>
+            <li>Si no se especifica, usa el valor de "Bloqueo E/S (Fallback)" global (25ms por defecto)</li>
             <li>Permite que cada proceso tenga diferentes tiempos de E/S</li>
             <li>Ejemplo: P1 con 10ms de E/S, P2 con 20ms de E/S</li>
+          </ul>
+          
+          <h4>Validaciones y Valores por Defecto:</h4>
+          <ul>
+            <li><strong>Costos 0:</strong> Si ingresa 0 en cualquier costo, se usa el valor por defecto del simulador</li>
+            <li><strong>Ráfagas 0:</strong> No permitidas - se convierten automáticamente a 1ms para evitar errores en la simulación</li>
+            <li><strong>Prioridad 0:</strong> Se cambia automáticamente a 10 (prioridad más baja) para evitar prioridad máxima accidental</li>
+            <li><strong>PIDs duplicados:</strong> Se autoincrementan para mantener unicidad</li>
+            <li><strong>Arribos negativos:</strong> No permitidos, deben ser ≥ 0</li>
+            <li><strong>Rango de prioridades:</strong> 1-10, donde 1 = máxima prioridad, 10 = mínima prioridad</li>
+            <li><strong>Quantum (RR):</strong> Por defecto 2, debe ser > 0</li>
+            <li><strong>Aging (PRIORITY):</strong> Step=1, Quantum=4 por defecto</li>
           </ul>
         </div>
       </details>

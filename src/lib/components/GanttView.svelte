@@ -1,4 +1,3 @@
-<!-- src/lib/components/GanttView.svelte -->
 <script lang="ts">
   import type { GanttModel } from '$lib/gantt/schema';
   
