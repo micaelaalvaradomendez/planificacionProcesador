@@ -269,19 +269,20 @@ function validateConfiguracion(cfg: unknown): ValidationResult {
 
   const config = cfg as Record<string, unknown>;
 
-  // Validar política
-  if ('politica' in config) {
+  // Validar política (acepta 'politica' o 'algoritmo')
+  const pol = (config.politica ?? config.algoritmo) as string | undefined;
+  if (pol !== undefined) {
     const validPoliticas = ['FCFS', 'RR', 'SPN', 'SRTN', 'PRIORITY'];
-    if (!validPoliticas.includes(config.politica as string)) {
+    if (!validPoliticas.includes(pol)) {
       errors.push({
         field: 'cfg.politica',
-        value: config.politica,
+        value: pol,
         reason: `Debe ser una de: ${validPoliticas.join(', ')}`
       });
     }
 
     // Validar quantum para RR
-    if (config.politica === 'RR') {
+    if (pol === 'RR') {
       if (!('quantum' in config) || typeof config.quantum !== 'number' || config.quantum <= 0) {
         errors.push({
           field: 'cfg.quantum',
@@ -440,25 +441,27 @@ function validateProcesoModerno(proceso: unknown, index: number): ValidationResu
     }
   }
 
-  // Validar ráfagas
-  if ('rafagas' in proc) {
-    if (!Array.isArray(proc.rafagas)) {
+  // Validar ráfagas (acepta rafagasCPU o rafagas)
+  const rafagasKey = 'rafagasCPU' in proc ? 'rafagasCPU' : ('rafagas' in proc ? 'rafagas' : null);
+  if (rafagasKey) {
+    const arr = proc[rafagasKey];
+    if (!Array.isArray(arr)) {
       errors.push({
-        field: `procesos[${index}].rafagas`,
-        value: typeof proc.rafagas,
+        field: `procesos[${index}].${rafagasKey}`,
+        value: typeof arr,
         reason: 'Debe ser un array'
       });
     } else {
-      proc.rafagas.forEach((rafaga, rafagaIndex) => {
+      arr.forEach((rafaga, rafagaIndex) => {
         if (typeof rafaga !== 'number' || !Number.isFinite(rafaga)) {
           errors.push({
-            field: `procesos[${index}].rafagas[${rafagaIndex}]`,
+            field: `procesos[${index}].${rafagasKey}[${rafagaIndex}]`,
             value: rafaga,
             reason: 'Debe ser un número válido'
           });
         } else if (rafaga <= 0) {
           errors.push({
-            field: `procesos[${index}].rafagas[${rafagaIndex}]`,
+            field: `procesos[${index}].${rafagasKey}[${rafagaIndex}]`,
             value: rafaga,
             reason: 'Debe ser mayor a 0'
           });

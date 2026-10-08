@@ -396,7 +396,8 @@ export function exportResultadoJSON(): void {
   if (!cfg || !procs?.length || !res) return;
 
   // Convertir configuración al formato de export
-  const exportCfg = {
+  const exportCfg: ExportSimulationConfig = {
+    politica: cfg.politica,
     algoritmo: cfg.politica,
     costos: cfg.costos || {},
     quantum: cfg.quantum

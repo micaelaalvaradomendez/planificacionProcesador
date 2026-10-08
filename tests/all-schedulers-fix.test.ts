@@ -80,18 +80,18 @@ describe('Verificación Completa del Fix - Todos los Schedulers', () => {
     console.log('✅ Priority: P2 ejecuta correctamente');
   });
 
-  it('resumen completo del fix', () => {
-    console.log('\n🎯 FIX COMPLETADO:');
-    console.log('================================');
-    console.log('✅ FCFS: Arrays vacíos manejados correctamente');
-    console.log('✅ RR: Arrays vacíos manejados correctamente');
-    console.log('✅ SPN: Arrays vacíos manejados correctamente');
-    console.log('✅ SRTN: Arrays vacíos manejados correctamente');
-    console.log('✅ Priority: Arrays vacíos manejados correctamente');
-    console.log('\n🔧 SOLUCIÓN IMPLEMENTADA:');
-    console.log('- Reset pendingDispatchAt = null en CPU_DONE');
-    console.log('- Permite dispatch en mismo tiempo t=0');
-    console.log('- Corrige bug de procesos con duración 0');
-    console.log('\n🎉 TODOS LOS SCHEDULERS FUNCIONAN CORRECTAMENTE');
+  it('todos los schedulers deben terminar el proceso válido', () => {
+    const schedulers = [
+      runFCFS(procesosProblematicos),
+      runRR(procesosProblematicos, {}, 1),
+      runSPN(procesosProblematicos),
+      runSRTN(procesosProblematicos),
+      runPriority(procesosProblematicos)
+    ];
+
+    for (const trace of schedulers) {
+      const tieneTerminoP2 = trace.events.some((e: any) => e.type === 'C→T' && e.pid === 2);
+      expect(tieneTerminoP2).toBe(true);
+    }
   });
 });

@@ -150,7 +150,8 @@ import type { Costos } from '../model/costos';
  * Configuración de simulación para export/import
  */
 export type ExportSimulationConfig = {
-  algoritmo: string;
+  politica: string;
+  algoritmo?: string; // alias para retrocompatibilidad
   costos: Partial<Costos>;
   quantum?: number;
 };

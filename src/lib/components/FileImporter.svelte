@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { loadFromTandaJSON, loadFixture, simulationConfig, procesos } from '$lib/stores/simulacion';
+  import { loadFromTandaJSON, loadFixture, simulationConfig, procesos, simulationResult } from '$lib/stores/simulacion';
   import { parseTandaJSON } from '$lib/io/parser';
   import { validateJSONData } from '$lib/io/json-validator';
   
@@ -60,30 +60,54 @@
       } else if (json && typeof json === 'object' && 'cfg' in json && 'procesos' in json) {
         // Es un escenario completo exportado - validar configuración adicional
         const obj = json as Record<string, unknown>;
+        const rawCfg = (obj.cfg || {}) as Record<string, unknown>;
+        const pol = (rawCfg.politica || rawCfg.algoritmo || 'FCFS') as string;
         
-        // Validación adicional de configuración antes de cargar
-        if (obj.cfg && typeof obj.cfg === 'object') {
-          const cfg = obj.cfg as Record<string, unknown>;
-          
-          // Validar quantum para Round Robin
-          if (cfg.politica === 'RR' && (!cfg.quantum || typeof cfg.quantum !== 'number' || cfg.quantum <= 0)) {
-            throw new Error('Round Robin requiere un quantum válido > 0');
-          }
-          
-          // Validar costos si están presentes
-          if (cfg.costos && typeof cfg.costos === 'object') {
-            const costos = cfg.costos as Record<string, unknown>;
-            for (const [key, value] of Object.entries(costos)) {
-              if (typeof value === 'number' && (value < 0 || !Number.isFinite(value))) {
-                throw new Error(`Costo ${key} inválido: ${value}`);
-              }
+        // Validar quantum para Round Robin
+        if (pol === 'RR' && (!rawCfg.quantum || typeof rawCfg.quantum !== 'number' || rawCfg.quantum <= 0)) {
+          throw new Error('Round Robin requiere un quantum válido > 0');
+        }
+        
+        // Validar costos si están presentes
+        if (rawCfg.costos && typeof rawCfg.costos === 'object') {
+          const costos = rawCfg.costos as Record<string, unknown>;
+          for (const [key, value] of Object.entries(costos)) {
+            if (typeof value === 'number' && (value < 0 || !Number.isFinite(value))) {
+              throw new Error(`Costo ${key} inválido: ${value}`);
             }
           }
         }
         
-        console.log('FileImporter: Cargando escenario completo:', { cfg: obj.cfg, procesos: obj.procesos });
-        simulationConfig.set(obj.cfg);
-        procesos.set(obj.procesos);
+        const internalCfg = {
+          politica: pol as any,
+          costos: (rawCfg.costos as any) || {},
+          quantum: rawCfg.quantum as number | undefined
+        };
+        
+        console.log('FileImporter: Cargando escenario completo:', { cfg: internalCfg, procesos: obj.procesos });
+        simulationConfig.set(internalCfg);
+        
+        const rawProcs = Array.isArray(obj.procesos) ? (obj.procesos as any[]) : [];
+        const normalizedProcs = rawProcs.map((p, idx) => ({
+          pid: p.pid ?? (idx + 1),
+          label: p.label ?? (p.nombre ?? `P${p.pid ?? (idx + 1)}`),
+          arribo: p.arribo ?? p.tiempo_arribo ?? 0,
+          rafagasCPU: p.rafagasCPU ?? p.rafagas ?? [],
+          rafagasES: p.rafagasES ?? p.bloqueoES ?? [],
+          prioridadBase: p.prioridadBase ?? p.prioridad ?? p.prioridad_externa,
+          estado: 'N' as const
+        }));
+        procesos.set(normalizedProcs);
+
+        if (obj.trace && obj.metricas && obj.gantt) {
+          simulationResult.set({
+            trace: obj.trace as any,
+            metricas: obj.metricas as any,
+            gantt: obj.gantt as any
+          });
+        } else {
+          simulationResult.set(null);
+        }
       } else if (json && typeof json === 'object' && 'procesos' in json && Array.isArray((json as any).procesos)) {
         // Formato con procesos wrapeados - procesar localmente
         const ps = parseTandaJSON((json as any).procesos);

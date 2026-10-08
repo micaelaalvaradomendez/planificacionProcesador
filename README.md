@@ -78,35 +78,53 @@ Al finalizar la simulación imprimirá y mostrará por pantalla –como mínimo�
 - Al producirse el cambio de bloqueado a listo de un proceso mientras otro se estaba ejecutando no nos afecta y debemos terminar el tiempo de quantum
 
 **Prioridades y SRT:**
-- Debo expropiarle la CPU a un proceso si apareció uno con mayor prioridad o con menor tiempo restante
+- Debo expropiarle la CPU a un proceso si apareció uno con mayor prioridad efectiva o con menor tiempo restante
 - Guardo lo que me resta de la ráfaga del proceso que se estaba ejecutando para terminarla cuando le vuelva a tocar
-- Las prioridades se definen de **1 a 100** siendo los valores más grandes de mayor prioridad
+- Las prioridades se definen de **1 a 10**, siendo **1 la mayor prioridad** y **10 la menor prioridad** (con sistema de *aging* para prevenir inanición)
+- En SRTN, en caso de empate de tiempo restante, no se expropia para evitar sobrecostos innecesarios
 
 ### Formato de Archivo de Entrada
 
-La tanda de trabajos a procesar se cargará en un archivo que el simulador debe leer y será un **JSON** donde cada línea (registro) define un proceso, y cada uno de los campos se separan por comas:
+La tanda de procesos se carga mediante un archivo **JSON** que contiene un array de objetos con la siguiente estructura:
 
-{
-    "nombre": "P3",
-    "tiempo_arribo": 3,
-    "cantidad_rafagas_cpu": 5,
+```json
+[
+  {
+    "nombre": "P1",
+    "tiempo_arribo": 0,
+    "cantidad_rafagas_cpu": 3,
     "duracion_rafaga_cpu": 2,
     "duracion_rafaga_es": 1,
-    "prioridad_externa": 4
+    "prioridad_externa": 2
   },
+  {
+    "nombre": "P2",
+    "tiempo_arribo": 2,
+    "cantidad_rafagas_cpu": 2,
+    "duracion_rafaga_cpu": 4,
+    "duracion_rafaga_es": 2,
+    "prioridad_externa": 1
+  }
+]
+```
+
+También es compatible con la importación de escenarios completos exportados previamente por el simulador (`kind: "sim-result"`). Para más detalles de la especificación técnica y desempates, consultar [docs/semantica.md](docs/semantica.md).
 
 ### Reglas de Temporización
 
-**h.** Un proceso no computará estado de listo hasta que no haya cumplido su TIP (inicialmente no computa tiempo de listo)
-
-**c.** Un proceso pasa de bloqueado a listo instantáneamente (aunque se esté ejecutando otro) y consume 0 unidades de tiempo (este tiempo lo consideramos dentro del TCP posterior)
+- **a.** Un proceso no computará estado de listo hasta que no haya cumplido su TIP (su admisión ocurre en `arribo + TIP`).
+- **b.** Un proceso pasa de bloqueado a listo al cumplirse su ráfaga de E/S.
+- **c.** Los costos TCP y TFP ocupan la CPU monoprocesador. Dos procesos o sobrecargas no pueden solaparse en CPU.
 
 ### Definiciones de Métricas
 
-1. **Tiempo de Retorno de un proceso (TRp):** Es desde que arriba el proceso hasta que termina (después de su TFP, incluyendo éste)
-2. **Tiempo de retorno normalizado (TRn):** Es el tiempo de Retorno del proceso dividido el tiempo efectivo de CPU que utilizó
-3. **Tiempo de retorno de la tanda (TRt):** Desde que arriba el primer proceso hasta que se realiza el último TFP (incluyendo el tiempo de éste)
-4. **Tiempo Medio de retorno de la tanda (TMRt):** La suma de los tiempos de retorno de los procesos, dividido la cantidad de procesos
+1. **Tiempo de Retorno de un proceso (TRp):** Desde que arriba el proceso hasta que termina definitivamente (incluyendo su TFP): $TR_p = t_{fin} - t_{arribo}$.
+2. **Tiempo de Retorno Normalizado (TRn):** Tiempo de retorno dividido el tiempo efectivo de servicio de CPU: $TR_n = TR_p / S_p$.
+3. **Tiempo de Espera (TE):** Tiempo acumulado en estado Listo.
+4. **Tiempo de Respuesta (TResp):** Tiempo desde el arribo hasta su primer despacho a CPU: $TResp = t_{\text{primer } L\to C} - t_{arribo}$.
+5. **Tiempo Total de la Tanda (TRt):** Desde el arribo del primer proceso hasta el último TFP completado: $\max(t_{fin}) - \min(t_{arribo})$.
+6. **Tiempo Medio de Retorno (TMRt):** Promedio de los tiempos de retorno de todos los procesos.
+7. **Throughput:** Cantidad de procesos completados por unidad de tiempo total de la tanda.
 
 ---
 
