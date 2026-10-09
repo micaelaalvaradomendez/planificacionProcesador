@@ -15,6 +15,7 @@ export interface ProcessMetrics {
   TRp: number;           // Tiempo de Retorno (turnaround) = fin - arribo
   TE: number;            // Tiempo de Espera total en Listo
   TRn: number;           // Tiempo de Respuesta Normalizada = TRp/servicioCPU
+  tiempoRespuesta: number; // Tiempo de Respuesta = primer L→C - arribo
 }
 
 /**
@@ -24,6 +25,7 @@ export interface GlobalMetrics {
   TRpPromedio: number;
   TEPromedio: number;  
   TRnPromedio: number;
+  tiempoRespuestaPromedio: number;
   throughput: number;
   cambiosDeContexto: number;
   expropiaciones: number;
@@ -56,6 +58,12 @@ export class MetricsBuilder {
       const tiempoEspera = this.tiempoListo(pid, trace);
       const overheads = this.overheadsProceso(pid, trace);
       
+      // Primer despacho a CPU (para tiempo de respuesta)
+      const primerDespacho = trace.events
+        .filter(e => e.pid === pid && e.type === 'L→C')
+        .sort((a, b) => a.t - b.t)[0];
+      const tiempoRespuesta = primerDespacho ? Math.max(0, primerDespacho.t - arribo) : 0;
+
       // Métricas clásicas
       const TRp = fin - arribo;              // Tiempo de Retorno (turnaround)
       const TE = tiempoEspera;               // Tiempo de Espera (en Listo)
@@ -71,7 +79,8 @@ export class MetricsBuilder {
         overheads,
         TRp,
         TE,
-        TRn
+        TRn,
+        tiempoRespuesta
       });
     }
     
@@ -88,6 +97,7 @@ export class MetricsBuilder {
         TRpPromedio: 0,
         TEPromedio: 0,
         TRnPromedio: 0,
+        tiempoRespuestaPromedio: 0,
         throughput: 0,
         cambiosDeContexto: 0,
         expropiaciones: 0,
@@ -103,21 +113,22 @@ export class MetricsBuilder {
     const TRpPromedio = processMetrics.reduce((sum, m) => sum + m.TRp, 0) / count;
     const TEPromedio = processMetrics.reduce((sum, m) => sum + m.TE, 0) / count;
     const TRnPromedio = processMetrics.reduce((sum, m) => sum + m.TRn, 0) / count;
+    const tiempoRespuestaPromedio = processMetrics.reduce((sum, m) => sum + m.tiempoRespuesta, 0) / count;
     
-    // Tiempo total de simulación (máximo fin de todos los procesos)
-    const tiempoTotalSimulacion = processMetrics.length > 0 
-      ? Math.max(...processMetrics.map(m => m.fin))
-      : 0;
+    // Tiempo total de simulación (desde el primer arribo hasta el fin del último proceso)
+    const minArribo = Math.min(...processMetrics.map(m => m.arribo));
+    const maxFin = Math.max(...processMetrics.map(m => m.fin));
+    const tiempoTotalSimulacion = Math.max(0, maxFin - minArribo);
     
-    // Throughput (procesos por unidad de tiempo)
+    // Throughput (procesos por unidad de tiempo de la tanda)
     const throughput = tiempoTotalSimulacion > 0 ? count / tiempoTotalSimulacion : 0;
     
     // Contadores de eventos
     const cambiosDeContexto = this.contarCambiosContexto(trace);
     const expropiaciones = this.contarExpropiaciones(trace);
 
-    // CPU ociosa y utilización (corregidas para evitar >100%)
-    const cpuMetrics = this.cpuOciosa(trace);
+    // CPU ociosa y utilización calculadas sobre el horizonte de la tanda [minArribo, maxFin]
+    const cpuMetrics = this.cpuOciosa(trace, minArribo, maxFin);
     const cpuOciosa = cpuMetrics.idle;
     const cpuOciosaPorc = cpuMetrics.total > 0 ? (cpuMetrics.idle / cpuMetrics.total) * 100 : 0;
     // Utilización = (total - idle) / total = tiempo ocupado real / tiempo total
@@ -128,6 +139,7 @@ export class MetricsBuilder {
       TRpPromedio,
       TEPromedio, 
       TRnPromedio,
+      tiempoRespuestaPromedio,
       throughput,
       cambiosDeContexto,
       expropiaciones,
@@ -219,48 +231,76 @@ export class MetricsBuilder {
   }
 
   /**
-   * Calcula métricas de CPU ociosa y utilización
-   * CORRIGE: No suma tiempos que se superponen, calcula ocupación real
+   * Fusiona un conjunto de intervalos [start, end) y devuelve la duración total cubierta
    */
-  private static cpuOciosa(trace: Trace): { idle: number; overheadCPU: number; busy: number; total: number } {
-    const maxT = Math.max(
-      0,
+  private static duracionIntervalos(intervalos: Array<{ start: number; end: number }>): number {
+    if (intervalos.length === 0) return 0;
+    const sorted = [...intervalos]
+      .filter(i => i.end > i.start)
+      .sort((a, b) => a.start - b.start);
+    if (sorted.length === 0) return 0;
+
+    let duracion = 0;
+    let currStart = sorted[0].start;
+    let currEnd = sorted[0].end;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i];
+      if (next.start <= currEnd) {
+        currEnd = Math.max(currEnd, next.end);
+      } else {
+        duracion += currEnd - currStart;
+        currStart = next.start;
+        currEnd = next.end;
+      }
+    }
+    duracion += currEnd - currStart;
+    return duracion;
+  }
+
+  /**
+   * Calcula métricas de CPU ociosa y utilización mediante unión de intervalos continuos
+   */
+  private static cpuOciosa(trace: Trace, minT: number = 0, maxT?: number): { idle: number; overheadCPU: number; busy: number; total: number } {
+    const calculatedMaxT = maxT !== undefined ? maxT : Math.max(
+      minT,
       ...trace.slices.map(s => s.end),
       ...trace.events.map(e => e.t),
       ...(trace.overheads ?? []).map(o => o.t1)
     );
 
-    // Crear un array de ocupación temporal para evitar doble conteo
-    const ocupacion = new Array(maxT).fill(false);
-    const ocupacionOverhead = new Array(maxT).fill(false);
+    const total = Math.max(0, calculatedMaxT - minT);
 
-    // Marcar períodos de CPU busy (slices)
-    for (const slice of trace.slices) {
-      for (let t = slice.start; t < slice.end; t++) {
-        ocupacion[t] = true;
-      }
-    }
+    // Intervalos de CPU ocupada por procesos (slices) dentro del horizonte
+    const slicesIntervals = trace.slices
+      .map(s => ({
+        start: Math.max(minT, s.start),
+        end: Math.min(calculatedMaxT, s.end)
+      }))
+      .filter(i => i.end > i.start);
 
-    // Marcar períodos de overhead CPU (TCP, TFP)
-    const overheadsCPU = (trace.overheads ?? []).filter(o => o.kind === 'TCP' || o.kind === 'TFP');
-    for (const overhead of overheadsCPU) {
-      for (let t = overhead.t0; t < overhead.t1; t++) {
-        ocupacionOverhead[t] = true;
-        ocupacion[t] = true; // Los overheads también ocupan CPU
-      }
-    }
+    // Intervalos de overhead CPU (TCP, TFP) dentro del horizonte
+    const overheadsIntervals = (trace.overheads ?? [])
+      .filter(o => o.kind === 'TCP' || o.kind === 'TFP')
+      .map(o => ({
+        start: Math.max(minT, o.t0),
+        end: Math.min(calculatedMaxT, o.t1)
+      }))
+      .filter(i => i.end > i.start);
 
-    // Contar tiempos reales
-    const busyTicks = ocupacion.filter(Boolean).length;
-    const overheadTicks = ocupacionOverhead.filter(Boolean).length;
-    const cpuBusyPuro = trace.slices.reduce((sum, s) => sum + (s.end - s.start), 0);
-    const idle = maxT - busyTicks;
+    // CPU ocupada total (slices + overheads combinados sin solapamientos ni doble conteo)
+    const totalOcupadoIntervals = [...slicesIntervals, ...overheadsIntervals];
+    const totalBusyTime = this.duracionIntervalos(totalOcupadoIntervals);
+    const overheadTime = this.duracionIntervalos(overheadsIntervals);
+    const cpuBusyPuro = this.duracionIntervalos(slicesIntervals);
+
+    const idle = Math.max(0, total - totalBusyTime);
 
     return { 
       idle, 
-      overheadCPU: overheadTicks, 
+      overheadCPU: overheadTime, 
       busy: cpuBusyPuro, 
-      total: maxT 
+      total 
     };
   }
   

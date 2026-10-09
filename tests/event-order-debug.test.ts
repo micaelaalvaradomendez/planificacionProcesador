@@ -49,18 +49,8 @@ describe('Debug Orden de Eventos', () => {
     console.log(`Tiempo 2: ${eventosT2.length} eventos`);
     eventosT2.forEach((e: any) => console.log(`  - ${e.type} pid=${e.pid}`));
     
-    // El problema clave
     const tieneDispatchP2 = trace.events.some((e: any) => e.type === 'L→C' && e.pid === 2);
-    console.log(`\n❗ PROBLEMA IDENTIFICADO:`);
-    console.log(`P2 nunca recibe DISPATCH (L→C): ${tieneDispatchP2 ? 'SÍ' : 'NO'}`);
-    
-    if (!tieneDispatchP2) {
-      console.log('\n🔧 POSIBLES CAUSAS:');
-      console.log('1. despacharSiLibre(0) tras CPU_DONE de P1 no encuentra P2 en ready');
-      console.log('2. scheduler.next() no retorna P2 cuando debería');
-      console.log('3. P2 no está siendo agregado correctamente a la ready queue');
-      console.log('4. Hay alguna condición que impide el dispatch de P2');
-    }
+    expect(tieneDispatchP2).toBe(true);
   });
   
   it('debe probar si el problema es el timing simultáneo', () => {
@@ -82,11 +72,6 @@ describe('Debug Orden de Eventos', () => {
     });
     
     const tieneDispatchP2 = trace.events.some((e: any) => e.type === 'L→C' && e.pid === 2);
-    console.log(`\nP2 recibe dispatch: ${tieneDispatchP2 ? '✅' : '❌'}`);
-    
-    if (tieneDispatchP2) {
-      console.log('✅ Con arrivals diferentes, P2 SÍ ejecuta');
-      console.log('🎯 Confirmación: El problema ES el timing simultáneo en t=0');
-    }
+    expect(tieneDispatchP2).toBe(true);
   });
 });

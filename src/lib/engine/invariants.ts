@@ -42,12 +42,14 @@ export class EngineInvariants {
    * Verificar que el PID no se encola con restante <= 0
    */
   static assertValidEnqueue(pid: number, restante: number, context: string): void {
-    if (restante <= 0) {
-      console.warn(`⚠️ ${context}: Intentando encolar P${pid} con restante=${restante}`);
-      // En desarrollo, throw error. En producción, solo warn.
+    if (restante < 0) {
+      console.warn(`⚠️ ${context}: Intentando encolar P${pid} con restante negativo (${restante})`);
       if (import.meta.env.DEV) {
-        throw new Error(`${context}: No se debe encolar P${pid} con restante <= 0`);
+        throw new Error(`${context}: No se debe encolar P${pid} con restante negativo (${restante})`);
       }
+    } else if (restante === 0) {
+      // Proceso con ráfaga 0 o ya completado: no encolar pero no lanzar error fatal
+      console.warn(`⚠️ ${context}: P${pid} tiene restante=0, omitiendo encolado`);
     }
   }
 

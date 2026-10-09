@@ -46,18 +46,9 @@ describe('Investigación Real del Bug - Arrays Vacíos', () => {
     console.log(`P1 terminó: ${terminoP1}`);
     console.log(`P2 terminó: ${terminoP2}`);
     
-    // PREGUNTA CRÍTICA: ¿Debería P2 ejecutar normalmente aunque P1 tenga array vacío?
-    // Respuesta esperada: SÍ, P2 debería ejecutar independientemente de P1
-    
-    // Si P2 no ejecuta, hay un BUG REAL en el simulador
-    if (slicesP2.length === 0 && !terminoP2) {
-      console.log('\n🚨 BUG DETECTADO: P2 no ejecutó cuando debería haber ejecutado normalmente');
-      console.log('El simulador está fallando al procesar procesos válidos cuando hay procesos con arrays vacíos');
-    } else if (slicesP2.length > 0) {
-      console.log('\n✅ P2 ejecutó correctamente - el simulador maneja bien este caso');
-    }
-    
-    // No hacer expect() aquí, solo investigar y reportar
+    // P2 debe ejecutar y terminar normalmente a pesar de que P1 tenga ráfagas vacías
+    expect(slicesP2.length).toBeGreaterThan(0);
+    expect(terminoP2).toBe(true);
   });
   
   it('debe comparar con un caso de control (sin procesos con arrays vacíos)', () => {

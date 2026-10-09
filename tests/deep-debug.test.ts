@@ -48,19 +48,8 @@ describe('Debug Profundo - Flujo de Eventos', () => {
     const tieneDispatchP2 = trace.events.some((e: any) => e.type === 'L→C' && e.pid === 2);
     const tieneTerminoP2 = trace.events.some((e: any) => e.type === 'C→T' && e.pid === 2);
     
-    console.log(`\n❌ DIAGNÓSTICO:`);
-    console.log(`- P2 dispatch (L→C): ${tieneDispatchP2 ? '✅' : '❌ FALTA'}`);
-    console.log(`- P2 terminación (C→T): ${tieneTerminoP2 ? '✅' : '❌ FALTA'}`);
-    
-    if (!tieneDispatchP2) {
-      console.log('\n🔍 HIPÓTESIS: El problema está en despacharSiLibre() después de que P1 termina');
-      console.log('   - P1 termina y llama despacharSiLibre(0)');
-      console.log('   - Pero P2 no se despacha ¿Por qué?');
-      console.log('   - Posibles causas:');
-      console.log('     1. P2 no está en ready queue cuando debería');
-      console.log('     2. despacharSiLibre() tiene bug');
-      console.log('     3. next() de scheduler no retorna P2');
-    }
+    expect(tieneDispatchP2).toBe(true);
+    expect(tieneTerminoP2).toBe(true);
   });
   
   it('debe verificar el estado de la ready queue en tiempo de despacho', () => {
@@ -88,9 +77,8 @@ describe('Debug Profundo - Flujo de Eventos', () => {
     const slicesP2 = trace2.slices.filter((s: any) => s.pid === 2);
     console.log(`P1 slices: ${slicesP1.length}, P2 slices: ${slicesP2.length}`);
     
-    if (slicesP2.length > 0) {
-      console.log('✅ Cuando P1 tiene duración > 0, P2 SÍ ejecuta');
-      console.log('🎯 CONFIRMADO: El bug es específico a ráfagas de duración 0');
-    }
+    expect(trace1.slices.length).toBeGreaterThan(0);
+    expect(slicesP1.length).toBeGreaterThan(0);
+    expect(slicesP2.length).toBeGreaterThan(0);
   });
 });

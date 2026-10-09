@@ -197,14 +197,16 @@ export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
         if (esUltima) {
           // Emitir C→T en el momento exacto de fin de CPU
           traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          sched.onFinish(e.pid);
           
           // Programar overhead administrativo TFP si existe
           if (TFP > 0) {
             traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
             programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(e.t);
           }
-          
-          sched.onFinish(e.pid);
         } else {
           // Emitir C→B y manejar E/S
           traceEvent(trace, e.t, EVT.BLOCK, e.pid);
@@ -218,13 +220,9 @@ export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
             programar(e.t + durES, EVT.IO_OUT, e.pid);
             sched.onBlock(e.pid);
           }
+          pendingDispatchAt = null;
+          despacharSiLibre(e.t);
         }
-        
-        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
-        // Esto es crítico cuando un proceso termina instantáneamente (duración 0)
-        // y hay otros procesos esperando en ready queue
-        pendingDispatchAt = null;
-        despacharSiLibre(e.t);
         break;
       }
 
@@ -247,7 +245,9 @@ export function runFCFS(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
       }
 
       case EVT.ADMIN_FINISH: {
-        // Overhead TFP completado - no hacer nada más
+        // Overhead TFP completado - CPU libre para nuevo despacho
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
     }
@@ -385,13 +385,15 @@ export function runRR(
         
         if (esUltima) {
           traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          sched.onFinish(e.pid);
           
           if (TFP > 0) {
             traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
             programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(e.t);
           }
-          
-          sched.onFinish(e.pid);
         } else {
           traceEvent(trace, e.t, EVT.BLOCK, e.pid);
           
@@ -404,11 +406,9 @@ export function runRR(
             programar(e.t + durES, EVT.IO_OUT, e.pid);
             sched.onBlock(e.pid);
           }
+          pendingDispatchAt = null;
+          despacharSiLibre(e.t);
         }
-        
-        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
-        pendingDispatchAt = null;
-        despacharSiLibre(e.t);
         break;
       }
 
@@ -462,6 +462,8 @@ export function runRR(
       }
 
       case EVT.ADMIN_FINISH: {
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
     }
@@ -601,14 +603,16 @@ export function runSPN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace
         if (esUltima) {
           // Emitir C→T en el momento exacto de fin de CPU
           traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          sched.onFinish(e.pid);
           
           // Programar overhead administrativo TFP si existe
           if (TFP > 0) {
             traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
             programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(e.t);
           }
-          
-          sched.onFinish(e.pid);
         } else {
           // Emitir C→B y manejar E/S
           traceEvent(trace, e.t, EVT.BLOCK, e.pid);
@@ -622,11 +626,9 @@ export function runSPN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace
             programar(e.t + durES, EVT.IO_OUT, e.pid);
             sched.onBlock(e.pid);
           }
+          pendingDispatchAt = null;
+          despacharSiLibre(e.t);
         }
-        
-        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
-        pendingDispatchAt = null;
-        despacharSiLibre(e.t);
         break;
       }
 
@@ -649,7 +651,9 @@ export function runSPN(procesos: Proceso[], costos: Partial<Costos> = {}): Trace
       }
 
       case EVT.ADMIN_FINISH: {
-        // Overhead TFP completado - no hacer nada más
+        // Overhead TFP completado - CPU libre para nuevo despacho
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
     }
@@ -823,13 +827,15 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
         
         if (esUltima) {
           traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          sched.onFinish(e.pid);
           
           if (TFP > 0) {
             traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
             programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(e.t);
           }
-          
-          sched.onFinish(e.pid);
         } else {
           traceEvent(trace, e.t, EVT.BLOCK, e.pid);
           
@@ -842,11 +848,9 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
             programar(e.t + durES, EVT.IO_OUT, e.pid);
             sched.onBlock(e.pid);
           }
+          pendingDispatchAt = null;
+          despacharSiLibre(e.t);
         }
-        
-        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
-        pendingDispatchAt = null;
-        despacharSiLibre(e.t);
         break;
       }
 
@@ -908,6 +912,9 @@ export function runSRTN(procesos: Proceso[], costos: Partial<Costos> = {}): Trac
       }
 
       case EVT.ADMIN_FINISH: {
+        // Overhead TFP completado - CPU libre para nuevo despacho
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
     }
@@ -988,11 +995,11 @@ export function runPriority(
     
     if (!currentR || !newR || currentPid == null) return false;
     
-    // Obtener prioridades efectivas (menor número = mayor prioridad)
-    const currentPriority = procesos.find(p => p.pid === currentPid)?.prioridadBase ?? 10;
-    const newPriority = procesos.find(p => p.pid === newPid)?.prioridadBase ?? 10;
+    // Obtener prioridades efectivas con aging (menor número = mayor prioridad)
+    const currentPriority = sched.getEffectivePriority(currentPid, t);
+    const newPriority = sched.getEffectivePriority(newPid, t);
     
-    // Preemptar si el nuevo proceso tiene mayor prioridad (menor número)
+    // Preemptar si el nuevo proceso tiene estrictamente mayor prioridad efectiva (menor número)
     if (newPriority < currentPriority) {
       // Calcular tiempo ejecutado
       const runFor = t - cpu.sliceStart; // puede ser 0 si t == sliceStart
@@ -1103,14 +1110,16 @@ export function runPriority(
         if (esUltima) {
           // Emitir C→T en el momento exacto de fin de CPU
           traceEvent(trace, e.t, EVT.FINISH, e.pid);
+          sched.onFinish(e.pid);
           
           // Programar overhead administrativo TFP si existe
           if (TFP > 0) {
             traceOverhead(trace, e.pid, 'TFP', e.t, e.t + TFP);
             programar(e.t + TFP, EVT.ADMIN_FINISH, e.pid);
+          } else {
+            pendingDispatchAt = null;
+            despacharSiLibre(e.t);
           }
-          
-          sched.onFinish(e.pid);
         } else {
           // Emitir C→B y manejar E/S
           traceEvent(trace, e.t, EVT.BLOCK, e.pid);
@@ -1124,11 +1133,9 @@ export function runPriority(
             programar(e.t + durES, EVT.IO_OUT, e.pid);
             sched.onBlock(e.pid);
           }
+          pendingDispatchAt = null;
+          despacharSiLibre(e.t);
         }
-        
-        // Reset pendingDispatchAt para permitir nuevo dispatch en mismo tiempo
-        pendingDispatchAt = null;
-        despacharSiLibre(e.t);
         break;
       }
 
@@ -1157,7 +1164,9 @@ export function runPriority(
       }
 
       case EVT.ADMIN_FINISH: {
-        // Overhead TFP completado - no hacer nada más
+        // Overhead TFP completado - CPU libre para nuevo despacho
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
     }

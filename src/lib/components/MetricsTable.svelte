@@ -36,6 +36,7 @@
               <th>TRp (Retorno)</th>
               <th>TE (Espera)</th>
               <th>TRn (Normalizada)</th>
+              <th>TResp (Respuesta)</th>
             </tr>
           </thead>
           <tbody>
@@ -51,6 +52,7 @@
                 <td class="highlight">{formatNumber(metrica.TRp)}</td>
                 <td>{formatNumber(metrica.TE)}</td>
                 <td class="trn-cell">{formatNumber(metrica.TRn)}</td>
+                <td>{formatNumber(metrica.tiempoRespuesta || 0)}</td>
               </tr>
             {/each}
           </tbody>
@@ -79,6 +81,12 @@
             <div class="metric-value">{formatNumber(global.TRnPromedio)}</div>
             <div class="metric-label">TRn Promedio</div>
             <div class="metric-description">TRp normalizado promedio</div>
+          </div>
+          
+          <div class="metric-card">
+            <div class="metric-value">{formatNumber(global.tiempoRespuestaPromedio || 0)}</div>
+            <div class="metric-label">TResp Promedio</div>
+            <div class="metric-description">Tiempo de respuesta medio</div>
           </div>
           
           <div class="metric-card">
