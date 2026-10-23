@@ -184,4 +184,42 @@ export class SchedulerPriority extends BaseScheduler {
   getReadyQueue(): number[] {
     return this.readyQueue.map(e => e.pid);
   }
+
+  /**
+   * Calcula el tiempo más temprano (tPreempt > fromTime y < untilTime) en que algún
+   * proceso en la cola de listos alcance una prioridad efectiva estrictamente mejor (< targetPriority).
+   */
+  getNextPreemptionTime(fromTime: number, untilTime: number, targetPriority: number): number | null {
+    let earliestPreempt: number | null = null;
+
+    for (const entry of this.readyQueue) {
+      const pBase = entry.priorityBase;
+      const tReady = entry.tReady;
+
+      if (this.agingConfig.minPriority >= targetPriority) continue;
+
+      const diff = pBase - targetPriority + 1;
+      if (diff <= 0) {
+        if (fromTime < untilTime) {
+          return fromTime;
+        }
+        continue;
+      }
+
+      const neededSteps = Math.ceil(diff / this.agingConfig.ageStep);
+      const effectiveAtNeeded = pBase - neededSteps * this.agingConfig.ageStep;
+      if (effectiveAtNeeded > targetPriority - 1 && effectiveAtNeeded < this.agingConfig.minPriority) {
+        continue;
+      }
+
+      const tPreempt = tReady + neededSteps * this.agingConfig.ageQuantum;
+      if (tPreempt > fromTime && tPreempt < untilTime) {
+        if (earliestPreempt === null || tPreempt < earliestPreempt) {
+          earliestPreempt = tPreempt;
+        }
+      }
+    }
+
+    return earliestPreempt;
+  }
 }

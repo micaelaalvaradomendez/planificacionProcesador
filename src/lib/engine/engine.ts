@@ -951,7 +951,12 @@ export function runPriority(
       ageStep: priorityAging.incremento,
       minPriority: 0,
       maxPriority: 10
-    } : undefined
+    } : {
+      ageQuantum: 2,
+      ageStep: 1,
+      minPriority: 0,
+      maxPriority: 10
+    }
   );
 
   let currentTick = Number.NEGATIVE_INFINITY;
@@ -1055,6 +1060,17 @@ export function runPriority(
         // Intentar preemptar si llegó un proceso con mayor prioridad
         if (!tryPreemptIfNeeded(e.t, e.pid)) {
           despacharSiLibre(e.t);
+          if (cpu.pid != null && cpu.sliceStart != null) {
+            const curR = rt.get(cpu.pid);
+            if (curR) {
+              const curPri = sched.getEffectivePriority(cpu.pid, e.t);
+              const tEnd = cpu.sliceStart + curR.restante;
+              const nextPreempt = sched.getNextPreemptionTime(e.t, tEnd, curPri);
+              if (nextPreempt !== null && nextPreempt < tEnd) {
+                programar(nextPreempt, EVT.PREEMPT, cpu.pid, { generation: curR.generation, reason: 'aging' });
+              }
+            }
+          }
         } else {
           despacharSiLibre(e.t);
         }
@@ -1086,6 +1102,12 @@ export function runPriority(
 
         // Programar fin de CPU con generation para detectar eventos obsoletos
         programar(tEnd, EVT.CPU_DONE, e.pid, { generation: r.generation });
+
+        const curPri = sched.getEffectivePriority(e.pid, tStart);
+        const nextPreempt = sched.getNextPreemptionTime(tStart, tEnd, curPri);
+        if (nextPreempt !== null && nextPreempt < tEnd) {
+          programar(nextPreempt, EVT.PREEMPT, e.pid, { generation: r.generation, reason: 'aging' });
+        }
 
         break;
       }
@@ -1157,9 +1179,47 @@ export function runPriority(
         // Intentar preemptar si el proceso que retorna tiene mayor prioridad
         if (!tryPreemptIfNeeded(e.t, e.pid)) {
           despacharSiLibre(e.t);
+          if (cpu.pid != null && cpu.sliceStart != null) {
+            const curR = rt.get(cpu.pid);
+            if (curR) {
+              const curPri = sched.getEffectivePriority(cpu.pid, e.t);
+              const tEnd = cpu.sliceStart + curR.restante;
+              const nextPreempt = sched.getNextPreemptionTime(e.t, tEnd, curPri);
+              if (nextPreempt !== null && nextPreempt < tEnd) {
+                programar(nextPreempt, EVT.PREEMPT, cpu.pid, { generation: curR.generation, reason: 'aging' });
+              }
+            }
+          }
         } else {
           despacharSiLibre(e.t);
         }
+        break;
+      }
+
+      case EVT.PREEMPT: {
+        if (e.pid == null) break;
+        
+        const r = rt.get(e.pid);
+        if (!r || cpu.pid !== e.pid || e.data?.generation !== r.generation) {
+          // Evento stale - ignorar
+          break;
+        }
+
+        const runFor = e.t - (cpu.sliceStart ?? e.t);
+        r.restante = Math.max(0, r.restante - runFor);
+        
+        cerrarSlice(e.t);
+        traceEvent(trace, e.t, EVT.PREEMPT, e.pid, { reason: e.data?.reason ?? 'aging' });
+        
+        // Invalidar eventos pendientes de la generación anterior
+        r.generation += 1;
+        
+        if (r.restante > 0) {
+          sched.onReady(e.pid);
+        }
+        
+        pendingDispatchAt = null;
+        despacharSiLibre(e.t);
         break;
       }
 
